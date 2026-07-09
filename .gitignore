@@ -2,6 +2,7 @@
 node_modules
 dist
 coverage
+*.tsbuildinfo
 
 # env — API keys are runtime settings, never committed (CLAUDE.md rule 5)
 .env
