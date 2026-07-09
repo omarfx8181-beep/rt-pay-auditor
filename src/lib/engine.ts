@@ -34,17 +34,35 @@ const toCenti = (hours: number): number => Math.round(hours * 100);
 /**
  * centihours × rate(cents/hr) → cents, rounded half-up like v1's r2.
  * Both factors are integers ≤ ~1e7, so the product is exact in a double.
+ * True half-cent products (e.g. 1.25 h × $105.06 = $131.325) round UP
+ * deterministically; v1's float math rounded some of these ties down by
+ * representation accident. Pinned by test "half-cent line amounts".
  */
 const centiTimesRate = (centi: number, rateCents: number): Cents =>
   Math.round((centi * rateCents) / 100);
 
+const DECIMAL_RE = /^-?\d+(\.\d+)?$/;
+
 /**
- * pct% of a cents amount, in exact integer arithmetic. pct is a human
- * percentage (6.2 for 6.2%); it is scaled to ten-thousandths of a percent
- * so calibrated rates like 13.6977 stay exact.
+ * pct% of a cents amount. The rate is applied at its full decimal
+ * precision via exact BigInt arithmetic (round half away from zero), so
+ * calibrated rates — 13.6977 or finer, e.g. re-derived from a new stub —
+ * never quantize. Rates so extreme they stringify in exponent notation
+ * fall back to float math.
  */
-const pctOf = (cents: Cents, pct: number): Cents =>
-  Math.round((cents * Math.round(pct * 10_000)) / 1_000_000);
+const pctOf = (cents: Cents, pct: number): Cents => {
+  const s = String(pct);
+  if (!DECIMAL_RE.test(s)) return Math.round((cents * pct) / 100);
+  const negative = s.startsWith("-") !== cents < 0;
+  const [intPart, fracPart = ""] = s.replace("-", "").split(".");
+  const rateScaled = BigInt(intPart + fracPart); // pct × 10^fracPart.length
+  const denominator = 100n * 10n ** BigInt(fracPart.length);
+  const numerator = BigInt(Math.abs(Math.round(cents))) * rateScaled;
+  const quotient = numerator / denominator;
+  const remainder = numerator % denominator;
+  const magnitude = Number(2n * remainder >= denominator ? quotient + 1n : quotient);
+  return magnitude === 0 ? 0 : negative ? -magnitude : magnitude;
+};
 
 /** 548 units (may be fractional, e.g. 2.5u) → cents. */
 export const unitsToCents = (units: number, unitValueCents: Cents): Cents =>
@@ -364,10 +382,14 @@ export function auditLine(
   const tolerance = opts.toleranceCents ?? AUDIT_TOLERANCE_CENTS;
   const deltaCents = actualCents - expectedCents;
   const ok = Math.abs(deltaCents) <= tolerance;
-  const deltaUnits =
-    opts.isUnits && opts.unit548Cents
-      ? Math.round((deltaCents / opts.unit548Cents) * 100) / 100
-      : null;
+  let deltaUnits: number | null = null;
+  if (opts.isUnits && opts.unit548Cents) {
+    // Round half AWAY from zero so a shortfall is never understated and
+    // over/short mirror each other (Math.round would take -0.045 to -0.04
+    // but +0.045 to +0.05, and collapse small shortfalls to -0).
+    const magnitude = Math.round((Math.abs(deltaCents) / opts.unit548Cents) * 100) / 100;
+    deltaUnits = magnitude === 0 ? 0 : Math.sign(deltaCents) * magnitude;
+  }
   return { deltaCents, ok, deltaUnits };
 }
 

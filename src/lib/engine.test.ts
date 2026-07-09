@@ -141,6 +141,44 @@ describe("SPEC §3 golden acceptance tests", () => {
   });
 });
 
+describe("rounding regressions (from adversarial port review)", () => {
+  test("pctOf applies rates at full decimal precision — 5-decimal calibrated rates don't quantize", () => {
+    // Re-calibrating from a new stub can yield >4-decimal effective rates.
+    // 13.69775% of fedTaxable $8,181.22 is exactly $1,120.64306255 → $1,120.64;
+    // a rate quantized to 13.6978% would (wrongly) give $1,120.65.
+    const p = computePeriod(FIXTURE_SHIFTS, CFG);
+    const n = computeNet(p.grossCents, { ...CFG, fedEffPct: 13.69775 });
+    expect(n.fedTaxableCents).toBe(818122);
+    expect(n.fedCents).toBe(112064);
+  });
+
+  test("unit shortfalls round half AWAY from zero and mirror overpayments; no -0", () => {
+    const opts = { isUnits: true, unit548Cents: CFG.unit548Cents };
+    // short $2.25 = 0.045u → reported as short 0.05u, never 0.04u
+    expect(auditLine(75000, 74775, opts).deltaUnits).toBe(-0.05);
+    // mirrored overpayment reports the same magnitude
+    expect(auditLine(75000, 75225, opts).deltaUnits).toBe(0.05);
+    // a red $0.25 shortfall is 0.01u, not -0 ("0.00 units" would hide it)
+    const tiny = auditLine(75000, 74975, opts);
+    expect(tiny.ok).toBe(false);
+    expect(tiny.deltaUnits).toBe(-0.01);
+    expect(Object.is(tiny.deltaUnits, -0)).toBe(false);
+  });
+
+  test("half-cent line amounts round up deterministically (documented v1 divergence)", () => {
+    // 13.25 h shift → 1.25 DT h × $105.06 = $131.325 exactly. The cents
+    // engine rounds the true half up to $131.33; v1's float representation
+    // (131.32499999...) happened to round down. Deterministic half-up is
+    // the intended behavior of the port.
+    const p = computePeriod(
+      [{ id: "x", date: "2026-07-01", hours: 13.25, chargeHours: 0, premiumHours: 0, preceptorHours: 0, units548: 0 }],
+      CFG,
+    );
+    expect(p.dtHours).toBe(1.25);
+    expect(p.lines.find((l) => l.key === "dt")?.amountCents).toBe(13133);
+  });
+});
+
 describe("full-stub reconciliation (v1 parity)", () => {
   test("every expected line lands within audit tolerance of the real stub", () => {
     // v1 ACTUAL_SEED, in cents — the entire real stub, line by line.
