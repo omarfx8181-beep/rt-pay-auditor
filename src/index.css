@@ -95,6 +95,10 @@
   --font-sans: "Spline Sans Variable", system-ui, -apple-system, sans-serif;
   --font-mono: "Spline Sans Mono Variable", ui-monospace, monospace;
   --shadow-card: 0 1px 2px rgba(20, 17, 15, 0.04), 0 1px 0 rgba(20, 17, 15, 0.03);
+  /* On-hero money colors = the espresso-mode pos/neg tokens (tokens.md §2);
+     the light-mode greens/reds lack contrast on the ink hero. */
+  --color-hero-pos: #5cb48a;
+  --color-hero-neg: #d86446;
 }
 
 @layer base {
@@ -133,4 +137,82 @@
 :where(a, button, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid rgb(var(--accent) / 0.9);
   outline-offset: 2px;
+}
+
+/* ============================================================
+   Knockdown component classes (ported from its @layer components;
+   compose .btn + .btn-primary/.btn-ghost in markup — Tailwind v4
+   can't @apply custom classes).
+   ============================================================ */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-surface-line bg-surface-card shadow-card;
+  }
+  .hero {
+    @apply rounded-2xl p-5 shadow-card;
+    background: rgb(var(--hero-bg));
+    color: rgb(var(--hero-fg));
+  }
+  .eyebrow {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-mono text-sm font-semibold tracking-wide transition active:scale-[.98] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-primary {
+    background: rgb(var(--btn-bg));
+    color: rgb(var(--btn-fg));
+  }
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  .btn-ghost {
+    @apply border border-surface-line bg-surface-card text-ink;
+  }
+  .btn-ghost:hover {
+    @apply border-accent text-accent;
+  }
+  .pressable {
+    @apply transition-transform duration-150 active:scale-[0.985];
+  }
+  .input {
+    @apply w-full rounded-xl border border-surface-line bg-surface-card px-3.5 py-2.5 text-ink outline-none;
+  }
+  .input::placeholder {
+    color: rgb(var(--ink-dim) / 0.55);
+  }
+  .input:focus {
+    @apply border-accent;
+    box-shadow: 0 0 0 2px rgb(var(--accent) / 0.2);
+  }
+  .label {
+    @apply mb-1.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim;
+  }
+}
+
+/* ---- Hero accent wash — faint drift, gentle not shiny.
+   Layered over a solid hero-bg color (unlike Knockdown's shorthand,
+   which let the page bleed through the low-alpha middle stop). ---- */
+.hero-glow {
+  background-color: rgb(var(--hero-bg));
+  background-image: linear-gradient(120deg, rgb(var(--hero-bg)), rgb(var(--accent) / 0.09), rgb(var(--hero-bg)));
+  background-size: 220% 100%;
+}
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-glow { animation: gradientShift 20s linear infinite; }
+}
+
+/* ---- Directional page transition (pairs with tab switches) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateX(var(--page-dx, 0)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .page-enter {
+    animation: pageIn 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  }
 }
