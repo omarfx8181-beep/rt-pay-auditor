@@ -28,6 +28,7 @@ export default function Shifts({
         One card per shift. Weekend diff applies itself on Sat/Sun dates. 1 unit of 548 = {unit548Label}.
       </p>
 
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
       {shifts.map((s) => {
         const wknd = s.date !== "" && isWeekend(s.date);
         return (
@@ -92,6 +93,7 @@ export default function Shifts({
           </section>
         );
       })}
+      </div>
 
       <button onClick={() => setShifts((arr) => [...arr, blankShift()])} className="btn btn-ghost pressable">
         <Plus size={15} /> Add shift

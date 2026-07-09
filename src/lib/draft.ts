@@ -12,8 +12,8 @@ export const num = (v: string): number => {
   return Number.isNaN(n) ? 0 : n;
 };
 
-let _id = 100;
-export const uid = (): string => "s" + _id++;
+/** Unique across reloads — shifts persist now, so a counter would collide. */
+export const uid = (): string => crypto.randomUUID();
 
 /* ---------------- config draft ---------------- */
 

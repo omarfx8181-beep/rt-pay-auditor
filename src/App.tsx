@@ -1,36 +1,40 @@
-import { useMemo, useRef, useState } from "react";
-import { Activity, CalendarClock, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Activity, CalendarClock, CalendarRange, FileCheck2, SlidersHorizontal } from "lucide-react";
 import {
   AUDIT_TOLERANCE_CENTS,
-  DEFAULT_TIERS,
   computeNet,
   computePeriod,
   dollarsToCents,
   type BonusTier,
 } from "./lib/engine.ts";
-import {
-  ACTUAL_SEED,
-  DEFAULT_CFG_DRAFT,
-  DEMO_SHIFTS,
-  draftToConfig,
-  draftToShift,
-  num,
-  type CfgDraft,
-  type ShiftDraft,
-} from "./lib/draft.ts";
+import { draftToConfig, draftToShift, num, type CfgDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
+import {
+  addDays,
+  buildBackup,
+  mergeBackup,
+  nextPeriodRange,
+  parseBackup,
+  periodLabel,
+  PERIOD_DAYS,
+  type PayPeriod,
+} from "./lib/periods.ts";
+import { db, setCurrentPeriodId } from "./db/db.ts";
 import { fmtCents, fmtNum, fmtSignedCents } from "./lib/format.ts";
 import { Eyebrow, Hero, TabBar, type Tab } from "./ui/kit.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import Paycheck, { type WhatIfDraft } from "./screens/Paycheck.tsx";
 import Audit from "./screens/Audit.tsx";
 import Rules from "./screens/Rules.tsx";
+import Periods from "./screens/Periods.tsx";
 
 const TABS: Tab[] = [
   { id: "shifts", label: "Shifts", Icon: CalendarClock },
   { id: "paycheck", label: "Paycheck", Icon: Activity },
   { id: "audit", label: "Audit", Icon: FileCheck2 },
   { id: "rules", label: "Rules", Icon: SlidersHorizontal },
+  { id: "periods", label: "Periods", Icon: CalendarRange },
 ];
 
 function VitalStat({ label, value, sub, color = "" }: { label: string; value: string; sub?: string; color?: string }) {
@@ -46,13 +50,53 @@ function VitalStat({ label, value, sub, color = "" }: { label: string; value: st
 }
 
 export default function App() {
+  const periods = useLiveQuery(() => db.periods.orderBy("startDate").reverse().toArray(), []);
+  const currentIdSetting = useLiveQuery(() => db.settings.get("currentPeriodId"), []);
+
+  if (!periods || periods.length === 0) {
+    return (
+      <div className="grid min-h-screen place-items-center">
+        <div className="text-center">
+          <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
+          <h1 className="mt-1.5 font-display text-3xl font-semibold">RT Pay Auditor</h1>
+        </div>
+      </div>
+    );
+  }
+
+  const current = periods.find((p) => p.id === currentIdSetting?.value) ?? periods[0];
+  // key by period id: switching periods remounts the workspace with fresh drafts
+  return <PeriodWorkspace key={current.id} record={current} periods={periods} />;
+}
+
+function PeriodWorkspace({ record, periods }: { record: PayPeriod; periods: PayPeriod[] }) {
   const [tab, setTab] = useState("shifts");
-  const [cfgDraft, setCfgDraft] = useState<CfgDraft>(DEFAULT_CFG_DRAFT);
-  const [tiers, setTiers] = useState<BonusTier[]>(DEFAULT_TIERS);
-  const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(DEMO_SHIFTS);
-  const [actual, setActual] = useState<Record<string, string>>(ACTUAL_SEED);
+  const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
+  const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
+  const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
+  const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
+  const [importStatus, setImportStatus] = useState("");
   const tabIndex = useRef(0);
+
+  // Persist edits: debounced while typing, flushed on unmount/period switch.
+  const snapshot = useRef({ shifts: shiftDrafts, actual, cfgDraft, tiers });
+  snapshot.current = { shifts: shiftDrafts, actual, cfgDraft, tiers };
+  const dirty = useRef(false);
+  useEffect(() => {
+    dirty.current = true;
+    const t = setTimeout(() => {
+      dirty.current = false;
+      void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [shiftDrafts, actual, cfgDraft, tiers, record.id]);
+  useEffect(
+    () => () => {
+      if (dirty.current) void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
+    },
+    [record.id],
+  );
 
   const cfg = useMemo(() => draftToConfig(cfgDraft), [cfgDraft]);
   const shifts = useMemo(() => shiftDrafts.map(draftToShift), [shiftDrafts]);
@@ -60,15 +104,13 @@ export default function App() {
   const net = useMemo(() => computeNet(period.grossCents, cfg), [period.grossCents, cfg]);
   const auditRows = useMemo(() => buildAuditRows(period, net), [period, net]);
 
-  // Vitals Δ = stub net vs expected net; red count from all filled audit lines.
-  const netDeltaCents = actual.net === "" ? null : dollarsToCents(num(actual.net)) - net.netCents;
+  const netDeltaCents = (actual.net ?? "") === "" ? null : dollarsToCents(num(actual.net)) - net.netCents;
   const reconciled = netDeltaCents !== null && Math.abs(netDeltaCents) <= AUDIT_TOLERANCE_CENTS;
   const offCount = auditRows.filter((row) => {
     const raw = actual[row.key] ?? "";
     return raw !== "" && Math.abs(dollarsToCents(num(raw)) - row.expectedCents) > AUDIT_TOLERANCE_CENTS;
   }).length;
 
-  // Directional slide, like Knockdown's tab swipe.
   const selectTab = (id: string, index: number) => {
     const dx = index > tabIndex.current ? 28 : index < tabIndex.current ? -28 : 0;
     document.documentElement.style.setProperty("--page-dx", `${dx}px`);
@@ -76,13 +118,64 @@ export default function App() {
     setTab(id);
   };
 
+  /* ---- period management (Periods tab) ---- */
+
+  const createNext = async () => {
+    const latest = periods.reduce((a, b) => (a.endDate > b.endDate ? a : b));
+    const now = Date.now();
+    const fresh: PayPeriod = {
+      id: crypto.randomUUID(),
+      ...nextPeriodRange(latest.endDate),
+      shifts: [],
+      actual: {},
+      // Rules roll forward from the latest period; history keeps its own.
+      // eveningHours is period DATA (manual timecard entry, SPEC §6 Q3),
+      // not a rule — a fresh period starts at zero.
+      cfgDraft: { ...latest.cfgDraft, eveningHours: "0" },
+      tiers: latest.tiers,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.periods.add(fresh);
+    await setCurrentPeriodId(fresh.id);
+  };
+
+  const exportBackup = async () => {
+    const all = await db.periods.toArray();
+    const json = JSON.stringify(buildBackup(all, new Date().toISOString()), null, 2);
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rt-pay-auditor-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importFile = async (file: File) => {
+    try {
+      const backup = parseBackup(await file.text());
+      const existing = await db.periods.toArray();
+      const { merged, added, updated, skipped } = mergeBackup(existing, backup.periods);
+      await db.periods.bulkPut(merged);
+      setImportStatus(`Imported: ${added} added, ${updated} updated, ${skipped} unchanged.`);
+    } catch (err) {
+      setImportStatus(String(err instanceof Error ? err.message : err));
+    }
+  };
+
   return (
-    <div className="mx-auto min-h-screen w-full max-w-2xl px-4 pb-28 pt-[max(20px,env(safe-area-inset-top))]">
+    <div className="mx-auto min-h-screen w-full max-w-2xl px-4 pb-28 pt-[max(20px,env(safe-area-inset-top))] md:max-w-5xl md:pb-12">
       <header>
         <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
         <h1 className="mt-1.5 font-display text-[40px] font-semibold leading-none tracking-tight">RT Pay Auditor</h1>
-        <p className="mt-2 font-mono text-sm text-ink-dim">Know what the check should say before it lands.</p>
+        <p className="mt-2 font-mono text-sm text-ink-dim">
+          Pay period {periodLabel(record.startDate, record.endDate)}
+          {record.archived ? " · archived" : ""}
+        </p>
       </header>
+
+      <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
 
       <Hero className="mt-5">
         <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
@@ -133,9 +226,40 @@ export default function App() {
             unit548Cents={cfg.unit548Cents}
           />
         )}
+        {tab === "periods" && (
+          <Periods
+            periods={periods}
+            currentId={record.id}
+            onSelect={(id) => void setCurrentPeriodId(id)}
+            onCreateNext={() => void createNext()}
+            onSetDates={(id, startDate) =>
+              void db.periods.update(id, { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1), updatedAt: Date.now() })
+            }
+            onToggleArchived={(id) => {
+              const p = periods.find((x) => x.id === id);
+              if (p) void db.periods.update(id, { archived: !p.archived, updatedAt: Date.now() });
+            }}
+            onDelete={async (id) => {
+              if (periods.length <= 1) return;
+              await db.periods.delete(id);
+              if (id === record.id) {
+                const remaining = periods.filter((p) => p.id !== id);
+                await setCurrentPeriodId(remaining[0].id);
+              }
+            }}
+            onExport={() => void exportBackup()}
+            onImportFile={(f) => void importFile(f)}
+            importStatus={importStatus}
+          />
+        )}
       </main>
 
-      <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
+      <TabBarSpacer />
     </div>
   );
+}
+
+/** Keeps the last content clear of the fixed bottom bar on phones. */
+function TabBarSpacer() {
+  return <div className="h-2 md:hidden" />;
 }
