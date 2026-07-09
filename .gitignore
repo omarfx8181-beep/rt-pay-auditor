@@ -1,0 +1,13 @@
+# dependencies / build
+node_modules
+dist
+coverage
+
+# env — API keys are runtime settings, never committed (CLAUDE.md rule 5)
+.env
+.env.*
+*.local
+
+# misc
+.DS_Store
+npm-debug.log*
