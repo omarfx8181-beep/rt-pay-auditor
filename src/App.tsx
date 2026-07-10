@@ -21,6 +21,7 @@ import {
   type PayPeriod,
 } from "./lib/periods.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
+import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
 import { fmtCents, fmtNum, fmtSignedCents } from "./lib/format.ts";
 import { Eyebrow, Hero, TabBar, type Tab } from "./ui/kit.tsx";
 import Shifts from "./screens/Shifts.tsx";
@@ -52,8 +53,11 @@ function VitalStat({ label, value, sub, color = "" }: { label: string; value: st
 export default function App() {
   const periods = useLiveQuery(() => db.periods.orderBy("startDate").reverse().toArray(), []);
   const currentIdSetting = useLiveQuery(() => db.settings.get("currentPeriodId"), []);
+  // null = stored-nothing, undefined = still loading (gate render on it so
+  // the email panel mounts with the real saved identity)
+  const identityRow = useLiveQuery(async () => (await db.settings.get("identity")) ?? null, []);
 
-  if (!periods || periods.length === 0) {
+  if (!periods || periods.length === 0 || identityRow === undefined) {
     return (
       <div className="grid min-h-screen place-items-center">
         <div className="text-center">
@@ -65,11 +69,25 @@ export default function App() {
   }
 
   const current = periods.find((p) => p.id === currentIdSetting?.value) ?? periods[0];
+  let identity = EMPTY_IDENTITY;
+  try {
+    if (identityRow) identity = { ...EMPTY_IDENTITY, ...(JSON.parse(identityRow.value) as EmailIdentity) };
+  } catch {
+    /* corrupt setting → start blank */
+  }
   // key by period id: switching periods remounts the workspace with fresh drafts
-  return <PeriodWorkspace key={current.id} record={current} periods={periods} />;
+  return <PeriodWorkspace key={current.id} record={current} periods={periods} identity={identity} />;
 }
 
-function PeriodWorkspace({ record, periods }: { record: PayPeriod; periods: PayPeriod[] }) {
+function PeriodWorkspace({
+  record,
+  periods,
+  identity,
+}: {
+  record: PayPeriod;
+  periods: PayPeriod[];
+  identity: EmailIdentity;
+}) {
   const [tab, setTab] = useState("shifts");
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
@@ -105,11 +123,13 @@ function PeriodWorkspace({ record, periods }: { record: PayPeriod; periods: PayP
   const auditRows = useMemo(() => buildAuditRows(period, net), [period, net]);
 
   const netDeltaCents = (actual.net ?? "") === "" ? null : dollarsToCents(num(actual.net)) - net.netCents;
-  const reconciled = netDeltaCents !== null && Math.abs(netDeltaCents) <= AUDIT_TOLERANCE_CENTS;
   const offCount = auditRows.filter((row) => {
     const raw = actual[row.key] ?? "";
     return raw !== "" && Math.abs(dollarsToCents(num(raw)) - row.expectedCents) > AUDIT_TOLERANCE_CENTS;
   }).length;
+  // "Reconciled" only when net matches AND no line anywhere is red — a
+  // matching net must not paper over a shorted line elsewhere.
+  const reconciled = netDeltaCents !== null && Math.abs(netDeltaCents) <= AUDIT_TOLERANCE_CENTS && offCount === 0;
 
   const selectTab = (id: string, index: number) => {
     const dx = index > tabIndex.current ? 28 : index < tabIndex.current ? -28 : 0;
@@ -216,7 +236,19 @@ function PeriodWorkspace({ record, periods }: { record: PayPeriod; periods: PayP
             setWhatIf={setWhatIf}
           />
         )}
-        {tab === "audit" && <Audit rows={auditRows} actual={actual} setActual={setActual} cfg={cfg} />}
+        {tab === "audit" && (
+          <Audit
+            rows={auditRows}
+            actual={actual}
+            setActual={setActual}
+            cfg={cfg}
+            shifts={shifts}
+            periodStart={record.startDate}
+            periodEnd={record.endDate}
+            identity={identity}
+            onSaveIdentity={(id) => void db.settings.put({ key: "identity", value: JSON.stringify(id) })}
+          />
+        )}
         {tab === "rules" && (
           <Rules
             cfgDraft={cfgDraft}

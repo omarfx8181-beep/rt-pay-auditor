@@ -1,20 +1,32 @@
 import { AlertTriangle } from "lucide-react";
-import { auditLine, dollarsToCents, type EngineConfig } from "../lib/engine.ts";
+import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num } from "../lib/draft.ts";
 import { fmtCents, fmtNum, fmtSignedCents } from "../lib/format.ts";
 import { CalloutCard, Card } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
+import type { EmailIdentity } from "../lib/hrEmail.ts";
+import HrEmailPanel from "./HrEmailPanel.tsx";
 
 export default function Audit({
   rows,
   actual,
   setActual,
   cfg,
+  shifts,
+  periodStart,
+  periodEnd,
+  identity,
+  onSaveIdentity,
 }: {
   rows: AuditRow[];
   actual: Record<string, string>;
   setActual: (updater: (a: Record<string, string>) => Record<string, string>) => void;
   cfg: EngineConfig;
+  shifts: Shift[];
+  periodStart: string;
+  periodEnd: string;
+  identity: EmailIdentity;
+  onSaveIdentity: (identity: EmailIdentity) => void;
 }) {
   const judged = rows.map((row) => {
     const raw = actual[row.key] ?? "";
@@ -91,6 +103,25 @@ export default function Audit({
             })}
           </div>
         </CalloutCard>
+      )}
+
+      {shortRows.length > 0 && (
+        <HrEmailPanel
+          discrepancies={shortRows.map(({ row, raw, delta }) => ({
+            key: row.key,
+            label: row.label,
+            expectedCents: row.expectedCents,
+            paidCents: dollarsToCents(num(raw)),
+            deltaCents: delta!.deltaCents,
+            deltaUnits: delta!.deltaUnits,
+          }))}
+          shifts={shifts}
+          periodStart={periodStart}
+          periodEnd={periodEnd}
+          unit548Cents={cfg.unit548Cents}
+          initialIdentity={identity}
+          onSaveIdentity={onSaveIdentity}
+        />
       )}
     </div>
   );
