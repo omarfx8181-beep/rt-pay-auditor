@@ -1,21 +1,24 @@
 name: Deploy to GitHub Pages
 
+# Publishes the built app to the gh-pages branch; GitHub Pages serves it
+# at https://omarfx8181-beep.github.io/rt-pay-auditor/. (The Pages-
+# artifact flow needs the site pre-created in Settings, which the
+# workflow token can't do — the branch flow auto-enables it.)
+
 on:
   push:
     branches: [main, claude/rt-pay-auditor-bootstrap-e9ud3w]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,19 +33,7 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE: /rt-pay-auditor/
-      - uses: actions/configure-pages@v5
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
