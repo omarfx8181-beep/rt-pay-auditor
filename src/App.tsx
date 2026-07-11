@@ -51,6 +51,13 @@ function VitalStat({ label, value, sub, color = "" }: { label: string; value: st
 }
 
 export default function App() {
+  // Surface a storage failure instead of an eternal splash (private
+  // browsing modes and sandboxed webviews can block IndexedDB).
+  const [dbError, setDbError] = useState("");
+  useEffect(() => {
+    db.open().catch((e: unknown) => setDbError(String(e instanceof Error ? e.message : e)));
+  }, []);
+
   const periods = useLiveQuery(() => db.periods.orderBy("startDate").reverse().toArray(), []);
   const currentIdSetting = useLiveQuery(() => db.settings.get("currentPeriodId"), []);
   // null = stored-nothing, undefined = still loading (gate render on these
@@ -61,9 +68,15 @@ export default function App() {
   if (!periods || periods.length === 0 || identityRow === undefined || apiKeyRow === undefined) {
     return (
       <div className="grid min-h-screen place-items-center">
-        <div className="text-center">
+        <div className="max-w-sm px-6 text-center">
           <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
           <h1 className="mt-1.5 font-display text-3xl font-semibold">RT Pay Auditor</h1>
+          {dbError !== "" && (
+            <p className="mt-4 font-mono text-sm text-neg">
+              This browser blocked local storage ({dbError}). Open the app directly in Safari or Chrome — everything
+              it saves lives on your device.
+            </p>
+          )}
         </div>
       </div>
     );
