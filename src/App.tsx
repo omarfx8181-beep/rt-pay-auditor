@@ -53,11 +53,12 @@ function VitalStat({ label, value, sub, color = "" }: { label: string; value: st
 export default function App() {
   const periods = useLiveQuery(() => db.periods.orderBy("startDate").reverse().toArray(), []);
   const currentIdSetting = useLiveQuery(() => db.settings.get("currentPeriodId"), []);
-  // null = stored-nothing, undefined = still loading (gate render on it so
-  // the email panel mounts with the real saved identity)
+  // null = stored-nothing, undefined = still loading (gate render on these
+  // so panels mount with the real saved values)
   const identityRow = useLiveQuery(async () => (await db.settings.get("identity")) ?? null, []);
+  const apiKeyRow = useLiveQuery(async () => (await db.settings.get("anthropicApiKey")) ?? null, []);
 
-  if (!periods || periods.length === 0 || identityRow === undefined) {
+  if (!periods || periods.length === 0 || identityRow === undefined || apiKeyRow === undefined) {
     return (
       <div className="grid min-h-screen place-items-center">
         <div className="text-center">
@@ -76,17 +77,27 @@ export default function App() {
     /* corrupt setting → start blank */
   }
   // key by period id: switching periods remounts the workspace with fresh drafts
-  return <PeriodWorkspace key={current.id} record={current} periods={periods} identity={identity} />;
+  return (
+    <PeriodWorkspace
+      key={current.id}
+      record={current}
+      periods={periods}
+      identity={identity}
+      apiKey={apiKeyRow?.value ?? ""}
+    />
+  );
 }
 
 function PeriodWorkspace({
   record,
   periods,
   identity,
+  apiKey,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
   identity: EmailIdentity;
+  apiKey: string;
 }) {
   const [tab, setTab] = useState("shifts");
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
@@ -223,6 +234,8 @@ function PeriodWorkspace({
             tiers={tiers}
             period={period}
             unit548Label={fmtCents(cfg.unit548Cents)}
+            cfg={cfg}
+            apiKey={apiKey}
           />
         )}
         {tab === "paycheck" && (
@@ -256,6 +269,8 @@ function PeriodWorkspace({
             tiers={tiers}
             setTiers={setTiers}
             unit548Cents={cfg.unit548Cents}
+            apiKey={apiKey}
+            onSaveApiKey={(key) => void db.settings.put({ key: "anthropicApiKey", value: key })}
           />
         )}
         {tab === "periods" && (

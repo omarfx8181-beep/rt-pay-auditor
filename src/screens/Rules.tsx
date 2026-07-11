@@ -1,4 +1,5 @@
-import { AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import type { BonusTier } from "../lib/engine.ts";
 import { num, type CfgDraft } from "../lib/draft.ts";
 import { fmtCents } from "../lib/format.ts";
@@ -17,14 +18,20 @@ export default function Rules({
   tiers,
   setTiers,
   unit548Cents,
+  apiKey,
+  onSaveApiKey,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
   tiers: BonusTier[];
   setTiers: (updater: (t: BonusTier[]) => BonusTier[]) => void;
   unit548Cents: number;
+  apiKey: string;
+  onSaveApiKey: (key: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
+  const [key, setKey] = useState(apiKey);
+  const [showKey, setShowKey] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -101,6 +108,37 @@ export default function Rules({
           Baked in: FICA wages = gross − medical/dental/FSA (403(b) stays FICA-taxable) · MN Paid Leave = % of full gross ·
           net subtracts the non-cash imputed life. These reconciled your 6/22–7/05 stub to within $0.02.
         </p>
+      </Card>
+
+      <Card title="Schedule scan — your key, your device">
+        <p className="text-sm">
+          The scan on the Shifts tab reads ScheduleAnywhere screenshots with your own Anthropic API key. It's stored
+          only in this browser — never in the repo, never in JSON backups, and screenshots go straight from here to
+          the API.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="flex min-w-64 flex-1 flex-col sm:max-w-md">
+            <span className="label">Anthropic API key</span>
+            <input
+              type={showKey ? "text" : "password"}
+              value={key}
+              onChange={(e) => {
+                setKey(e.target.value);
+                onSaveApiKey(e.target.value.trim());
+              }}
+              placeholder="sk-ant-…"
+              autoComplete="off"
+              className="input px-2.5 py-1.5 font-mono text-sm"
+            />
+          </label>
+          <button
+            onClick={() => setShowKey((v) => !v)}
+            className="btn btn-ghost pressable px-3"
+            aria-label={showKey ? "Hide key" : "Show key"}
+          >
+            {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        </div>
       </Card>
 
       <CalloutCard tone="amber">

@@ -1,8 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
-import { isWeekend, type BonusTier, type PeriodResult } from "../lib/engine.ts";
+import { isWeekend, type BonusTier, type EngineConfig, type PeriodResult } from "../lib/engine.ts";
 import { blankShift, num, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtNum } from "../lib/format.ts";
 import { Field, StatTile } from "../ui/kit.tsx";
+import ScanPanel from "./ScanPanel.tsx";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -12,18 +13,27 @@ export default function Shifts({
   tiers,
   period,
   unit548Label,
+  cfg,
+  apiKey,
 }: {
   shifts: ShiftDraft[];
   setShifts: (updater: (arr: ShiftDraft[]) => ShiftDraft[]) => void;
   tiers: BonusTier[];
   period: PeriodResult;
   unit548Label: string;
+  cfg: EngineConfig;
+  apiKey: string;
 }) {
   const setShift = (id: string, key: keyof ShiftDraft, value: string) =>
     setShifts((arr) => arr.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
 
   return (
     <div className="space-y-3">
+      <ScanPanel
+        apiKey={apiKey}
+        cfg={cfg}
+        onApply={(mode, drafts) => setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]))}
+      />
       <p className="font-mono text-sm text-ink-dim">
         One card per shift. Weekend diff applies itself on Sat/Sun dates. 1 unit of 548 = {unit548Label}.
       </p>
