@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/rt-pay-auditor/sw.js', { scope: '/rt-pay-auditor/' })})}
