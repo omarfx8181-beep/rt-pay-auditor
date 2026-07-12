@@ -179,6 +179,43 @@ describe("rounding regressions (from adversarial port review)", () => {
   });
 });
 
+describe("paid leave (Kronos Time Off codes) — base rate, outside OT/DT/weekend", () => {
+  const LEAVE = [
+    { id: "l1", date: "2026-06-28", hours: 12, type: "sto" as const }, // Sunday on purpose
+    { id: "l2", date: "2026-06-30", hours: 4, type: "sto" as const },
+    { id: "l3", date: "2026-07-01", hours: 16, type: "loa" as const },
+  ];
+
+  test("leave adds gross at exactly hours × base rate, one line per type", () => {
+    const p = computePeriod(FIXTURE_SHIFTS, CFG, LEAVE);
+    const sto = p.lines.find((l) => l.key === "sto");
+    const loa = p.lines.find((l) => l.key === "loa");
+    expect(sto).toMatchObject({ qty: 16, rateCents: 5253, amountCents: 84048 }); // 16 × $52.53
+    expect(loa).toMatchObject({ qty: 16, rateCents: 5253, amountCents: 84048 });
+    expect(p.lines.find((l) => l.key === "medical")).toBeUndefined(); // unused type → no line
+    expect(p.grossCents).toBe(886520 + 84048 + 84048);
+    expect(p.leaveHours).toBe(32);
+  });
+
+  test("leave never touches worked-hour math: no OT, no DT, no weekend diff", () => {
+    const withLeave = computePeriod(FIXTURE_SHIFTS, CFG, LEAVE);
+    expect(withLeave.regHours).toBe(80);
+    expect(withLeave.otHours).toBe(15.8); // 32 leave hrs did NOT push past the 80-hr line
+    expect(withLeave.dtHours).toBe(16.6); // 16-hr LOA day is not daily double time
+    expect(withLeave.workedHours).toBe(112.4);
+    // Sunday sick day earns no weekend differential
+    expect(withLeave.lines.find((l) => l.key === "weekend")?.qty).toBe(30.7);
+  });
+
+  test("no leave → engine output identical to before the feature (golden guard)", () => {
+    const p = computePeriod(FIXTURE_SHIFTS, CFG);
+    expect(p.grossCents).toBe(886520);
+    expect(p.lines.some((l) => l.key === "sto" || l.key === "loa" || l.key === "medical")).toBe(false);
+    expect(p.leaveHours).toBe(0);
+    expect(p.lines[p.lines.length - 1].key).toBe("imputed"); // imputed stays the last line
+  });
+});
+
 describe("full-stub reconciliation (v1 parity)", () => {
   test("every expected line lands within audit tolerance of the real stub", () => {
     // v1 ACTUAL_SEED, in cents — the entire real stub, line by line.

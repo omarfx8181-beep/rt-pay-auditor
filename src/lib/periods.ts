@@ -4,7 +4,7 @@
  * layer (src/db/db.ts) stays thin so all of this is unit-testable.
  */
 import { computeNet, computePeriod, type BonusTier, type Cents } from "./engine.ts";
-import { draftToConfig, draftToShift, type CfgDraft, type ShiftDraft } from "./draft.ts";
+import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./draft.ts";
 
 export interface PayPeriod {
   id: string;
@@ -13,6 +13,8 @@ export interface PayPeriod {
   endDate: string;
   /** Stored exactly as typed — drafts, not parsed numbers. */
   shifts: ShiftDraft[];
+  /** Paid leave (Kronos Time Off codes); absent on pre-leave records. */
+  leave?: LeaveDraft[];
   actual: Record<string, string>;
   /**
    * Each period snapshots its own rules: rates and bonus tiers move week
@@ -61,6 +63,7 @@ export interface YtdRollup {
   otHours: number;
   dtHours: number;
   workedHours: number;
+  leaveHours: number;
 }
 
 /** Engine-computed totals for every period ending in `year` (archived included). */
@@ -74,11 +77,12 @@ export function rollupYtd(periods: PayPeriod[], year: string): YtdRollup {
     otHours: 0,
     dtHours: 0,
     workedHours: 0,
+    leaveHours: 0,
   };
   for (const p of periods) {
     if (p.endDate.slice(0, 4) !== year) continue;
     const cfg = draftToConfig(p.cfgDraft);
-    const period = computePeriod(p.shifts.map(draftToShift), cfg);
+    const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
     const net = computeNet(period.grossCents, cfg);
     rollup.periodCount += 1;
     rollup.grossCents += period.grossCents;
@@ -87,6 +91,7 @@ export function rollupYtd(periods: PayPeriod[], year: string): YtdRollup {
     rollup.otHours += period.otHours;
     rollup.dtHours += period.dtHours;
     rollup.workedHours += period.workedHours;
+    rollup.leaveHours += period.leaveHours;
   }
   return rollup;
 }

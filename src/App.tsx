@@ -8,7 +8,7 @@ import {
   dollarsToCents,
   type BonusTier,
 } from "./lib/engine.ts";
-import { draftToConfig, draftToShift, num, type CfgDraft, type ShiftDraft } from "./lib/draft.ts";
+import { draftToConfig, draftToLeave, draftToShift, num, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
 import {
   addDays,
@@ -149,14 +149,15 @@ function PeriodWorkspace({
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
+  const [leaveDrafts, setLeaveDrafts] = useState<LeaveDraft[]>(record.leave ?? []);
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
   const tabIndex = useRef(0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
-  const snapshot = useRef({ shifts: shiftDrafts, actual, cfgDraft, tiers });
-  snapshot.current = { shifts: shiftDrafts, actual, cfgDraft, tiers };
+  const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers });
+  snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers };
   const dirty = useRef(false);
   useEffect(() => {
     dirty.current = true;
@@ -165,7 +166,7 @@ function PeriodWorkspace({
       void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
     }, 400);
     return () => clearTimeout(t);
-  }, [shiftDrafts, actual, cfgDraft, tiers, record.id]);
+  }, [shiftDrafts, leaveDrafts, actual, cfgDraft, tiers, record.id]);
   useEffect(
     () => () => {
       if (dirty.current) void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
@@ -175,7 +176,8 @@ function PeriodWorkspace({
 
   const cfg = useMemo(() => draftToConfig(cfgDraft), [cfgDraft]);
   const shifts = useMemo(() => shiftDrafts.map(draftToShift), [shiftDrafts]);
-  const period = useMemo(() => computePeriod(shifts, cfg), [shifts, cfg]);
+  const leave = useMemo(() => leaveDrafts.map(draftToLeave), [leaveDrafts]);
+  const period = useMemo(() => computePeriod(shifts, cfg, leave), [shifts, cfg, leave]);
   const net = useMemo(() => computeNet(period.grossCents, cfg), [period.grossCents, cfg]);
   const auditRows = useMemo(() => buildAuditRows(period, net), [period, net]);
 
@@ -204,6 +206,7 @@ function PeriodWorkspace({
       id: crypto.randomUUID(),
       ...nextPeriodRange(latest.endDate),
       shifts: [],
+      leave: [],
       actual: {},
       // Rules roll forward from the latest period; history keeps its own.
       // eveningHours is period DATA (manual timecard entry, SPEC §6 Q3),
@@ -277,6 +280,8 @@ function PeriodWorkspace({
           <Shifts
             shifts={shiftDrafts}
             setShifts={setShiftDrafts}
+            leave={leaveDrafts}
+            setLeave={setLeaveDrafts}
             tiers={tiers}
             period={period}
             unit548Label={fmtCents(cfg.unit548Cents)}

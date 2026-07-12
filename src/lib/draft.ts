@@ -4,7 +4,7 @@
  * config. The engine itself never sees a string. Seeds are v1's
  * DEFAULT_CFG / DEMO_SHIFTS / ACTUAL_SEED verbatim.
  */
-import { DEFAULT_CFG, dollarsToCents, type EngineConfig, type Shift } from "./engine.ts";
+import { DEFAULT_CFG, dollarsToCents, type EngineConfig, type LeaveEntry, type LeaveType, type Shift } from "./engine.ts";
 
 /** v1's num(): parse-or-zero at the input boundary. */
 export const num = (v: string): number => {
@@ -146,6 +146,23 @@ export function draftToShift(s: ShiftDraft): Shift {
 
 export function blankShift(): ShiftDraft {
   return { id: uid(), date: "", hours: "12", charge: "0", premium: "0", preceptor: "0", units548: "0", note: "" };
+}
+
+/* ---------------- leave drafts (Kronos Time Off codes) ---------------- */
+
+export interface LeaveDraft {
+  id: string;
+  date: string;
+  hours: string;
+  type: LeaveType;
+}
+
+export function draftToLeave(l: LeaveDraft): LeaveEntry {
+  return { id: l.id, date: l.date, hours: num(l.hours), type: l.type };
+}
+
+export function blankLeave(type: LeaveType): LeaveDraft {
+  return { id: uid(), date: "", hours: "12", type };
 }
 
 /** v1 DEMO_SHIFTS — the real 6/22–7/05 period. */
