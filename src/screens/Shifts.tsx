@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
-import { isWeekend, type BonusTier, type EngineConfig, type PeriodResult } from "../lib/engine.ts";
-import { blankShift, num, type ShiftDraft } from "../lib/draft.ts";
-import { dayLabel, fmtNum } from "../lib/format.ts";
-import { Field, StatTile } from "../ui/kit.tsx";
+import { ChevronDown, HeartPulse, Plus, Trash2 } from "lucide-react";
+import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
+import { blankLeave, blankShift, num, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
+import { dayLabel, fmtNum, fmtRate } from "../lib/format.ts";
+import { Card, Field, StatTile } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -76,25 +76,21 @@ function ShiftCard({
             <Field label="Premium" value={s.premium} onChange={(v) => setShift("premium", v)} w="w-full" />
             <Field label="Precept" value={s.preceptor} onChange={(v) => setShift("preceptor", v)} w="w-full" />
           </div>
+          <div>
+            <span className="label">Add bonus tier — taps add to 548 units</span>
+            <div className="flex flex-wrap gap-1.5">
+              {tiers.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setShift("units548", String(round2(num(s.units548) + t.units)))}
+                  className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left font-mono text-[11px] hover:border-accent hover:text-accent"
+                >
+                  {t.label} <span className="font-semibold text-accent">+{t.units}u</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col">
-              <span className="label">Add bonus tier</span>
-              <select
-                value=""
-                onChange={(e) => {
-                  const tier = tiers.find((t) => t.id === e.target.value);
-                  if (tier) setShift("units548", String(round2(num(s.units548) + tier.units)));
-                }}
-                className="input w-auto max-w-[180px] px-2.5 py-1.5 font-mono text-xs"
-              >
-                <option value="">+ tier…</option>
-                {tiers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.label} (+{t.units}u)
-                  </option>
-                ))}
-              </select>
-            </label>
             <label className="flex min-w-32 flex-1 flex-col">
               <span className="label">Note</span>
               <input
@@ -119,6 +115,8 @@ function ShiftCard({
 export default function Shifts({
   shifts,
   setShifts,
+  leave,
+  setLeave,
   tiers,
   period,
   unit548Label,
@@ -130,6 +128,8 @@ export default function Shifts({
 }: {
   shifts: ShiftDraft[];
   setShifts: (updater: (arr: ShiftDraft[]) => ShiftDraft[]) => void;
+  leave: LeaveDraft[];
+  setLeave: (updater: (arr: LeaveDraft[]) => LeaveDraft[]) => void;
   tiers: BonusTier[];
   period: PeriodResult;
   unit548Label: string;
@@ -191,11 +191,61 @@ export default function Shifts({
         <Plus size={15} /> Add shift
       </button>
 
+      <Card>
+        <div className="mb-1 flex items-center gap-1.5">
+          <HeartPulse size={13} className="text-blue" />
+          <span className="eyebrow">Leave — sick · LOA · medical</span>
+        </div>
+        <p className="font-mono text-[11px] text-ink-dim">
+          One tap per leave day: paid at base rate ({fmtRate(cfg.baseRateCents)}/hr), never counts toward the 80-hr OT
+          line, no weekend diff, and these hours don't accrue PTO. Kronos shows them as Time Off pay codes.
+        </p>
+
+        {leave.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {leave.map((l) => (
+              <div key={l.id} className="flex flex-wrap items-center gap-2 border-t border-surface-line/60 pt-2">
+                <span className="w-32 font-mono text-xs">{LEAVE_LABELS[l.type]}</span>
+                <input
+                  type="date"
+                  value={l.date}
+                  onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, date: e.target.value } : x)))}
+                  className="input w-auto px-2 py-1 font-mono text-xs"
+                />
+                <input
+                  value={l.hours}
+                  onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, hours: e.target.value } : x)))}
+                  inputMode="decimal"
+                  className="input w-16 px-2 py-1 text-right font-mono text-xs tabular-nums"
+                />
+                <span className="font-mono text-[11px] text-ink-dim">hrs</span>
+                <button
+                  onClick={() => setLeave((arr) => arr.filter((x) => x.id !== l.id))}
+                  className="pressable p-1 text-ink-dim hover:text-neg"
+                  aria-label="Remove leave"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          {LEAVE_TYPES.map((type: LeaveType) => (
+            <button key={type} onClick={() => setLeave((arr) => [...arr, blankLeave(type)])} className="btn btn-ghost pressable text-xs">
+              <Plus size={13} /> {LEAVE_LABELS[type]}
+            </button>
+          ))}
+        </div>
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
         <StatTile label="Regular" value={fmtNum(period.regHours) + " h"} />
         <StatTile label="Overtime" value={fmtNum(period.otHours) + " h"} tone="amber" />
         <StatTile label="Double time" value={fmtNum(period.dtHours) + " h"} tone="neg" />
         <StatTile label="Total worked" value={fmtNum(period.workedHours) + " h"} tone="pos" />
+        {period.leaveHours > 0 && <StatTile label="Leave (base)" value={fmtNum(period.leaveHours) + " h"} sub="non-PTO-accruing" />}
       </div>
     </div>
   );

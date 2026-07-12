@@ -205,6 +205,29 @@ export interface PayLine {
   nonCash?: boolean;
 }
 
+/**
+ * Paid leave — Kronos "Time Off" pay codes (e.g. 921/933 on the
+ * timecard). Paid at base rate; NOT hours worked, so they never count
+ * toward the 80-hr OT line, earn no DT/weekend diff, and accrue no PTO.
+ */
+export type LeaveType = "sto" | "loa" | "medical";
+
+export const LEAVE_LABELS: Record<LeaveType, string> = {
+  sto: "Sick / STO",
+  loa: "Leave of Absence",
+  medical: "Medical Leave",
+};
+
+export const LEAVE_TYPES = Object.keys(LEAVE_LABELS) as LeaveType[];
+
+export interface LeaveEntry {
+  id: string;
+  /** YYYY-MM-DD; informational (no weekend diff on leave). */
+  date: string;
+  hours: number;
+  type: LeaveType;
+}
+
 export interface PeriodResult {
   lines: PayLine[];
   grossCents: Cents;
@@ -213,9 +236,11 @@ export interface PeriodResult {
   otHours: number;
   dtHours: number;
   units548: number;
+  /** Paid-leave hours (base rate), separate from workedHours. */
+  leaveHours: number;
 }
 
-export function computePeriod(shifts: Shift[], cfg: EngineConfig): PeriodResult {
+export function computePeriod(shifts: Shift[], cfg: EngineConfig, leave: LeaveEntry[] = []): PeriodResult {
   const dtDailyCenti = toCenti(cfg.dtDailyHours);
   const otPeriodCenti = toCenti(cfg.otPeriodHours);
 
@@ -259,8 +284,26 @@ export function computePeriod(shifts: Shift[], cfg: EngineConfig): PeriodResult 
     { key: "premium", label: "Adder – Premium Pay (320)", qty: premiumCenti / 100, rateCents: cfg.premiumRateCents, amountCents: centiTimesRate(premiumCenti, cfg.premiumRateCents) },
     { key: "preceptor", label: "Adder – Preceptor Pay", qty: preceptCenti / 100, rateCents: cfg.preceptorRateCents, amountCents: centiTimesRate(preceptCenti, cfg.preceptorRateCents) },
     { key: "bonus548", label: "Critical Shift Bonus (548)", qty: units548, rateCents: cfg.unit548Cents, amountCents: unitsToCents(units548, cfg.unit548Cents), isUnits: true },
-    { key: "imputed", label: "Imputed – Basic Term Life", qty: 0, rateCents: 0, amountCents: cfg.imputedCents, nonCash: true },
   ];
+
+  // Leave lines: base rate, one line per type used, no OT/DT/weekend effects.
+  const leaveCenti: Record<LeaveType, number> = { sto: 0, loa: 0, medical: 0 };
+  for (const l of leave) leaveCenti[l.type] += toCenti(l.hours);
+  let totalLeaveCenti = 0;
+  for (const type of LEAVE_TYPES) {
+    const centi = leaveCenti[type];
+    if (centi <= 0) continue;
+    totalLeaveCenti += centi;
+    lines.push({
+      key: type,
+      label: `${LEAVE_LABELS[type]} — base rate`,
+      qty: centi / 100,
+      rateCents: cfg.baseRateCents,
+      amountCents: centiTimesRate(centi, cfg.baseRateCents),
+    });
+  }
+
+  lines.push({ key: "imputed", label: "Imputed – Basic Term Life", qty: 0, rateCents: 0, amountCents: cfg.imputedCents, nonCash: true });
 
   const grossCents = lines.reduce((acc, l) => acc + l.amountCents, 0);
 
@@ -272,6 +315,7 @@ export function computePeriod(shifts: Shift[], cfg: EngineConfig): PeriodResult 
     otHours: otCenti / 100,
     dtHours: dtCenti / 100,
     units548,
+    leaveHours: totalLeaveCenti / 100,
   };
 }
 
