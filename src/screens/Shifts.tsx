@@ -15,6 +15,7 @@ function ShiftCard({
   onToggle,
   setShift,
   onRemove,
+  onCallIn,
   tiers,
 }: {
   s: ShiftDraft;
@@ -22,8 +23,11 @@ function ShiftCard({
   onToggle: () => void;
   setShift: (key: keyof ShiftDraft, value: string) => void;
   onRemove: () => void;
+  onCallIn: () => void;
   tiers: BonusTier[];
 }) {
+  const [tierMenuOpen, setTierMenuOpen] = useState(false);
+  const [confirmCallIn, setConfirmCallIn] = useState(false);
   const wknd = s.date !== "" && isWeekend(s.date);
   const extras: string[] = [];
   if (num(s.charge) > 0) extras.push(`chg ${s.charge}`);
@@ -77,18 +81,30 @@ function ShiftCard({
             <Field label="Precept" value={s.preceptor} onChange={(v) => setShift("preceptor", v)} w="w-full" />
           </div>
           <div>
-            <span className="label">Add bonus tier — taps add to 548 units</span>
-            <div className="flex flex-wrap gap-1.5">
-              {tiers.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setShift("units548", String(round2(num(s.units548) + t.units)))}
-                  className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left font-mono text-[11px] hover:border-accent hover:text-accent"
-                >
-                  {t.label} <span className="font-semibold text-accent">+{t.units}u</span>
-                </button>
-              ))}
-            </div>
+            <button
+              onClick={() => setTierMenuOpen((v) => !v)}
+              aria-expanded={tierMenuOpen}
+              className="pressable flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim hover:text-ink"
+            >
+              Add bonus tier
+              <ChevronDown size={13} className={`transition-transform ${tierMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+            {tierMenuOpen && (
+              <div className="reveal mt-2 flex flex-wrap gap-1.5">
+                {tiers.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setShift("units548", String(round2(num(s.units548) + t.units)));
+                      setTierMenuOpen(false);
+                    }}
+                    className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left font-mono text-[11px] hover:border-accent hover:text-accent"
+                  >
+                    {t.label} <span className="font-semibold text-accent">+{t.units}u</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex min-w-32 flex-1 flex-col">
@@ -99,6 +115,23 @@ function ShiftCard({
                 className="input px-2.5 py-1.5 font-mono text-xs"
               />
             </label>
+            {confirmCallIn ? (
+              <span className="mb-1 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider">
+                <button onClick={onCallIn} className="pressable font-semibold text-blue">
+                  Convert to STO?
+                </button>
+                <button onClick={() => setConfirmCallIn(false)} className="pressable text-ink-dim hover:text-ink">
+                  Keep
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setConfirmCallIn(true)}
+                className="pressable mb-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-blue"
+              >
+                <HeartPulse size={13} /> Called in sick
+              </button>
+            )}
             <button
               onClick={onRemove}
               className="pressable mb-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg"
@@ -182,6 +215,13 @@ export default function Shifts({
             onToggle={() => toggle(s.id)}
             setShift={(key, value) => setShift(s.id, key, value)}
             onRemove={() => setShifts((arr) => arr.filter((x) => x.id !== s.id))}
+            onCallIn={() => {
+              // Called in for THIS day: the scheduled shift becomes STO leave
+              // with the same date and hours.
+              const entry = { ...blankLeave("sto"), date: s.date || todayIso(), hours: s.hours };
+              setLeave((arr) => [...arr, entry]);
+              setShifts((arr) => arr.filter((x) => x.id !== s.id));
+            }}
             tiers={tiers}
           />
         ))}
