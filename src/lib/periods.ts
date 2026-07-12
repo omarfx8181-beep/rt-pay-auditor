@@ -52,13 +52,43 @@ export const nextPeriodRange = (latestEndDate: string): { startDate: string; end
   return { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1) };
 };
 
+/** The biweekly window right before `earliestStartDate` — for logging past stubs. */
+export const prevPeriodRange = (earliestStartDate: string): { startDate: string; endDate: string } => {
+  const endDate = addDays(earliestStartDate, -1);
+  return { startDate: addDays(endDate, -(PERIOD_DAYS - 1)), endDate };
+};
+
+/* ---------------- other income (non-Fairview) ---------------- */
+
+export interface OtherIncomeDraft {
+  id: string;
+  /** YYYY-MM-DD — the pay date; its year buckets the entry. */
+  date: string;
+  source: string;
+  /** Dollars as typed. */
+  gross: string;
+  /** Dollars as typed; blank = nothing withheld, take-home equals gross. */
+  net: string;
+  updatedAt: number;
+}
+
 /* ---------------- YTD rollups ---------------- */
 
 export interface YtdRollup {
   year: string;
   periodCount: number;
+  /** Periods whose stub net has been entered — their numbers are stub-true. */
+  stubCount: number;
+  /** Fairview money: the stub's actual when entered, engine expected otherwise. */
   grossCents: Cents;
   netCents: Cents;
+  /** Non-Fairview income for the year. */
+  otherGrossCents: Cents;
+  otherNetCents: Cents;
+  otherCount: number;
+  /** Everything combined — the ticker numbers. */
+  totalGrossCents: Cents;
+  totalNetCents: Cents;
   units548: number;
   otHours: number;
   dtHours: number;
@@ -66,13 +96,30 @@ export interface YtdRollup {
   leaveHours: number;
 }
 
-/** Engine-computed totals for every period ending in `year` (archived included). */
-export function rollupYtd(periods: PayPeriod[], year: string): YtdRollup {
+const parseDollars = (raw: string | undefined): Cents | null => {
+  const trimmed = (raw ?? "").trim();
+  if (trimmed === "") return null;
+  const n = parseFloat(trimmed.replace(/[$,]/g, ""));
+  return Number.isNaN(n) ? null : Math.round(n * 100);
+};
+
+/**
+ * Year totals across every period ending in `year` (archived included)
+ * plus other income dated in it. Stub actuals outrank engine estimates:
+ * once a period's real gross/net is entered, those are the truth.
+ */
+export function rollupYtd(periods: PayPeriod[], year: string, otherIncome: OtherIncomeDraft[] = []): YtdRollup {
   const rollup: YtdRollup = {
     year,
     periodCount: 0,
+    stubCount: 0,
     grossCents: 0,
     netCents: 0,
+    otherGrossCents: 0,
+    otherNetCents: 0,
+    otherCount: 0,
+    totalGrossCents: 0,
+    totalNetCents: 0,
     units548: 0,
     otHours: 0,
     dtHours: 0,
@@ -84,15 +131,29 @@ export function rollupYtd(periods: PayPeriod[], year: string): YtdRollup {
     const cfg = draftToConfig(p.cfgDraft);
     const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
     const net = computeNet(period.grossCents, cfg);
+    const actualGross = parseDollars(p.actual?.gross);
+    const actualNet = parseDollars(p.actual?.net);
     rollup.periodCount += 1;
-    rollup.grossCents += period.grossCents;
-    rollup.netCents += net.netCents;
+    if (actualNet !== null) rollup.stubCount += 1;
+    rollup.grossCents += actualGross ?? period.grossCents;
+    rollup.netCents += actualNet ?? net.netCents;
     rollup.units548 += period.units548;
     rollup.otHours += period.otHours;
     rollup.dtHours += period.dtHours;
     rollup.workedHours += period.workedHours;
     rollup.leaveHours += period.leaveHours;
   }
+  for (const o of otherIncome) {
+    if (o.date.slice(0, 4) !== year) continue;
+    const gross = parseDollars(o.gross) ?? 0;
+    // blank net = nothing withheld → take-home equals gross
+    const net = parseDollars(o.net) ?? gross;
+    rollup.otherCount += 1;
+    rollup.otherGrossCents += gross;
+    rollup.otherNetCents += net;
+  }
+  rollup.totalGrossCents = rollup.grossCents + rollup.otherGrossCents;
+  rollup.totalNetCents = rollup.netCents + rollup.otherNetCents;
   return rollup;
 }
 
@@ -100,16 +161,19 @@ export function rollupYtd(periods: PayPeriod[], year: string): YtdRollup {
 
 export interface BackupFile {
   app: "rt-pay-auditor";
-  version: 1;
+  /** v1 had periods only; v2 adds otherIncome. Both import fine. */
+  version: 1 | 2;
   exportedAt: string;
   periods: PayPeriod[];
+  otherIncome?: OtherIncomeDraft[];
 }
 
-export const buildBackup = (periods: PayPeriod[], exportedAt: string): BackupFile => ({
+export const buildBackup = (periods: PayPeriod[], otherIncome: OtherIncomeDraft[], exportedAt: string): BackupFile => ({
   app: "rt-pay-auditor",
-  version: 1,
+  version: 2,
   exportedAt,
   periods,
+  otherIncome,
 });
 
 export function parseBackup(text: string): BackupFile {
@@ -122,18 +186,21 @@ export function parseBackup(text: string): BackupFile {
       throw new Error("Backup file has a malformed period entry.");
     }
   }
-  return obj as BackupFile;
+  if (obj.otherIncome !== undefined && !Array.isArray(obj.otherIncome)) {
+    throw new Error("Backup file has a malformed other-income section.");
+  }
+  return { ...obj, otherIncome: obj.otherIncome ?? [] } as BackupFile;
 }
 
-export interface MergeResult {
-  merged: PayPeriod[];
+export interface MergeResult<T> {
+  merged: T[];
   added: number;
   updated: number;
   skipped: number;
 }
 
-/** Merge by id; the newer updatedAt wins. Existing periods are never dropped. */
-export function mergeBackup(existing: PayPeriod[], incoming: PayPeriod[]): MergeResult {
+/** Merge by id; the newer updatedAt wins. Existing entries are never dropped. */
+export function mergeBackup<T extends { id: string; updatedAt?: number }>(existing: T[], incoming: T[]): MergeResult<T> {
   const byId = new Map(existing.map((p) => [p.id, p]));
   let added = 0;
   let updated = 0;

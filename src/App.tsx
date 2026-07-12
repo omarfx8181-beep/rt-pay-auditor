@@ -17,6 +17,7 @@ import {
   nextPeriodRange,
   parseBackup,
   periodLabel,
+  rollupYtd,
   PERIOD_DAYS,
   type PayPeriod,
 } from "./lib/periods.ts";
@@ -28,7 +29,7 @@ import Shifts from "./screens/Shifts.tsx";
 import Paycheck, { type WhatIfDraft } from "./screens/Paycheck.tsx";
 import Audit from "./screens/Audit.tsx";
 import Rules, { type AppearanceMode, type QuestionAnswer } from "./screens/Rules.tsx";
-import Periods from "./screens/Periods.tsx";
+import Periods, { newOtherIncome } from "./screens/Periods.tsx";
 
 const TABS: Tab[] = [
   { id: "shifts", label: "Shifts", Icon: CalendarClock },
@@ -181,6 +182,10 @@ function PeriodWorkspace({
   const net = useMemo(() => computeNet(period.grossCents, cfg), [period.grossCents, cfg]);
   const auditRows = useMemo(() => buildAuditRows(period, net), [period, net]);
 
+  const otherIncome = useLiveQuery(() => db.otherIncome.orderBy("date").reverse().toArray(), []) ?? [];
+  const year = record.endDate.slice(0, 4);
+  const ytd = useMemo(() => rollupYtd(periods, year, otherIncome), [periods, year, otherIncome]);
+
   const netDeltaCents = (actual.net ?? "") === "" ? null : dollarsToCents(num(actual.net)) - net.netCents;
   const offCount = auditRows.filter((row) => {
     const raw = actual[row.key] ?? "";
@@ -221,9 +226,30 @@ function PeriodWorkspace({
     await setCurrentPeriodId(fresh.id);
   };
 
+  // Historical stub: a period with just the real gross/net; rules snapshot
+  // from the earliest period (closest in time to the old stub).
+  const logPastStub = async (endDate: string, gross: string, net: string) => {
+    const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
+    const now = Date.now();
+    await db.periods.add({
+      id: crypto.randomUUID(),
+      startDate: addDays(endDate, -(PERIOD_DAYS - 1)),
+      endDate,
+      shifts: [],
+      leave: [],
+      actual: { gross: gross.trim(), net: net.trim() },
+      cfgDraft: { ...earliest.cfgDraft, eveningHours: "0" },
+      tiers: earliest.tiers,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+  };
+
   const exportBackup = async () => {
     const all = await db.periods.toArray();
-    const json = JSON.stringify(buildBackup(all, new Date().toISOString()), null, 2);
+    const others = await db.otherIncome.toArray();
+    const json = JSON.stringify(buildBackup(all, others, new Date().toISOString()), null, 2);
     const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
@@ -236,9 +262,14 @@ function PeriodWorkspace({
     try {
       const backup = parseBackup(await file.text());
       const existing = await db.periods.toArray();
-      const { merged, added, updated, skipped } = mergeBackup(existing, backup.periods);
-      await db.periods.bulkPut(merged);
-      setImportStatus(`Imported: ${added} added, ${updated} updated, ${skipped} unchanged.`);
+      const periodsMerge = mergeBackup(existing, backup.periods);
+      await db.periods.bulkPut(periodsMerge.merged);
+      const existingOther = await db.otherIncome.toArray();
+      const otherMerge = mergeBackup(existingOther, backup.otherIncome ?? []);
+      await db.otherIncome.bulkPut(otherMerge.merged);
+      setImportStatus(
+        `Imported: ${periodsMerge.added + otherMerge.added} added, ${periodsMerge.updated + otherMerge.updated} updated, ${periodsMerge.skipped + otherMerge.skipped} unchanged.`,
+      );
     } catch (err) {
       setImportStatus(String(err instanceof Error ? err.message : err));
     }
@@ -274,6 +305,24 @@ function PeriodWorkspace({
           />
         </div>
       </Hero>
+
+      {/* year ticker — total made / take-home across ALL income, always visible */}
+      <button
+        onClick={() => selectTab("periods", TABS.length - 1)}
+        className="card pressable mt-3 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5 text-left"
+      >
+        <span className="eyebrow">{year} · All income</span>
+        <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-sm tabular-nums">
+          <span>
+            <span className="text-ink-dim">made </span>
+            {fmtCents(ytd.totalGrossCents)}
+          </span>
+          <span className="font-semibold text-pos">
+            <span className="font-normal text-ink-dim">take-home </span>
+            {fmtCents(ytd.totalNetCents)}
+          </span>
+        </span>
+      </button>
 
       <main key={tab} className="page-enter mt-5">
         {tab === "shifts" && (
@@ -337,8 +386,14 @@ function PeriodWorkspace({
           <Periods
             periods={periods}
             currentId={record.id}
+            ytd={ytd}
+            otherIncome={otherIncome}
             onSelect={(id) => void setCurrentPeriodId(id)}
             onCreateNext={() => void createNext()}
+            onLogPastStub={(endDate, gross, net) => void logPastStub(endDate, gross, net)}
+            onAddOther={() => void db.otherIncome.add(newOtherIncome())}
+            onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
+            onDeleteOther={(id) => void db.otherIncome.delete(id)}
             onSetDates={(id, startDate) =>
               void db.periods.update(id, { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1), updatedAt: Date.now() })
             }
