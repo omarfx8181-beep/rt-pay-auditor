@@ -228,12 +228,12 @@ function PeriodWorkspace({
 
   // Historical stub: a period with just the real gross/net; rules snapshot
   // from the earliest period (closest in time to the old stub).
-  const logPastStub = async (endDate: string, gross: string, net: string) => {
+  const logPastStub = async (endDate: string, gross: string, net: string, startDate?: string) => {
     const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
     const now = Date.now();
     await db.periods.add({
       id: crypto.randomUUID(),
-      startDate: addDays(endDate, -(PERIOD_DAYS - 1)),
+      startDate: startDate ?? addDays(endDate, -(PERIOD_DAYS - 1)),
       endDate,
       shifts: [],
       leave: [],
@@ -288,41 +288,33 @@ function PeriodWorkspace({
 
       <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
 
+      {/* one big number, one verdict — details live in the quiet rows below */}
       <Hero className="mt-5">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4">
-          <VitalStat label="Expected gross" value={fmtCents(period.grossCents)} sub={fmtNum(period.workedHours) + " hrs worked"} />
-          <VitalStat label="Expected net" value={fmtCents(net.netCents)} sub={"taxes " + fmtCents(net.taxesCents)} />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+          <VitalStat label="Expected net" value={fmtCents(net.netCents)} sub="this period, to your account" />
           <VitalStat
-            label="548 units"
-            value={fmtNum(period.units548)}
-            sub={fmtCents(Math.round(period.units548 * cfg.unit548Cents)) + " bonus"}
-          />
-          <VitalStat
-            label="Δ stub vs expected"
-            value={netDeltaCents === null ? "—" : fmtSignedCents(netDeltaCents)}
-            sub={netDeltaCents === null ? "enter the stub in Audit" : reconciled ? "Reconciled ✓" : `${offCount} line(s) off — see Audit`}
+            label="Stub check"
+            value={netDeltaCents === null ? "—" : reconciled ? "✓ Paid right" : fmtSignedCents(netDeltaCents)}
+            sub={netDeltaCents === null ? "enter the stub in Audit" : reconciled ? "matches to the penny" : `${offCount} line(s) off — see Audit`}
             color={netDeltaCents === null ? "" : reconciled ? "text-hero-pos" : "text-hero-neg"}
           />
         </div>
-      </Hero>
-
-      {/* year ticker — total made / take-home across ALL income, always visible */}
-      <button
-        onClick={() => selectTab("periods", TABS.length - 1)}
-        className="card pressable mt-3 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5 text-left"
-      >
-        <span className="eyebrow">{year} · All income</span>
-        <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-sm tabular-nums">
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-white/10 pt-3 font-mono text-[11px] tabular-nums text-hero-fg/60">
+          <span>gross {fmtCents(period.grossCents)}</span>
+          <span>{fmtNum(period.workedHours)} hrs</span>
+          <span>{fmtNum(period.units548)}u 548</span>
+        </div>
+        <button
+          onClick={() => selectTab("periods", TABS.length - 1)}
+          className="pressable mt-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-left font-mono text-[11px] tabular-nums text-hero-fg/60"
+        >
           <span>
-            <span className="text-ink-dim">made </span>
-            {fmtCents(ytd.totalGrossCents)}
+            {year} so far · made <span className="text-hero-fg/90">{fmtCents(ytd.totalGrossCents)}</span> · take-home{" "}
+            <span className="font-semibold text-hero-pos">{fmtCents(ytd.totalNetCents)}</span>
           </span>
-          <span className="font-semibold text-pos">
-            <span className="font-normal text-ink-dim">take-home </span>
-            {fmtCents(ytd.totalNetCents)}
-          </span>
-        </span>
-      </button>
+          <span className="text-hero-fg/40">→</span>
+        </button>
+      </Hero>
 
       <main key={tab} className="page-enter mt-5">
         {tab === "shifts" && (
@@ -388,9 +380,10 @@ function PeriodWorkspace({
             currentId={record.id}
             ytd={ytd}
             otherIncome={otherIncome}
+            apiKey={apiKey}
             onSelect={(id) => void setCurrentPeriodId(id)}
             onCreateNext={() => void createNext()}
-            onLogPastStub={(endDate, gross, net) => void logPastStub(endDate, gross, net)}
+            onLogPastStub={(endDate, gross, net, startDate) => void logPastStub(endDate, gross, net, startDate)}
             onAddOther={() => void db.otherIncome.add(newOtherIncome())}
             onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
             onDeleteOther={(id) => void db.otherIncome.delete(id)}
