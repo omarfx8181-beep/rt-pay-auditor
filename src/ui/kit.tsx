@@ -3,7 +3,8 @@
  * index.css, which are ports of Knockdown's own (see design/tokens.md §5).
  * Every screen composes these; nothing styles itself from scratch.
  */
-import type { ComponentType, ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 
 /* ---------------- text & fields ---------------- */
 
@@ -70,6 +71,41 @@ export function CalloutCard({
   className?: string;
 }) {
   return <section className={`rounded-2xl border p-4 shadow-card ${CALLOUT_TONES[tone]} ${className}`}>{children}</section>;
+}
+
+/** Card whose content hides behind its header — the antidote to number soup. */
+export function Disclosure({
+  title,
+  icon,
+  hint,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  /** Quiet one-liner shown while closed, so closed ≠ mysterious. */
+  hint?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="card p-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="pressable flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span className="eyebrow flex items-center gap-1.5">
+          {icon}
+          {title}
+        </span>
+        <ChevronDown size={14} className={`shrink-0 text-ink-dim transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {!open && hint ? <p className="mt-1.5 font-mono text-[11px] text-ink-dim">{hint}</p> : null}
+      {open && <div className="reveal mt-3">{children}</div>}
+    </section>
+  );
 }
 
 /** Ink-block hero card with Knockdown's dot texture; the glow wash is opt-in (Boost-style). */

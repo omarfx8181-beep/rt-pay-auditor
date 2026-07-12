@@ -82,7 +82,7 @@ export function scanRowsToDrafts(rows: ScanRow[]): ShiftDraft[] {
   }));
 }
 
-const fileToB64 = (file: File): Promise<string> =>
+export const fileToB64 = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
@@ -90,15 +90,21 @@ const fileToB64 = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
-/** The network call. Key comes from Settings; nothing else leaves the device, ever. */
-export async function parseScheduleImages(files: File[], apiKey: string): Promise<RawScanShift[]> {
-  const images = [];
+/** Images become image blocks; PDFs become document blocks. */
+export async function filesToContentBlocks(files: File[]): Promise<unknown[]> {
+  const blocks: unknown[] = [];
   for (const f of files) {
-    images.push({
-      type: "image",
-      source: { type: "base64", media_type: f.type || "image/png", data: await fileToB64(f) },
+    const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+    blocks.push({
+      type: isPdf ? "document" : "image",
+      source: { type: "base64", media_type: isPdf ? "application/pdf" : f.type || "image/png", data: await fileToB64(f) },
     });
   }
+  return blocks;
+}
+
+/** One vision call. Key comes from Settings; nothing else leaves the device, ever. */
+export async function callClaude(content: unknown[], instruction: string, apiKey: string, maxTokens = 1000): Promise<string> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -109,10 +115,8 @@ export async function parseScheduleImages(files: File[], apiKey: string): Promis
     },
     body: JSON.stringify({
       model: SCAN_MODEL,
-      max_tokens: 1000,
-      messages: [
-        { role: "user", content: [...images, { type: "text", text: scanInstruction(new Date().toISOString().slice(0, 10)) }] },
-      ],
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: [...content, { type: "text", text: instruction }] }],
     }),
   });
   const data = (await response.json()) as {
@@ -120,9 +124,14 @@ export async function parseScheduleImages(files: File[], apiKey: string): Promis
     error?: { message?: string };
   };
   if (!response.ok) throw new Error(data.error?.message ?? `API error (${response.status})`);
-  const text = (data.content ?? [])
+  return (data.content ?? [])
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("\n");
+}
+
+export async function parseScheduleImages(files: File[], apiKey: string): Promise<RawScanShift[]> {
+  const blocks = await filesToContentBlocks(files.filter((f) => f.type?.startsWith("image/")));
+  const text = await callClaude(blocks, scanInstruction(new Date().toISOString().slice(0, 10)), apiKey);
   return parseScanResponse(text);
 }
