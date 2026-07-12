@@ -27,7 +27,7 @@ import { Eyebrow, Hero, TabBar, type Tab } from "./ui/kit.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import Paycheck, { type WhatIfDraft } from "./screens/Paycheck.tsx";
 import Audit from "./screens/Audit.tsx";
-import Rules from "./screens/Rules.tsx";
+import Rules, { type AppearanceMode, type QuestionAnswer } from "./screens/Rules.tsx";
 import Periods from "./screens/Periods.tsx";
 
 const TABS: Tab[] = [
@@ -64,8 +64,26 @@ export default function App() {
   // so panels mount with the real saved values)
   const identityRow = useLiveQuery(async () => (await db.settings.get("identity")) ?? null, []);
   const apiKeyRow = useLiveQuery(async () => (await db.settings.get("anthropicApiKey")) ?? null, []);
+  const feedUrlRow = useLiveQuery(async () => (await db.settings.get("icalFeedUrl")) ?? null, []);
+  const appearanceRow = useLiveQuery(async () => (await db.settings.get("appearance")) ?? null, []);
+  const answersRow = useLiveQuery(async () => (await db.settings.get("questionAnswers")) ?? null, []);
 
-  if (!periods || periods.length === 0 || identityRow === undefined || apiKeyRow === undefined) {
+  // Reflect the chosen appearance on <html>; "system" removes the override.
+  const appearance = (appearanceRow?.value as AppearanceMode) || "system";
+  useEffect(() => {
+    if (appearance === "system") delete document.documentElement.dataset.mode;
+    else document.documentElement.dataset.mode = appearance;
+  }, [appearance]);
+
+  if (
+    !periods ||
+    periods.length === 0 ||
+    identityRow === undefined ||
+    apiKeyRow === undefined ||
+    feedUrlRow === undefined ||
+    appearanceRow === undefined ||
+    answersRow === undefined
+  ) {
     return (
       <div className="grid min-h-screen place-items-center">
         <div className="max-w-sm px-6 text-center">
@@ -89,6 +107,12 @@ export default function App() {
   } catch {
     /* corrupt setting → start blank */
   }
+  let answers: Record<string, QuestionAnswer> = {};
+  try {
+    if (answersRow) answers = JSON.parse(answersRow.value) as Record<string, QuestionAnswer>;
+  } catch {
+    /* corrupt setting → all questions open */
+  }
   // key by period id: switching periods remounts the workspace with fresh drafts
   return (
     <PeriodWorkspace
@@ -97,6 +121,9 @@ export default function App() {
       periods={periods}
       identity={identity}
       apiKey={apiKeyRow?.value ?? ""}
+      feedUrl={feedUrlRow?.value ?? ""}
+      appearance={appearance}
+      answers={answers}
     />
   );
 }
@@ -106,11 +133,17 @@ function PeriodWorkspace({
   periods,
   identity,
   apiKey,
+  feedUrl,
+  appearance,
+  answers,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
   identity: EmailIdentity;
   apiKey: string;
+  feedUrl: string;
+  appearance: AppearanceMode;
+  answers: Record<string, QuestionAnswer>;
 }) {
   const [tab, setTab] = useState("shifts");
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
@@ -249,6 +282,9 @@ function PeriodWorkspace({
             unit548Label={fmtCents(cfg.unit548Cents)}
             cfg={cfg}
             apiKey={apiKey}
+            feedUrl={feedUrl}
+            periodStart={record.startDate}
+            periodEnd={record.endDate}
           />
         )}
         {tab === "paycheck" && (
@@ -284,6 +320,12 @@ function PeriodWorkspace({
             unit548Cents={cfg.unit548Cents}
             apiKey={apiKey}
             onSaveApiKey={(key) => void db.settings.put({ key: "anthropicApiKey", value: key })}
+            feedUrl={feedUrl}
+            onSaveFeedUrl={(url) => void db.settings.put({ key: "icalFeedUrl", value: url })}
+            appearance={appearance}
+            onSetAppearance={(mode) => void db.settings.put({ key: "appearance", value: mode })}
+            answers={answers}
+            onSaveAnswers={(next) => void db.settings.put({ key: "questionAnswers", value: JSON.stringify(next) })}
           />
         )}
         {tab === "periods" && (

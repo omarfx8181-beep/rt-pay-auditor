@@ -1,16 +1,23 @@
 import { useState } from "react";
-import { AlertTriangle, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { BonusTier } from "../lib/engine.ts";
 import { num, type CfgDraft } from "../lib/draft.ts";
 import { fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Field } from "../ui/kit.tsx";
 
-const OPEN_QUESTIONS = [
-  "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?",
-  '"12 = $500" — confirmed as the 12-hr extra-shift tier (10 units)?',
-  "What does code 301 (Eve Mgr, −4.00/day) remove? Until known, evening hours are entered manually from the timecard.",
-  "Preceptor adder rate — stub shows YTD only; seeded at $3/hr.",
+const OPEN_QUESTIONS: Array<{ id: string; text: string }> = [
+  { id: "transport", text: "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?" },
+  { id: "twelve500", text: '"12 = $500" — confirmed as the 12-hr extra-shift tier (10 units)?' },
+  { id: "code301", text: "What does code 301 (Eve Mgr, −4.00/day) remove? Until known, evening hours are entered manually from the timecard." },
+  { id: "preceptor", text: "Preceptor adder rate — stub shows YTD only; seeded at $3/hr." },
 ];
+
+export interface QuestionAnswer {
+  answer: string;
+  answeredAt: number;
+}
+
+export type AppearanceMode = "system" | "light" | "dark";
 
 export default function Rules({
   cfgDraft,
@@ -20,6 +27,12 @@ export default function Rules({
   unit548Cents,
   apiKey,
   onSaveApiKey,
+  feedUrl,
+  onSaveFeedUrl,
+  appearance,
+  onSetAppearance,
+  answers,
+  onSaveAnswers,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -28,10 +41,20 @@ export default function Rules({
   unit548Cents: number;
   apiKey: string;
   onSaveApiKey: (key: string) => void;
+  feedUrl: string;
+  onSaveFeedUrl: (url: string) => void;
+  appearance: AppearanceMode;
+  onSetAppearance: (mode: AppearanceMode) => void;
+  answers: Record<string, QuestionAnswer>;
+  onSaveAnswers: (answers: Record<string, QuestionAnswer>) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   const [key, setKey] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
+  const [feed, setFeed] = useState(feedUrl);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const unanswered = OPEN_QUESTIONS.filter((q) => !answers[q.id]);
+  const answered = OPEN_QUESTIONS.filter((q) => answers[q.id]);
 
   return (
     <div className="space-y-3">
@@ -110,13 +133,32 @@ export default function Rules({
         </p>
       </Card>
 
-      <Card title="Schedule scan — your key, your device">
+      <Card title="Schedule scan — your credentials, your device">
         <p className="text-sm">
-          The scan on the Shifts tab reads ScheduleAnywhere screenshots with your own Anthropic API key. It's stored
-          only in this browser — never in the repo, never in JSON backups, and screenshots go straight from here to
-          the API.
+          Best way to pull shifts: your ScheduleAnywhere <strong>calendar feed</strong> — in ScheduleAnywhere go to
+          Employee → iCalendar → Copy URL. No API key needed. Both values below live only in this browser: never in
+          the repo, never in JSON backups.
         </p>
-        <div className="mt-3 flex flex-wrap items-end gap-2">
+        <div className="mt-3">
+          <label className="flex flex-col sm:max-w-xl">
+            <span className="label">ScheduleAnywhere feed URL</span>
+            <input
+              value={feed}
+              onChange={(e) => {
+                setFeed(e.target.value);
+                onSaveFeedUrl(e.target.value.trim());
+              }}
+              placeholder="https://www.scheduleanywhere.com/ical/…"
+              autoComplete="off"
+              className="input px-2.5 py-1.5 font-mono text-sm"
+            />
+          </label>
+        </div>
+        <p className="mt-4 text-sm">
+          Screenshot scanning is the fallback (schedule grids the feed doesn't cover). It uses your own Anthropic API
+          key, sending screenshots straight from your browser to the API.
+        </p>
+        <div className="mt-2 flex flex-wrap items-end gap-2">
           <label className="flex min-w-64 flex-1 flex-col sm:max-w-md">
             <span className="label">Anthropic API key</span>
             <input
@@ -141,16 +183,90 @@ export default function Rules({
         </div>
       </Card>
 
-      <CalloutCard tone="amber">
-        <div className="mb-2 flex items-center gap-1.5 font-display text-base font-semibold text-amber">
-          <AlertTriangle size={15} /> Open questions — confirm with payroll, then edit above
-        </div>
-        <ol className="list-decimal space-y-1 pl-5 text-sm">
-          {OPEN_QUESTIONS.map((q) => (
-            <li key={q}>{q}</li>
+      <Card title="Appearance">
+        <div className="flex gap-1.5">
+          {(["system", "light", "dark"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => onSetAppearance(mode)}
+              className={`btn px-3.5 py-2 text-xs capitalize ${appearance === mode ? "btn-primary" : "btn-ghost"} pressable`}
+            >
+              {mode}
+            </button>
           ))}
-        </ol>
-      </CalloutCard>
+        </div>
+        <p className="mt-2 font-mono text-[11px] text-ink-dim">
+          System follows your phone. Dark is the warm espresso set from the Knockdown tokens.
+        </p>
+      </Card>
+
+      {unanswered.length > 0 && (
+        <CalloutCard tone="amber">
+          <div className="mb-2 flex items-center gap-1.5 font-display text-base font-semibold text-amber">
+            <AlertTriangle size={15} /> Open questions — confirm with payroll, then edit above
+          </div>
+          <div className="space-y-3">
+            {unanswered.map((q) => (
+              <div key={q.id} className="text-sm">
+                <div>{q.text}</div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <input
+                    value={drafts[q.id] ?? ""}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
+                    placeholder="payroll's answer…"
+                    className="input min-w-48 flex-1 px-2.5 py-1.5 font-mono text-xs sm:max-w-md"
+                  />
+                  <button
+                    onClick={() => {
+                      const answer = (drafts[q.id] ?? "").trim();
+                      if (answer === "") return;
+                      onSaveAnswers({ ...answers, [q.id]: { answer, answeredAt: Date.now() } });
+                    }}
+                    className="btn btn-ghost pressable text-xs"
+                  >
+                    <CheckCircle2 size={13} /> Mark answered
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CalloutCard>
+      )}
+
+      {answered.length > 0 && (
+        <Card title="Config history — answered questions">
+          <div className="space-y-3">
+            {answered.map((q) => {
+              const a = answers[q.id];
+              return (
+                <div key={q.id} className="text-sm">
+                  <div className="text-ink-dim">{q.text}</div>
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="font-mono text-sm text-pos">✓ {a.answer}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-ink-dim">
+                      {new Date(a.answeredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const next = { ...answers };
+                        delete next[q.id];
+                        onSaveAnswers(next);
+                        setDrafts((d) => ({ ...d, [q.id]: a.answer }));
+                      }}
+                      className="pressable flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-dim hover:text-ink"
+                    >
+                      <RotateCcw size={11} /> Reopen
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 font-mono text-[11px] text-ink-dim">
+            Answers live here as history — remember to update the matching rate or tier above.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }

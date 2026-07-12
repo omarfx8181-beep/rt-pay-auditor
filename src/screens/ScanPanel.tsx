@@ -1,8 +1,9 @@
 import { useState, type ClipboardEvent } from "react";
-import { Loader2, ScanLine, X } from "lucide-react";
+import { CalendarArrowDown, Loader2, ScanLine, X } from "lucide-react";
 import { isWeekend, type EngineConfig } from "../lib/engine.ts";
 import type { ShiftDraft } from "../lib/draft.ts";
 import { buildScanRows, parseScheduleImages, scanRowsToDrafts, type ScanRow } from "../lib/scan.ts";
+import { icsToRawShifts } from "../lib/ical.ts";
 import { dayLabel, fmtNum } from "../lib/format.ts";
 import { CalloutCard, Eyebrow } from "../ui/kit.tsx";
 
@@ -14,21 +15,61 @@ type ScanState =
 
 export default function ScanPanel({
   apiKey,
+  feedUrl,
+  periodStart,
+  periodEnd,
   cfg,
   onApply,
 }: {
   apiKey: string;
+  feedUrl: string;
+  periodStart: string;
+  periodEnd: string;
   cfg: EngineConfig;
   onApply: (mode: "replace" | "append", drafts: ShiftDraft[]) => void;
 }) {
   const [scan, setScan] = useState<ScanState>({ status: "idle" });
 
-  const handleFiles = async (fileList: Iterable<File>) => {
-    const files = Array.from(fileList).filter((f) => f.type?.startsWith("image/"));
-    if (!files.length) return;
-    setScan({ status: "working", msg: `Reading ${files.length} screenshot${files.length > 1 ? "s" : ""}…` });
+  const preview = (rows: ScanRow[]) => {
+    if (!rows.length) throw new Error("No shifts found inside this pay period — check the period dates on Periods.");
+    setScan({ status: "preview", rows });
+  };
+
+  const pullFeed = async () => {
+    setScan({ status: "working", msg: "Pulling your posted schedule…" });
     try {
-      const raw = await parseScheduleImages(files, apiKey);
+      let text: string;
+      try {
+        const res = await fetch(feedUrl);
+        if (!res.ok) throw new Error(`feed returned ${res.status}`);
+        text = await res.text();
+      } catch {
+        throw new Error(
+          "Couldn't reach the feed from the browser (the site may not allow it). Open the feed URL in Safari — it downloads a .ics file — then upload that file here.",
+        );
+      }
+      preview(buildScanRows(icsToRawShifts(text, { from: periodStart, to: periodEnd }), cfg));
+    } catch (err) {
+      setScan({ status: "error", msg: String(err instanceof Error ? err.message : err) });
+    }
+  };
+
+  const handleFiles = async (fileList: Iterable<File>) => {
+    const files = Array.from(fileList);
+    const ics = files.find((f) => f.name.toLowerCase().endsWith(".ics") || f.type === "text/calendar");
+    const images = files.filter((f) => f.type?.startsWith("image/"));
+    try {
+      if (ics) {
+        setScan({ status: "working", msg: "Reading " + ics.name + "…" });
+        preview(buildScanRows(icsToRawShifts(await ics.text(), { from: periodStart, to: periodEnd }), cfg));
+        return;
+      }
+      if (!images.length) return;
+      if (!apiKey) {
+        throw new Error("Screenshot scanning needs your Anthropic API key — add it under Rules → Schedule scan, or pull from the calendar feed instead.");
+      }
+      setScan({ status: "working", msg: `Reading ${images.length} screenshot${images.length > 1 ? "s" : ""}…` });
+      const raw = await parseScheduleImages(images, apiKey);
       const rows = buildScanRows(raw, cfg);
       if (!rows.length) throw new Error("No shifts detected — try a tighter screenshot of just your row.");
       setScan({ status: "preview", rows });
@@ -48,39 +89,38 @@ export default function ScanPanel({
   };
 
   return (
-    <CalloutCard tone="accent" className="focus:outline-none" >
+    <CalloutCard tone="accent">
       <div tabIndex={0} onPaste={onPaste}>
         <div className="flex flex-wrap items-center gap-3">
           <Eyebrow accent className="flex items-center gap-1.5">
-            <ScanLine size={13} /> Scan schedule
+            <ScanLine size={13} /> Pull schedule
           </Eyebrow>
-          {apiKey ? (
-            <>
-              <label className="btn btn-ghost pressable cursor-pointer text-xs">
-                Upload ScheduleAnywhere screenshot(s)
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) void handleFiles(e.target.files);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-              <span className="font-mono text-[11px] text-ink-dim">
-                or click this panel and paste · pre-fills dates + scheduled hours ({cfg.mealDeductHours} hr meal off
-                shifts &gt; {cfg.mealThresholdHours} hrs)
-              </span>
-            </>
-          ) : (
-            <span className="font-mono text-[11px] text-ink-dim">
-              Add your Anthropic API key under Rules → Schedule scan first. It stays on this device — the screenshots
-              go straight from your browser to the API with your key.
-            </span>
-          )}
+          {feedUrl ? (
+            <button onClick={() => void pullFeed()} className="btn btn-primary pressable text-xs">
+              <CalendarArrowDown size={14} /> Pull from ScheduleAnywhere
+            </button>
+          ) : null}
+          <label className="btn btn-ghost pressable cursor-pointer text-xs">
+            Upload .ics or screenshot(s)
+            <input
+              type="file"
+              accept="image/*,.ics,text/calendar"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) void handleFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
         </div>
+        <p className="mt-2 font-mono text-[11px] text-ink-dim">
+          {feedUrl
+            ? `Feed pulls shifts posted for ${dayLabel(periodStart)} – ${dayLabel(periodEnd)} — no API key needed. `
+            : "Best way: add your ScheduleAnywhere calendar-feed URL under Rules → Schedule scan (no API key needed). "}
+          Screenshots also work{apiKey ? "" : " once an Anthropic API key is set in Rules"} · scheduled hours take the{" "}
+          {cfg.mealDeductHours} hr meal off shifts &gt; {cfg.mealThresholdHours} hrs.
+        </p>
 
         {scan.status === "working" && (
           <div className="mt-3 flex items-center gap-2 font-mono text-sm text-accent">
