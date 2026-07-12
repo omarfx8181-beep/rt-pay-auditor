@@ -1,0 +1,229 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Knockdown design tokens — extracted, not invented.
+   Source: omarfx8181-beep/knockdown src/index.css @ 6dc6449;
+   see design/tokens.md. RGB channels so alpha modifiers work.
+   Editorial style only for now; light = :root, dark = espresso.
+   ============================================================ */
+:root {
+  --ink: 20 17 15;
+  --ink-dim: 104 95 82;
+  --surface-bg: 244 239 230;
+  --surface-card: 255 255 255;
+  --surface-soft: 235 227 213;
+  --surface-line: 216 205 184;
+  --accent: 200 100 47;
+  --pos: 47 107 79;
+  --neg: 168 65 46;
+  --amber: 145 98 18;
+  --blue: 44 93 134;
+  --hero-bg: 20 17 15;
+  --hero-fg: 244 239 230;
+  --btn-bg: 20 17 15;
+  --btn-fg: 244 239 230;
+  --on-accent: 255 255 255;
+  --chart: 58 136 98;
+}
+
+/* Editorial · dark — warm espresso paper (explicit toggle wins) */
+:root[data-mode="dark"] {
+  --ink: 238 232 222;
+  --ink-dim: 168 156 140;
+  --surface-bg: 23 19 16;
+  --surface-card: 33 28 23;
+  --surface-soft: 45 39 32;
+  --surface-line: 58 51 42;
+  --accent: 224 132 76;
+  --pos: 92 180 138;
+  --neg: 216 100 70;
+  --amber: 214 162 78;
+  --blue: 112 158 202;
+  --hero-bg: 41 35 28;
+  --hero-fg: 240 235 226;
+  --btn-bg: 240 235 226;
+  --btn-fg: 23 19 16;
+  --on-accent: 23 19 16;
+  --chart: 92 180 138;
+}
+
+/* Follow the system until a mode is chosen in Settings (M2+). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) {
+    --ink: 238 232 222;
+    --ink-dim: 168 156 140;
+    --surface-bg: 23 19 16;
+    --surface-card: 33 28 23;
+    --surface-soft: 45 39 32;
+    --surface-line: 58 51 42;
+    --accent: 224 132 76;
+    --pos: 92 180 138;
+    --neg: 216 100 70;
+    --amber: 214 162 78;
+    --blue: 112 158 202;
+    --hero-bg: 41 35 28;
+    --hero-fg: 240 235 226;
+    --btn-bg: 240 235 226;
+    --btn-fg: 23 19 16;
+    --on-accent: 23 19 16;
+    --chart: 92 180 138;
+  }
+}
+
+@theme inline {
+  --color-ink: rgb(var(--ink));
+  --color-ink-dim: rgb(var(--ink-dim));
+  --color-surface-bg: rgb(var(--surface-bg));
+  --color-surface-card: rgb(var(--surface-card));
+  --color-surface-soft: rgb(var(--surface-soft));
+  --color-surface-line: rgb(var(--surface-line));
+  --color-accent: rgb(var(--accent));
+  --color-pos: rgb(var(--pos));
+  --color-neg: rgb(var(--neg));
+  --color-amber: rgb(var(--amber));
+  --color-blue: rgb(var(--blue));
+  --color-hero-bg: rgb(var(--hero-bg));
+  --color-hero-fg: rgb(var(--hero-fg));
+  --color-btn-bg: rgb(var(--btn-bg));
+  --color-btn-fg: rgb(var(--btn-fg));
+  --color-on-accent: rgb(var(--on-accent));
+  --color-chart: rgb(var(--chart));
+}
+
+@theme {
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-sans: "Spline Sans Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "Spline Sans Mono Variable", ui-monospace, monospace;
+  --shadow-card: 0 1px 2px rgba(20, 17, 15, 0.04), 0 1px 0 rgba(20, 17, 15, 0.03);
+  /* On-hero money colors = the espresso-mode pos/neg tokens (tokens.md §2);
+     the light-mode greens/reds lack contrast on the ink hero. */
+  --color-hero-pos: #5cb48a;
+  --color-hero-neg: #d86446;
+}
+
+@layer base {
+  html {
+    color-scheme: light dark;
+  }
+  html[data-mode="light"] {
+    color-scheme: light;
+  }
+  html[data-mode="dark"] {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-surface-bg text-ink font-sans antialiased;
+    /* Editorial-light paper washes; dark mode goes flat like Knockdown. */
+    background-image:
+      radial-gradient(circle at 12% 8%, rgb(var(--accent) / 0.06), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgb(var(--pos) / 0.06), transparent 40%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+    font-optical-sizing: auto;
+    text-rendering: optimizeLegibility;
+  }
+  html[data-mode="dark"] body {
+    background-image: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-mode]) body {
+      background-image: none;
+    }
+  }
+}
+
+/* Accessible keyboard focus ring (Knockdown verbatim) */
+:where(a, button, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--accent) / 0.9);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Knockdown component classes (ported from its @layer components;
+   compose .btn + .btn-primary/.btn-ghost in markup — Tailwind v4
+   can't @apply custom classes).
+   ============================================================ */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-surface-line bg-surface-card shadow-card;
+  }
+  .hero {
+    @apply rounded-2xl p-5 shadow-card;
+    background: rgb(var(--hero-bg));
+    color: rgb(var(--hero-fg));
+  }
+  .eyebrow {
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-mono text-sm font-semibold tracking-wide transition active:scale-[.98] disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-primary {
+    background: rgb(var(--btn-bg));
+    color: rgb(var(--btn-fg));
+  }
+  .btn-primary:hover {
+    opacity: 0.9;
+  }
+  .btn-ghost {
+    @apply border border-surface-line bg-surface-card text-ink;
+  }
+  .btn-ghost:hover {
+    @apply border-accent text-accent;
+  }
+  .pressable {
+    @apply transition-transform duration-150 active:scale-[0.985];
+  }
+  .input {
+    @apply w-full rounded-xl border border-surface-line bg-surface-card px-3.5 py-2.5 text-ink outline-none;
+  }
+  .input::placeholder {
+    color: rgb(var(--ink-dim) / 0.55);
+  }
+  .input:focus {
+    @apply border-accent;
+    box-shadow: 0 0 0 2px rgb(var(--accent) / 0.2);
+  }
+  .label {
+    @apply mb-1.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim;
+  }
+}
+
+/* ---- Hero accent wash — faint drift, gentle not shiny.
+   Layered over a solid hero-bg color (unlike Knockdown's shorthand,
+   which let the page bleed through the low-alpha middle stop). ---- */
+.hero-glow {
+  background-color: rgb(var(--hero-bg));
+  background-image: linear-gradient(120deg, rgb(var(--hero-bg)), rgb(var(--accent) / 0.09), rgb(var(--hero-bg)));
+  background-size: 220% 100%;
+}
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-glow { animation: gradientShift 20s linear infinite; }
+}
+
+/* ---- Drop-down reveal (shift card extras) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes reveal {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .reveal {
+    animation: reveal 0.18s ease-out both;
+  }
+}
+
+/* ---- Directional page transition (pairs with tab switches) ---- */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateX(var(--page-dx, 0)); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .page-enter {
+    animation: pageIn 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  }
+}
