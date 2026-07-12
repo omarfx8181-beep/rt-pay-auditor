@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, HeartPulse, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
-import { blankLeave, blankShift, num, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
+import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtNum, fmtRate } from "../lib/format.ts";
 import { Card, Field, StatTile } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
@@ -197,8 +197,9 @@ export default function Shifts({
           <span className="eyebrow">Leave — sick · LOA · medical</span>
         </div>
         <p className="font-mono text-[11px] text-ink-dim">
-          One tap per leave day: paid at base rate ({fmtRate(cfg.baseRateCents)}/hr), never counts toward the 80-hr OT
-          line, no weekend diff, and these hours don't accrue PTO. Kronos shows them as Time Off pay codes.
+          Calling in? One tap logs TODAY — hours prefill from today's scheduled shift when there is one. Paid at base
+          rate ({fmtRate(cfg.baseRateCents)}/hr), never counts toward the 80-hr OT line, no weekend diff, and these
+          hours don't accrue PTO. Kronos shows them as Time Off pay codes.
         </p>
 
         {leave.length > 0 && (
@@ -233,7 +234,17 @@ export default function Shifts({
 
         <div className="mt-3 flex flex-wrap gap-2">
           {LEAVE_TYPES.map((type: LeaveType) => (
-            <button key={type} onClick={() => setLeave((arr) => [...arr, blankLeave(type)])} className="btn btn-ghost pressable text-xs">
+            <button
+              key={type}
+              onClick={() => {
+                // Same-day call-in: today's date, and today's scheduled hours when known.
+                const todaysShift = shifts.find((s) => s.date === todayIso() && num(s.hours) > 0);
+                const entry = blankLeave(type);
+                if (todaysShift) entry.hours = todaysShift.hours;
+                setLeave((arr) => [...arr, entry]);
+              }}
+              className="btn btn-ghost pressable text-xs"
+            >
               <Plus size={13} /> {LEAVE_LABELS[type]}
             </button>
           ))}

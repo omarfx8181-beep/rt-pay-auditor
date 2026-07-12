@@ -161,8 +161,16 @@ export function draftToLeave(l: LeaveDraft): LeaveEntry {
   return { id: l.id, date: l.date, hours: num(l.hours), type: l.type };
 }
 
+/** Device-local YYYY-MM-DD. */
+export const todayIso = (): string => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/** Calling in is a same-day event: new leave defaults to TODAY. */
 export function blankLeave(type: LeaveType): LeaveDraft {
-  return { id: uid(), date: "", hours: "12", type };
+  return { id: uid(), date: todayIso(), hours: "12", type };
 }
 
 /** v1 DEMO_SHIFTS — the real 6/22–7/05 period. */
