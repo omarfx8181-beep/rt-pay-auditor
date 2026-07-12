@@ -29,10 +29,25 @@ export default function ScanPanel({
   onApply: (mode: "replace" | "append", drafts: ShiftDraft[]) => void;
 }) {
   const [scan, setScan] = useState<ScanState>({ status: "idle" });
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
 
   const preview = (rows: ScanRow[]) => {
     if (!rows.length) throw new Error("No shifts found inside this pay period — check the period dates on Periods.");
     setScan({ status: "preview", rows });
+  };
+
+  const readIcsText = (text: string) => {
+    try {
+      if (!/BEGIN:VCALENDAR/i.test(text)) {
+        throw new Error("That doesn't look like calendar data — it should start with BEGIN:VCALENDAR.");
+      }
+      preview(buildScanRows(icsToRawShifts(text, { from: periodStart, to: periodEnd }), cfg));
+      setPasteOpen(false);
+      setPasteText("");
+    } catch (err) {
+      setScan({ status: "error", msg: String(err instanceof Error ? err.message : err) });
+    }
   };
 
   const pullFeed = async () => {
@@ -46,8 +61,9 @@ export default function ScanPanel({
       } catch {
         throw new Error(
           "The browser couldn't fetch the feed directly (ScheduleAnywhere blocks cross-site reads). " +
-            "On iPhone: paste the feed URL into Safari and tap Download, then come back here, tap " +
-            "Upload, and pick the file from Files → Downloads. Same preview, same result.",
+            "Plan B: open the feed URL in Safari — if it shows the schedule as text, Select All → Copy, " +
+            "then use Paste calendar text here. If Safari offers Download instead, upload the file from " +
+            "Files → Downloads. Same preview either way.",
         );
       }
       preview(buildScanRows(icsToRawShifts(text, { from: periodStart, to: periodEnd }), cfg));
@@ -82,7 +98,12 @@ export default function ScanPanel({
 
   const onPaste = (e: ClipboardEvent) => {
     const files = Array.from(e.clipboardData?.files ?? []);
-    if (files.length) void handleFiles(files);
+    if (files.length) {
+      void handleFiles(files);
+      return;
+    }
+    const text = e.clipboardData?.getData("text") ?? "";
+    if (/BEGIN:VCALENDAR/i.test(text)) readIcsText(text);
   };
 
   const apply = (mode: "replace" | "append", rows: ScanRow[]) => {
@@ -115,7 +136,26 @@ export default function ScanPanel({
               }}
             />
           </label>
+          <button onClick={() => setPasteOpen((v) => !v)} className="btn btn-ghost pressable text-xs">
+            Paste calendar text
+          </button>
         </div>
+
+        {pasteOpen && (
+          <div className="reveal mt-3 space-y-2">
+            <textarea
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              rows={5}
+              spellCheck={false}
+              placeholder="Open the feed URL in Safari, Select All, Copy — then paste everything here (starts with BEGIN:VCALENDAR)."
+              className="input px-3 py-2 font-mono text-[11px] leading-relaxed"
+            />
+            <button onClick={() => readIcsText(pasteText)} className="btn btn-primary pressable text-xs">
+              Read schedule
+            </button>
+          </div>
+        )}
         <p className="mt-2 font-mono text-[11px] text-ink-dim">
           {feedUrl
             ? `Feed pulls shifts posted for ${dayLabel(periodStart)} – ${dayLabel(periodEnd)} — no API key needed. `
