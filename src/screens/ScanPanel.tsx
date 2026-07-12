@@ -45,7 +45,9 @@ export default function ScanPanel({
         text = await res.text();
       } catch {
         throw new Error(
-          "Couldn't reach the feed from the browser (the site may not allow it). Open the feed URL in Safari — it downloads a .ics file — then upload that file here.",
+          "The browser couldn't fetch the feed directly (ScheduleAnywhere blocks cross-site reads). " +
+            "On iPhone: paste the feed URL into Safari and tap Download, then come back here, tap " +
+            "Upload, and pick the file from Files → Downloads. Same preview, same result.",
         );
       }
       preview(buildScanRows(icsToRawShifts(text, { from: periodStart, to: periodEnd }), cfg));
