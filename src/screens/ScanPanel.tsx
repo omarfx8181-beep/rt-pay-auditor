@@ -124,7 +124,7 @@ export default function ScanPanel({
             </button>
           ) : null}
           <label className="btn btn-ghost pressable cursor-pointer text-xs">
-            Upload .ics or screenshot(s)
+            Upload calendar file or screenshots
             <input
               type="file"
               accept="image/*,.ics,text/calendar"
@@ -189,7 +189,7 @@ export default function ScanPanel({
                   <span className="w-14 shrink-0 tabular-nums">{r.hours != null ? fmtNum(r.hours) + " h" : "—"}</span>
                   <span className="min-w-0 flex-1 truncate font-sans text-ink-dim">
                     {r.label}
-                    {r.date && isWeekend(r.date) ? " · wknd" : ""}
+                    {r.date && isWeekend(r.date) ? " · weekend" : ""}
                   </span>
                   <button
                     onClick={() =>
@@ -217,7 +217,7 @@ export default function ScanPanel({
               </button>
             </div>
             <p className="text-[11px] text-ink-dim">
-              These are scheduled hours — after each shift, adjust paid hrs to your actual punches and add 548 units.
+              These are scheduled hours — after each shift, adjust paid hours to your actual punches and add bonus units.
             </p>
           </div>
         )}

@@ -31,9 +31,9 @@ function ShiftCard({
   const [confirmCallIn, setConfirmCallIn] = useState(false);
   const wknd = s.date !== "" && isWeekend(s.date);
   const extras: string[] = [];
-  if (num(s.charge) > 0) extras.push(`chg ${s.charge}`);
-  if (num(s.premium) > 0) extras.push(`prem ${s.premium}`);
-  if (num(s.preceptor) > 0) extras.push(`pre ${s.preceptor}`);
+  if (num(s.charge) > 0) extras.push(`charge ${s.charge}h`);
+  if (num(s.premium) > 0) extras.push(`premium ${s.premium}h`);
+  if (num(s.preceptor) > 0) extras.push(`precept ${s.preceptor}h`);
 
   return (
     <section className="card p-4">
@@ -46,12 +46,12 @@ function ShiftCard({
             className="input w-auto px-2.5 py-1.5 text-xs"
           />
           <div className={`mt-1 text-[10px] ${wknd ? "font-semibold text-pos" : "text-ink-dim"}`}>
-            {s.date ? dayLabel(s.date) + (wknd ? " · wknd diff" : "") : "no date — no weekend diff"}
+            {s.date ? dayLabel(s.date) + (wknd ? " · weekend pay" : "") : "no date — no weekend pay"}
           </div>
         </div>
         <div className="flex items-start gap-3">
           <Field label="Paid hrs" value={s.hours} onChange={(v) => setShift("hours", v)} w="w-16" />
-          <Field label="548 units" value={s.units548} onChange={(v) => setShift("units548", v)} w="w-14" />
+          <Field label="Bonus units" value={s.units548} onChange={(v) => setShift("units548", v)} w="w-14" />
         </div>
       </div>
 
@@ -68,7 +68,7 @@ function ShiftCard({
               {s.note}
             </>
           ) : (
-            "adders · tiers · note"
+            "extra pay · bonus tiers · note"
           )}
         </span>
         <ChevronDown size={14} className={`shrink-0 text-ink-dim transition-transform ${expanded ? "rotate-180" : ""}`} />
@@ -206,8 +206,8 @@ export default function Shifts({
       />
 
       <p className="text-sm text-ink-dim">
-        Date, hours, and 548 units up front — everything else is in each card's drop-down. Weekend diff applies itself
-        on Sat/Sun. 1 unit = {fmtCents(cfg.unit548Cents)}.
+        Date, hours, and bonus units up front — the rest lives in each shift's drop-down. Weekend pay adds itself on
+        Saturday and Sunday. 1 bonus unit = {fmtCents(cfg.unit548Cents)}.
       </p>
 
       <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
@@ -241,9 +241,9 @@ export default function Shifts({
           <span className="eyebrow">Leave — sick · LOA · medical</span>
         </div>
         <p className="text-[11px] text-ink-dim">
-          Calling in? One tap logs TODAY — hours prefill from today's scheduled shift when there is one. Paid at base
-          rate ({fmtRate(cfg.baseRateCents)}/hr), never counts toward the 80-hr OT line, no weekend diff, and these
-          hours don't accrue PTO. Kronos shows them as Time Off pay codes.
+          Calling in? One tap logs today — hours prefill from today's scheduled shift when there is one. Paid at your base
+          rate (${fmtRate(cfg.baseRateCents)}/hr), never counts toward overtime, no weekend pay, and these hours
+          don't earn PTO. They show on your timecard as Time Off.
         </p>
 
         {leave.length > 0 && (
@@ -300,7 +300,7 @@ export default function Shifts({
         <StatTile label="Overtime" value={fmtNum(period.otHours) + " h"} tone="amber" />
         <StatTile label="Double time" value={fmtNum(period.dtHours) + " h"} tone="neg" />
         <StatTile label="Total worked" value={fmtNum(period.workedHours) + " h"} tone="pos" />
-        {period.leaveHours > 0 && <StatTile label="Leave (base)" value={fmtNum(period.leaveHours) + " h"} sub="non-PTO-accruing" />}
+        {period.leaveHours > 0 && <StatTile label="Leave" value={fmtNum(period.leaveHours) + " h"} sub="paid, no PTO earned" />}
       </div>
     </div>
   );

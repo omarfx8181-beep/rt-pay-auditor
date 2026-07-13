@@ -6,6 +6,7 @@
 import { computeWhatIf, type EngineConfig, type NetResult, type PeriodResult, type Shift } from "../lib/engine.ts";
 import { num, type CfgDraft } from "../lib/draft.ts";
 import { fmtCents, fmtNum, fmtRate } from "../lib/format.ts";
+import { plainLabel } from "../lib/labels.ts";
 import { Card, Field } from "../ui/kit.tsx";
 
 export interface WhatIfDraft {
@@ -25,27 +26,27 @@ export function BreakdownCards({
   cfgDraft: CfgDraft;
 }) {
   const deductions: Array<[string, number]> = [
-    [`Federal W/H (${cfgDraft.fedEff}% eff.)`, net.fedCents],
-    [`Minnesota W/H (${cfgDraft.mnEff}% eff.)`, net.mnCents],
-    ["Social Security 6.2%", net.ssCents],
-    ["Medicare 1.45%", net.medicareCents],
-    ["MN Paid Family Leave", net.mnFamCents],
-    ["MN Paid Medical Leave", net.mnMedCents],
-    [`403(b) ${cfgDraft.k403bPct}%`, net.k403Cents],
-    ["Medical / Dental / FSA (pretax)", net.s125Cents],
+    ["Federal tax withheld", net.fedCents],
+    ["Minnesota tax withheld", net.mnCents],
+    ["Social Security", net.ssCents],
+    ["Medicare", net.medicareCents],
+    ["MN paid family leave", net.mnFamCents],
+    ["MN paid medical leave", net.mnMedCents],
+    [`Retirement savings — ${cfgDraft.k403bPct}%`, net.k403Cents],
+    ["Health, dental & FSA (pretax)", net.s125Cents],
     ["After-tax deductions", net.afterTaxCents],
-    ["Imputed life (non-cash)", net.imputedCents],
+    ["Life insurance (non-cash)", net.imputedCents],
   ];
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Card title="Earnings — expected">
+      <Card title="What you earned">
         <div className="divide-y divide-surface-line/60">
           {period.lines
             .filter((l) => l.amountCents !== 0)
             .map((l) => (
               <div key={l.key} className="flex items-baseline justify-between gap-3 py-2">
-                <span className="min-w-0 flex-1 text-sm">{l.label}</span>
+                <span className="min-w-0 flex-1 text-sm">{plainLabel(l.key, l.label)}</span>
                 {l.qty !== 0 ? (
                   <span className="whitespace-nowrap text-xs tabular-nums text-ink-dim">
                     {fmtNum(l.qty)}
@@ -56,13 +57,13 @@ export function BreakdownCards({
               </div>
             ))}
           <div className="flex items-baseline justify-between py-2.5">
-            <span className="text-headline">Total gross</span>
+            <span className="text-headline">Total before taxes</span>
             <span className="text-headline tabular-nums text-pos">{fmtCents(period.grossCents)}</span>
           </div>
         </div>
       </Card>
 
-      <Card title="Gross → net">
+      <Card title="From pay to take-home">
         <div className="divide-y divide-surface-line/60">
           {deductions.map(([label, cents]) => (
             <div key={label} className="flex items-baseline justify-between gap-3 py-2">
@@ -71,7 +72,7 @@ export function BreakdownCards({
             </div>
           ))}
           <div className="flex items-baseline justify-between py-2.5">
-            <span className="text-headline">Expected net</span>
+            <span className="text-headline">Take-home</span>
             <span className="text-headline tabular-nums text-pos">{fmtCents(net.netCents)}</span>
           </div>
         </div>

@@ -50,8 +50,8 @@ export default function HrEmailPanel({
         <Mail size={13} /> One-tap HR email
       </Eyebrow>
       <p className="text-sm">
-        The format that won the June dispute: line deltas, the per-shift 548 table, and the identical-shift
-        comparison. Your details save on this device only.
+        The format that won the June dispute: exact amounts line by line, the per-shift bonus table, and the
+        identical-shift comparison. Your details save on this device only.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-3">

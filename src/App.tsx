@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarClock, CircleUserRound, House } from "lucide-react";
-import {
-  AUDIT_TOLERANCE_CENTS,
-  computeNet,
-  computePeriod,
-  dollarsToCents,
-  type BonusTier,
-} from "./lib/engine.ts";
-import { draftToConfig, draftToLeave, draftToShift, num, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
+import { computeNet, computePeriod, type BonusTier } from "./lib/engine.ts";
+import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
+import { computeVerdict } from "./lib/verdict.ts";
 import {
   addDays,
   buildBackup,
@@ -23,7 +18,7 @@ import {
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
 import { TabBar, type Tab } from "./ui/kit.tsx";
-import Home, { type StubStatus } from "./screens/Home.tsx";
+import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
@@ -169,15 +164,7 @@ function PeriodWorkspace({
   const year = record.endDate.slice(0, 4);
   const ytd = useMemo(() => rollupYtd(periods, year, otherIncome), [periods, year, otherIncome]);
 
-  const netDeltaCents = (actual.net ?? "") === "" ? null : dollarsToCents(num(actual.net)) - net.netCents;
-  const offCount = auditRows.filter((row) => {
-    const raw = actual[row.key] ?? "";
-    return raw !== "" && Math.abs(dollarsToCents(num(raw)) - row.expectedCents) > AUDIT_TOLERANCE_CENTS;
-  }).length;
-  // "Reconciled" only when net matches AND no line anywhere is red — a
-  // matching net must not paper over a shorted line elsewhere.
-  const reconciled = netDeltaCents !== null && Math.abs(netDeltaCents) <= AUDIT_TOLERANCE_CENTS && offCount === 0;
-  const stubStatus: StubStatus = netDeltaCents === null && offCount === 0 ? "unchecked" : reconciled ? "matched" : "off";
+  const verdict = useMemo(() => computeVerdict(auditRows, actual, cfg.unit548Cents), [auditRows, actual, cfg.unit548Cents]);
 
   const selectTab = (id: string, index: number) => {
     const dx = index > tabIndex.current ? 28 : index < tabIndex.current ? -28 : 0;
@@ -272,7 +259,7 @@ function PeriodWorkspace({
             onCreateNext={() => void createNext()}
             period={period}
             net={net}
-            stubStatus={stubStatus}
+            verdict={verdict}
             auditRows={auditRows}
             actual={actual}
             setActual={setActual}

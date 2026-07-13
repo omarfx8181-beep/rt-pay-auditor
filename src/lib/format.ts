@@ -11,6 +11,10 @@ export const fmtNum = (n: number): string =>
 
 export const fmtRate = (rateCents: number): string => fmtNum(centsToDollars(rateCents));
 
+/** Bonus units read like counts: "5", "2.5" — no trailing zeros. */
+export const fmtUnits = (n: number): string =>
+  n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
 /** "Sun 6/28" from YYYY-MM-DD — v1's dayLabel. */
 export const dayLabel = (dateStr: string): string => {
   const d = new Date(dateStr + "T12:00:00");
