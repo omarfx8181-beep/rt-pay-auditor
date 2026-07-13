@@ -19,23 +19,24 @@ import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
 
 export type StubStatus = "unchecked" | "matched" | "off";
 
+/** Status pill styled for the ink-block hero (on-hero money colors). */
 function StatusPill({ status }: { status: StubStatus }) {
   if (status === "matched") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-pos/10 px-2.5 py-1 text-caption text-pos">
+      <span className="inline-flex items-center gap-1 rounded-full bg-hero-pos/15 px-2.5 py-1 text-caption text-hero-pos">
         <Check size={12} strokeWidth={2.5} /> Checked — looks right
       </span>
     );
   }
   if (status === "off") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-neg/10 px-2.5 py-1 text-caption text-neg">
+      <span className="inline-flex items-center gap-1 rounded-full bg-hero-neg/20 px-2.5 py-1 text-caption text-hero-neg">
         <CircleAlert size={12} strokeWidth={2.5} /> Needs a look
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-surface-soft px-2.5 py-1 text-caption text-ink-dim">
+    <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-caption text-hero-fg/70">
       Not checked yet
     </span>
   );
@@ -205,29 +206,29 @@ export default function Home({
         <>
           <Hero>
             <div className="flex items-start justify-between gap-3">
-              <Eyebrow>This check</Eyebrow>
+              <Eyebrow className="text-hero-fg/50">This check</Eyebrow>
               <StatusPill status={stubStatus} />
             </div>
             <div className="mt-3 text-hero-num tabular-nums">
               {fmtCents(showGross ? period.grossCents : net.netCents)}
             </div>
-            <div className="mt-1 text-subhead text-ink-dim">
+            <div className="mt-1 text-subhead text-hero-fg/60">
               {showGross ? "Expected pay before taxes" : "Expected take-home this period"}
             </div>
-            <div className="mt-3 inline-flex rounded-full bg-surface-soft p-0.5">
+            <div className="mt-3 inline-flex rounded-full bg-white/10 p-0.5">
               {([false, true] as const).map((gross) => (
                 <button
                   key={String(gross)}
                   onClick={() => setShowGross(gross)}
                   className={`min-h-8 rounded-full px-3 py-1 text-caption transition ${
-                    showGross === gross ? "bg-surface-card font-semibold shadow-card" : "text-ink-dim"
+                    showGross === gross ? "bg-hero-fg font-semibold text-hero-bg" : "text-hero-fg/60"
                   }`}
                 >
                   {gross ? "Before taxes" : "Take-home"}
                 </button>
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-surface-line pt-3 text-footnote text-ink-dim">
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-footnote text-hero-fg/60">
               <span>{fmtNum(period.workedHours)} hours</span>
               <span>{period.units548.toLocaleString("en-US", { maximumFractionDigits: 2 })} bonus units</span>
               <span>{fmtCents(period.grossCents)} before taxes</span>

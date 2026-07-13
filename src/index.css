@@ -1,84 +1,83 @@
 @import "tailwindcss";
 
 /* ============================================================
-   RT Pay V3 design tokens — design/V3_DESIGN_BRIEF.md §3.
-   Warm-minimal, Apple HIG (Clarity / Deference / Depth):
-   content leads, chrome recedes, one emerald accent reserved
-   for action and money. RGB channels so alpha modifiers work
-   (bg-accent/10, border-surface-line/60, …).
+   RT Pay V3 tokens — Knockdown palette on the V3 structure.
+   Colors are the Knockdown extraction (design/tokens.md §2,
+   editorial light + espresso dark) at Omar's call; type scale,
+   spacing, radius, and IA stay per design/V3_DESIGN_BRIEF.md.
+   RGB channels so alpha modifiers work (bg-accent/10, …).
 
-   Values not named in the brief (ink-3 dark, sunken dark,
-   accent-pressed dark) are minimal derivations of its scale.
-   Legacy token names from V2 are kept as aliases where markup
-   still uses them (surface-soft → sunken, ink-dim → ink-2).
+   ink-faint (placeholder tier) is not a Knockdown token — it is
+   ink-dim at the /55 alpha Knockdown used for placeholders,
+   pre-blended against the page background.
    ============================================================ */
 :root {
-  --ink: 28 25 23; /* #1C1917 primary text */
-  --ink-dim: 107 101 96; /* #6B6560 secondary (ink-2) */
-  --ink-faint: 155 148 141; /* #9B948D tertiary / placeholder (ink-3) */
-  --surface-bg: 250 249 246; /* #FAF9F6 warm paper */
+  --ink: 20 17 15; /* #14110F primary text */
+  --ink-dim: 104 95 82; /* #685F52 secondary */
+  --ink-faint: 166 156 141; /* ink-dim/55 on cream — placeholders */
+  --surface-bg: 244 239 230; /* #F4EFE6 warm cream */
   --surface-card: 255 255 255; /* #FFFFFF card */
-  --surface-soft: 242 240 235; /* #F2F0EB sunken fills */
-  --surface-line: 231 227 220; /* #E7E3DC hairline */
-  --accent: 14 124 90; /* #0E7C5A emerald — brand + interactive */
-  --accent-pressed: 10 94 68; /* #0A5E44 */
-  --pos: 14 124 90; /* "check is right" */
-  --neg: 196 54 43; /* #C4362B "you're owed" */
-  --amber: 201 138 43; /* #C98A2B "needs a look" */
-  --blue: 14 124 90; /* legacy informational → folded into the one accent */
-  --hero-bg: 255 255 255; /* status hero = surface card, not an ink block */
-  --hero-fg: 28 25 23;
-  --btn-bg: 14 124 90; /* primary action = accent */
-  --btn-fg: 255 255 255;
+  --surface-soft: 235 227 213; /* #EBE3D5 soft fills */
+  --surface-line: 216 205 184; /* #D8CDB8 hairline */
+  --accent: 200 100 47; /* #C8642F terracotta — links, active tab, highlights */
+  --accent-pressed: 169 79 34; /* darkened terracotta */
+  --pos: 47 107 79; /* #2F6B4F positive money */
+  --neg: 168 65 46; /* #A8412E shortfalls */
+  --amber: 145 98 18; /* #916212 warnings, open questions */
+  --blue: 44 93 134; /* #2C5D86 informational */
+  --hero-bg: 20 17 15; /* ink-block hero */
+  --hero-fg: 244 239 230;
+  --btn-bg: 20 17 15; /* primary button = ink block */
+  --btn-fg: 244 239 230;
   --on-accent: 255 255 255;
-  --chart: 14 124 90;
+  --chart: 58 136 98;
 }
 
-/* V3 dark — on the warm near-black the app already ships (#14110D). */
+/* Editorial · dark — warm espresso paper (explicit toggle wins) */
 :root[data-mode="dark"] {
-  --ink: 245 242 236; /* #F5F2EC */
-  --ink-dim: 184 176 166; /* #B8B0A6 */
-  --ink-faint: 138 129 117; /* derived tertiary */
-  --surface-bg: 20 17 13; /* #14110D */
-  --surface-card: 31 27 22; /* #1F1B16 */
-  --surface-soft: 26 22 17; /* derived sunken */
-  --surface-line: 51 44 36; /* #332C24 */
-  --accent: 47 185 138; /* #2FB98A */
-  --accent-pressed: 38 160 120;
-  --pos: 47 185 138;
-  --neg: 229 103 91; /* #E5675B */
-  --amber: 224 166 78; /* #E0A64E */
-  --blue: 47 185 138;
-  --hero-bg: 31 27 22;
-  --hero-fg: 245 242 236;
-  --btn-bg: 47 185 138;
-  --btn-fg: 20 17 13; /* dark ink on the brighter dark-mode emerald */
-  --on-accent: 20 17 13;
-  --chart: 47 185 138;
+  --ink: 238 232 222; /* #EEE8DE */
+  --ink-dim: 168 156 140; /* #A89C8C */
+  --ink-faint: 122 113 100; /* ink-dim/55 on espresso */
+  --surface-bg: 23 19 16; /* #171310 */
+  --surface-card: 33 28 23; /* #211C17 */
+  --surface-soft: 45 39 32; /* #2D2720 */
+  --surface-line: 58 51 42; /* #3A332A */
+  --accent: 224 132 76; /* #E0844C */
+  --accent-pressed: 200 110 56;
+  --pos: 92 180 138; /* #5CB48A */
+  --neg: 216 100 70; /* #D86446 */
+  --amber: 214 162 78; /* #D6A24E */
+  --blue: 112 158 202; /* #709ECA */
+  --hero-bg: 41 35 28; /* #29231C */
+  --hero-fg: 240 235 226; /* #F0EBE2 */
+  --btn-bg: 240 235 226;
+  --btn-fg: 23 19 16;
+  --on-accent: 23 19 16;
+  --chart: 92 180 138;
 }
 
 /* Follow the system until a mode is chosen in Me → Appearance. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-mode]) {
-    --ink: 245 242 236;
-    --ink-dim: 184 176 166;
-    --ink-faint: 138 129 117;
-    --surface-bg: 20 17 13;
-    --surface-card: 31 27 22;
-    --surface-soft: 26 22 17;
-    --surface-line: 51 44 36;
-    --accent: 47 185 138;
-    --accent-pressed: 38 160 120;
-    --pos: 47 185 138;
-    --neg: 229 103 91;
-    --amber: 224 166 78;
-    --blue: 47 185 138;
-    --hero-bg: 31 27 22;
-    --hero-fg: 245 242 236;
-    --btn-bg: 47 185 138;
-    --btn-fg: 20 17 13;
-    --on-accent: 20 17 13;
-    --chart: 47 185 138;
+    --ink: 238 232 222;
+    --ink-dim: 168 156 140;
+    --ink-faint: 122 113 100;
+    --surface-bg: 23 19 16;
+    --surface-card: 33 28 23;
+    --surface-soft: 45 39 32;
+    --surface-line: 58 51 42;
+    --accent: 224 132 76;
+    --accent-pressed: 200 110 56;
+    --pos: 92 180 138;
+    --neg: 216 100 70;
+    --amber: 214 162 78;
+    --blue: 112 158 202;
+    --hero-bg: 41 35 28;
+    --hero-fg: 240 235 226;
+    --btn-bg: 240 235 226;
+    --btn-fg: 23 19 16;
+    --on-accent: 23 19 16;
+    --chart: 92 180 138;
   }
 }
 
@@ -98,8 +97,6 @@
   --color-blue: rgb(var(--blue));
   --color-hero-bg: rgb(var(--hero-bg));
   --color-hero-fg: rgb(var(--hero-fg));
-  --color-hero-pos: rgb(var(--pos));
-  --color-hero-neg: rgb(var(--neg));
   --color-btn-bg: rgb(var(--btn-bg));
   --color-btn-fg: rgb(var(--btn-fg));
   --color-on-accent: rgb(var(--on-accent));
@@ -149,8 +146,13 @@
   /* Cards: 20px radius (§3.3) — rounded-2xl everywhere cards live. */
   --radius-2xl: 20px;
 
-  /* The only shadow: soft, near-flat (§3.3). */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+  /* The only shadow — Knockdown's near-flat ink-tinted pair. */
+  --shadow-card: 0 1px 2px rgba(20, 17, 15, 0.04), 0 1px 0 rgba(20, 17, 15, 0.03);
+
+  /* On-hero money colors = the espresso-mode pos/neg (tokens.md §2);
+     the light-mode greens/reds lack contrast on the ink hero. */
+  --color-hero-pos: #5cb48a;
+  --color-hero-neg: #d86446;
 }
 
 @layer base {
@@ -165,12 +167,24 @@
   }
   body {
     @apply bg-surface-bg text-ink font-sans antialiased;
-    /* V3: flat warm paper — no washes, chrome recedes. */
+    /* Editorial-light paper washes (Knockdown); dark goes flat. */
+    background-image:
+      radial-gradient(circle at 12% 8%, rgb(var(--accent) / 0.06), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgb(var(--pos) / 0.06), transparent 40%);
+    background-attachment: fixed;
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
     text-rendering: optimizeLegibility;
     /* Every number aligns; currency is always tabular (§3.2). */
     font-variant-numeric: tabular-nums;
+  }
+  html[data-mode="dark"] body {
+    background-image: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-mode]) body {
+      background-image: none;
+    }
   }
 }
 
@@ -188,9 +202,9 @@
   .card {
     @apply rounded-2xl border border-surface-line bg-surface-card shadow-card;
   }
-  /* Status hero = a surface card with the big number, Apple Card style. */
+  /* Status hero = Knockdown's ink block carrying the V3 big number. */
   .hero {
-    @apply rounded-2xl border border-surface-line p-5 shadow-card;
+    @apply rounded-2xl p-5 shadow-card;
     background: rgb(var(--hero-bg));
     color: rgb(var(--hero-fg));
   }
@@ -206,10 +220,7 @@
     color: rgb(var(--btn-fg));
   }
   .btn-primary:hover {
-    opacity: 0.92;
-  }
-  .btn-primary:active {
-    background: rgb(var(--accent-pressed));
+    opacity: 0.9;
   }
   .btn-ghost {
     @apply border border-surface-line bg-surface-card text-ink;

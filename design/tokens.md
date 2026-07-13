@@ -1,7 +1,10 @@
-> **Superseded (V3).** As of the V3 redesign the live design system is the
-> one specified in `design/V3_DESIGN_BRIEF.md` §3 (warm-minimal Apple style,
-> emerald accent, SF Pro/Inter) and implemented in `src/index.css`. This
-> file remains as the historical record of the V2 Knockdown extraction.
+> **V3 status (Omar's call, 2026-07-13).** V3 keeps THIS palette — the
+> Knockdown extraction in §2 below (terracotta accent, cream/espresso
+> surfaces, ink-block hero and primary button, paper washes) — layered on
+> the V3 structure from `design/V3_DESIGN_BRIEF.md`: 3-tab IA, SF Pro/Inter
+> single family, V3 type scale, 20px cards, 8pt spacing. The brief's §3.1
+> emerald/neutral palette was tried and rejected. §3–§5 below (Fraunces/
+> Spline type, 16px radii, mono eyebrows) describe V2 and are historical.
 
 # RT Pay Auditor — design tokens, extracted from Knockdown
 
