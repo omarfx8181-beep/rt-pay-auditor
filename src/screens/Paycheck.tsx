@@ -1,11 +1,15 @@
 /**
  * The breakdown + the what-if — composed by Home (V3 §4).
- * BreakdownCards is "one level down" from the hero: the story of the
- * number. WhatIfBody is the picking-up-a-shift calculator.
+ * Breakdown rows are progressive-disclosure (§3.5): the answer (label +
+ * amount) → tap → the story (plain words) → tap → the receipt (formula
+ * and the stub's own line name, codes included — this is the one place
+ * codes may appear outside the HR email).
  */
-import { computeWhatIf, type EngineConfig, type NetResult, type PeriodResult, type Shift } from "../lib/engine.ts";
+import { useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { computeWhatIf, type EngineConfig, type NetResult, type PayLine, type PeriodResult, type Shift } from "../lib/engine.ts";
 import { num, type CfgDraft } from "../lib/draft.ts";
-import { fmtCents, fmtNum, fmtRate } from "../lib/format.ts";
+import { fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { plainLabel } from "../lib/labels.ts";
 import { Card, Field } from "../ui/kit.tsx";
 
@@ -14,6 +18,60 @@ export interface WhatIfDraft {
   units548: string;
   weekend: boolean;
   charge: string;
+}
+
+/** One pay line: answer → story → receipt on successive taps. */
+function PayRow({
+  label,
+  amount,
+  negative,
+  story,
+  receipt,
+}: {
+  label: string;
+  amount: string;
+  negative?: boolean;
+  story: string;
+  receipt: string;
+}) {
+  const [level, setLevel] = useState(0);
+  return (
+    <div>
+      <button
+        onClick={() => setLevel((l) => (l + 1) % 3)}
+        aria-expanded={level > 0}
+        className="pressable flex min-h-11 w-full items-baseline justify-between gap-3 py-2 text-left"
+      >
+        <span className="min-w-0 flex-1 text-sm">{label}</span>
+        <span className={`text-sm tabular-nums ${negative ? "text-neg" : ""}`}>{amount}</span>
+        <ChevronDown
+          size={13}
+          className={`mb-0.5 shrink-0 self-center text-ink-dim/60 transition-transform ${level > 0 ? "rotate-180" : ""}`}
+        />
+      </button>
+      {level >= 1 && <p className="reveal pb-2 pr-6 text-footnote text-ink-dim">{story}</p>}
+      {level >= 2 && <p className="reveal pb-2.5 pr-6 text-caption tabular-nums text-ink-dim">{receipt}</p>}
+    </div>
+  );
+}
+
+function Rows({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-surface-line/60">{children}</div>;
+}
+
+/** Plain-words story for an earnings line, from its own quantities. */
+function earningsStory(l: PayLine): string {
+  if (l.key === "imputed") return "On the stub but never cash — it's taxed, then taken back out.";
+  if (l.qty === 0) return "Nothing this period.";
+  return l.isUnits
+    ? `${fmtUnits(l.qty)} bonus units at ${fmtCents(l.rateCents)} each.`
+    : `${fmtNum(l.qty)} hours at $${fmtRate(l.rateCents)}/hr.`;
+}
+
+/** The receipt: the stub's own line name and the math, verbatim. */
+function earningsReceipt(l: PayLine): string {
+  if (l.qty === 0) return `On the stub as "${l.label}" · ${fmtCents(l.amountCents)}`;
+  return `On the stub as "${l.label}" · ${l.isUnits ? fmtUnits(l.qty) : fmtNum(l.qty)} × $${fmtRate(l.rateCents)} = ${fmtCents(l.amountCents)}`;
 }
 
 export function BreakdownCards({
@@ -25,57 +83,112 @@ export function BreakdownCards({
   net: NetResult;
   cfgDraft: CfgDraft;
 }) {
-  const deductions: Array<[string, number]> = [
-    ["Federal tax withheld", net.fedCents],
-    ["Minnesota tax withheld", net.mnCents],
-    ["Social Security", net.ssCents],
-    ["Medicare", net.medicareCents],
-    ["MN paid family leave", net.mnFamCents],
-    ["MN paid medical leave", net.mnMedCents],
-    [`Retirement savings — ${cfgDraft.k403bPct}%`, net.k403Cents],
-    ["Health, dental & FSA (pretax)", net.s125Cents],
-    ["After-tax deductions", net.afterTaxCents],
-    ["Life insurance (non-cash)", net.imputedCents],
+  const cashCents = period.grossCents - net.imputedCents;
+  const deductions: Array<{ key: string; label: string; cents: number; story: string; receipt: string }> = [
+    {
+      key: "fed",
+      label: "Federal tax withheld",
+      cents: net.fedCents,
+      story: "Withheld for federal income tax, at the rate calibrated from your real stub.",
+      receipt: `${cfgDraft.fedEff}% × ${fmtCents(net.fedTaxableCents)} taxable = ${fmtCents(net.fedCents)}`,
+    },
+    {
+      key: "mn",
+      label: "Minnesota tax withheld",
+      cents: net.mnCents,
+      story: "Withheld for Minnesota income tax, calibrated the same way.",
+      receipt: `${cfgDraft.mnEff}% × ${fmtCents(net.fedTaxableCents)} taxable = ${fmtCents(net.mnCents)}`,
+    },
+    {
+      key: "ss",
+      label: "Social Security",
+      cents: net.ssCents,
+      story: "The flat federal cut. Health premiums come out first; retirement savings don't.",
+      receipt: `6.2% × ${fmtCents(net.ficaWagesCents)} = ${fmtCents(net.ssCents)}`,
+    },
+    {
+      key: "medicare",
+      label: "Medicare",
+      cents: net.medicareCents,
+      story: "Medicare's flat cut, on the same wages as Social Security.",
+      receipt: `1.45% × ${fmtCents(net.ficaWagesCents)} = ${fmtCents(net.medicareCents)}`,
+    },
+    {
+      key: "mnFam",
+      label: "MN paid family leave",
+      cents: net.mnFamCents,
+      story: "Your share of Minnesota's paid-leave program — the standard statewide rate.",
+      receipt: `${cfgDraft.mnFam}% × ${fmtCents(period.grossCents)} full pay = ${fmtCents(net.mnFamCents)}`,
+    },
+    {
+      key: "mnMed",
+      label: "MN paid medical leave",
+      cents: net.mnMedCents,
+      story: "The medical share of the same program.",
+      receipt: `${cfgDraft.mnMed}% × ${fmtCents(period.grossCents)} full pay = ${fmtCents(net.mnMedCents)}`,
+    },
+    {
+      key: "k403",
+      label: `Retirement savings — ${cfgDraft.k403bPct}%`,
+      cents: net.k403Cents,
+      story: "Into your retirement account before income tax touches it.",
+      receipt: `${cfgDraft.k403bPct}% × ${fmtCents(cashCents)} cash pay = ${fmtCents(net.k403Cents)}`,
+    },
+    {
+      key: "s125",
+      label: "Health, dental & FSA (pretax)",
+      cents: net.s125Cents,
+      story: "Your medical, dental, and FSA premiums, taken before tax.",
+      receipt: `$${cfgDraft.med} medical + $${cfgDraft.dent} dental + $${cfgDraft.fsa} FSA = ${fmtCents(net.s125Cents)}`,
+    },
+    {
+      key: "aftertax",
+      label: "After-tax deductions",
+      cents: net.afterTaxCents,
+      story: "Accident and critical-illness insurance, plus everything else payroll takes after tax.",
+      receipt: `$${cfgDraft.acc} + $${cfgDraft.crit} + $${cfgDraft.otherAfterTax} = ${fmtCents(net.afterTaxCents)}`,
+    },
+    {
+      key: "imputed",
+      label: "Life insurance (non-cash)",
+      cents: net.imputedCents,
+      story: "Employer life insurance the IRS taxes but you never receive as money.",
+      receipt: `On the stub as "Imputed – Basic Term Life" · ${fmtCents(net.imputedCents)}`,
+    },
   ];
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Card title="What you earned">
-        <div className="divide-y divide-surface-line/60">
+      <Card title="What you earned — tap a line for the story, twice for the receipt">
+        <Rows>
           {period.lines
             .filter((l) => l.amountCents !== 0)
             .map((l) => (
-              <div key={l.key} className="flex items-baseline justify-between gap-3 py-2">
-                <span className="min-w-0 flex-1 text-sm">{plainLabel(l.key, l.label)}</span>
-                {l.qty !== 0 ? (
-                  <span className="whitespace-nowrap text-xs tabular-nums text-ink-dim">
-                    {fmtNum(l.qty)}
-                    {l.isUnits ? "u" : "h"} @{fmtRate(l.rateCents)}
-                  </span>
-                ) : null}
-                <span className="w-24 text-right text-sm tabular-nums">{fmtCents(l.amountCents)}</span>
-              </div>
+              <PayRow
+                key={l.key}
+                label={plainLabel(l.key, l.label)}
+                amount={fmtCents(l.amountCents)}
+                story={earningsStory(l)}
+                receipt={earningsReceipt(l)}
+              />
             ))}
           <div className="flex items-baseline justify-between py-2.5">
             <span className="text-headline">Total before taxes</span>
             <span className="text-headline tabular-nums text-pos">{fmtCents(period.grossCents)}</span>
           </div>
-        </div>
+        </Rows>
       </Card>
 
       <Card title="From pay to take-home">
-        <div className="divide-y divide-surface-line/60">
-          {deductions.map(([label, cents]) => (
-            <div key={label} className="flex items-baseline justify-between gap-3 py-2">
-              <span className="min-w-0 flex-1 text-sm">{label}</span>
-              <span className="text-sm tabular-nums text-neg">{fmtCents(-cents)}</span>
-            </div>
+        <Rows>
+          {deductions.map((d) => (
+            <PayRow key={d.key} label={d.label} amount={fmtCents(-d.cents)} negative story={d.story} receipt={d.receipt} />
           ))}
           <div className="flex items-baseline justify-between py-2.5">
             <span className="text-headline">Take-home</span>
             <span className="text-headline tabular-nums text-pos">{fmtCents(net.netCents)}</span>
           </div>
-        </div>
+        </Rows>
       </Card>
     </div>
   );
@@ -119,11 +232,11 @@ export function WhatIfBody({
       </div>
       <div className="space-y-1 text-sm tabular-nums">
         <div className="flex justify-between gap-3">
-          <span className="text-ink-dim">Gross added (OT/DT rules applied)</span>
+          <span className="text-ink-dim">Pay added (overtime rules applied)</span>
           <span>{fmtCents(wi.dGrossCents)}</span>
         </div>
         <div className="flex justify-between gap-3">
-          <span className="text-ink-dim">Taxes + 403(b) on it</span>
+          <span className="text-ink-dim">Taxes + retirement on it</span>
           <span className="text-neg">{fmtCents(-(wi.d403Cents + wi.dFicaCents + wi.dLeaveCents + wi.dFedMnCents))}</span>
         </div>
         <div className="flex justify-between gap-3 border-t border-surface-line/60 pt-1.5">
@@ -134,7 +247,8 @@ export function WhatIfBody({
         </div>
       </div>
       <p className="mt-2 text-footnote text-ink-dim">
-        Uses marginal W/H rates ({cfgDraft.marginalFed}% fed + {cfgDraft.marginalMN}% MN) — edit in Me → Advanced.
+        Extra pay is taxed at your top rates ({cfgDraft.marginalFed}% federal + {cfgDraft.marginalMN}% Minnesota) —
+        change them in Me → Advanced.
       </p>
     </div>
   );

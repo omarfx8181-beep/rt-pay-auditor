@@ -5,7 +5,7 @@
  * quiet year line. Detail is one tap down: the check flow and the full
  * breakdown are sub-views of Home, not tabs.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarRange, Check, ChevronDown, ChevronLeft, CircleAlert, Plus, ScanLine } from "lucide-react";
 import type { EngineConfig, NetResult, PeriodResult, Shift } from "../lib/engine.ts";
 import type { CfgDraft } from "../lib/draft.ts";
@@ -17,6 +17,34 @@ import { fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
 import Audit from "./Audit.tsx";
 import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
+
+/**
+ * Restrained count-up for the hero number (V3 §3.4): 0 → value on first
+ * mount, previous → next on changes. Honors prefers-reduced-motion.
+ */
+function useCountUp(targetCents: number, ms = 600): number {
+  const [value, setValue] = useState(targetCents);
+  const prev = useRef<number | null>(null);
+  useEffect(() => {
+    const from = prev.current ?? 0;
+    prev.current = targetCents;
+    if (from === targetCents || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setValue(targetCents);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / ms);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(Math.round(from + (targetCents - from) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [targetCents, ms]);
+  return value;
+}
 
 /** Status pill styled for the ink-block hero (on-hero money colors). */
 function StatusPill({ verdict }: { verdict: Verdict }) {
@@ -156,6 +184,7 @@ export default function Home({
 }) {
   const [view, setView] = useState<"main" | "check" | "breakdown">("main");
   const [showGross, setShowGross] = useState(false);
+  const heroCents = useCountUp(showGross ? period.grossCents : net.netCents);
   const empty = shifts.length === 0 && period.leaveHours === 0;
 
   if (view !== "main") {
@@ -216,9 +245,7 @@ export default function Home({
               <Eyebrow className="text-hero-fg/50">This check</Eyebrow>
               <StatusPill verdict={verdict} />
             </div>
-            <div className="mt-3 text-hero-num tabular-nums">
-              {fmtCents(showGross ? period.grossCents : net.netCents)}
-            </div>
+            <div className="mt-3 text-hero-num tabular-nums">{fmtCents(heroCents)}</div>
             <div className="mt-1 text-subhead text-hero-fg/60">
               {showGross ? "Expected pay before taxes" : "Expected take-home this period"}
             </div>

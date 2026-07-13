@@ -246,6 +246,27 @@
   }
 }
 
+/* ---- Checkmark draw — the clean-audit celebration ---- */
+.draw-circle,
+.draw-check {
+  stroke-dashoffset: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes drawStroke {
+    to { stroke-dashoffset: 0; }
+  }
+  .draw-circle {
+    stroke-dasharray: 79;
+    stroke-dashoffset: 79;
+    animation: drawStroke 0.5s ease-out forwards;
+  }
+  .draw-check {
+    stroke-dasharray: 17;
+    stroke-dashoffset: 17;
+    animation: drawStroke 0.35s ease-out 0.4s forwards;
+  }
+}
+
 /* ---- Drop-down reveal (shift card extras) ---- */
 @media (prefers-reduced-motion: no-preference) {
   @keyframes reveal {

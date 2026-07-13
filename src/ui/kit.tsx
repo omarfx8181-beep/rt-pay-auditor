@@ -4,7 +4,8 @@
  * Every screen composes these; nothing styles itself from scratch.
  */
 import { useState, type ComponentType, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ChevronDown, X } from "lucide-react";
 
 /* ---------------- text & fields ---------------- */
 
@@ -144,6 +145,62 @@ export function StatTile({
       <div className={`mt-1 font-display text-2xl font-semibold leading-none tabular-nums ${STAT_TONES[tone]}`}>{value}</div>
       {sub ? <div className="mt-1.5 text-[11px] text-ink-dim">{sub}</div> : null}
     </div>
+  );
+}
+
+/* ---------------- bottom sheet ---------------- */
+
+/**
+ * iOS-style bottom sheet (V3 §3.4) — editing keeps spatial context.
+ * Backdrop tap or the close button dismisses; content scrolls inside;
+ * safe-area padded; slide respects prefers-reduced-motion.
+ */
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  children: ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.2 }}
+            onClick={onClose}
+          />
+          <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-surface-card px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(20,17,15,0.18)]"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={reduced ? { duration: 0 } : { type: "tween", duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-surface-line" aria-hidden />
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-headline">{title}</h2>
+              <button onClick={onClose} className="pressable grid size-11 place-items-center rounded-full text-ink-dim hover:text-ink" aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            {children}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 

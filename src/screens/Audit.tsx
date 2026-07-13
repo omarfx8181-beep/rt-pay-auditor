@@ -5,7 +5,7 @@
  * question. The line-by-line table sits below in plain language.
  */
 import { useRef } from "react";
-import { BadgeCheck, CircleAlert, Mail } from "lucide-react";
+import { CircleAlert, Mail } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num } from "../lib/draft.ts";
 import { fmtCents, fmtUnits } from "../lib/format.ts";
@@ -15,7 +15,17 @@ import type { LineDelta, Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 
-/** "Your critical shift bonus was short 5.0 units ($250.00)." */
+/** The clean-audit celebration: a checkmark that draws itself. */
+function CheckDraw() {
+  return (
+    <svg viewBox="0 0 28 28" className="size-7 shrink-0" aria-hidden fill="none" stroke="currentColor">
+      <circle cx="14" cy="14" r="12.5" strokeWidth="2" className="draw-circle" />
+      <path d="M8.5 14.5l4 4 7-8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="draw-check" />
+    </svg>
+  );
+}
+
+/** "Your critical shift bonus was short 5 units ($250.00)." */
 function shortSentence(d: LineDelta): string {
   const label = d.label.charAt(0).toLowerCase() + d.label.slice(1);
   const dollars = fmtCents(Math.abs(d.deltaCents));
@@ -53,7 +63,7 @@ function VerdictBanner({
     return (
       <CalloutCard tone="pos">
         <div className="flex items-center gap-2 text-title-2 text-pos">
-          <BadgeCheck size={24} /> Your check is right ✓
+          <CheckDraw /> Your check is right ✓
         </div>
         <p className="mt-2 text-body">
           Paid in full — <span className="font-semibold tabular-nums">{fmtCents(verdict.paidNetCents)}</span> to your

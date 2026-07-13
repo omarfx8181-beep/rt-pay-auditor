@@ -1,148 +1,270 @@
+/**
+ * Shifts — friendly cards, edited in a bottom sheet (V3 §4).
+ * Each shift shows as date + hours + human tags ("Weekend", "Charge",
+ * "2 bonus units") — no codes. Tap to edit in the sheet: big controls,
+ * plain toggles for the extra-pay adders, a stepper for bonus units,
+ * and the weekly tier chips. Scan stays on top; leave keeps one-tap
+ * call-ins; the hour tiles read the period at a glance.
+ */
 import { useState } from "react";
-import { ChevronDown, HeartPulse, Plus, Trash2 } from "lucide-react";
+import { HeartPulse, Minus, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
 import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
-import { dayLabel, fmtCents, fmtNum, fmtRate } from "../lib/format.ts";
+import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
-import { Card, Field, StatTile } from "../ui/kit.tsx";
+import { Card, Sheet, StatTile } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** One shift: essentials always visible, the extra stuff behind a drop-down. */
-function ShiftCard({
+function Tag({ children, tone = "soft" }: { children: React.ReactNode; tone?: "soft" | "pos" | "accent" }) {
+  const tones = {
+    soft: "bg-surface-soft text-ink-dim",
+    pos: "bg-pos/10 text-pos",
+    accent: "bg-accent/10 text-accent",
+  } as const;
+  return <span className={`rounded-full px-2 py-0.5 text-caption ${tones[tone]}`}>{children}</span>;
+}
+
+/** The friendly list card: the shift at a glance, tap to edit. */
+function ShiftRow({ s, onOpen }: { s: ShiftDraft; onOpen: () => void }) {
+  const wknd = s.date !== "" && isWeekend(s.date);
+  return (
+    <button onClick={onOpen} className="card pressable w-full p-4 text-left">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-headline">{s.date ? dayLabel(s.date) : "No date yet"}</div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {wknd && <Tag tone="pos">Weekend</Tag>}
+            {num(s.units548) > 0 && <Tag tone="accent">{fmtUnits(num(s.units548))} bonus unit{num(s.units548) === 1 ? "" : "s"}</Tag>}
+            {num(s.charge) > 0 && <Tag>Charge {s.charge}h</Tag>}
+            {num(s.premium) > 0 && <Tag>Premium {s.premium}h</Tag>}
+            {num(s.preceptor) > 0 && <Tag>Precepting {s.preceptor}h</Tag>}
+            {s.note && <Tag>{s.note}</Tag>}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-title-2 tabular-nums">{fmtNum(num(s.hours))}</div>
+          <div className="text-caption text-ink-dim">hours</div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/** Plain on/off for an adder; hours editable while on. */
+function AdderToggle({
+  label,
+  hint,
+  hours,
+  defaultHours,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  hours: string;
+  defaultHours: string;
+  onChange: (v: string) => void;
+}) {
+  const on = num(hours) > 0;
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-surface-line/60 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-subhead">{label}</div>
+        <div className="text-footnote text-ink-dim">{hint}</div>
+      </div>
+      {on && (
+        <span className="flex items-center gap-1">
+          <input
+            value={hours}
+            onChange={(e) => onChange(e.target.value)}
+            inputMode="decimal"
+            className="input w-16 px-2 py-1.5 text-right text-[16px] tabular-nums"
+            aria-label={`${label} hours`}
+          />
+          <span className="text-footnote text-ink-dim">h</span>
+        </span>
+      )}
+      <button
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        onClick={() => onChange(on ? "0" : defaultHours)}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${on ? "bg-accent" : "bg-surface-soft"}`}
+      >
+        <span
+          className={`absolute top-0.5 size-6 rounded-full bg-surface-card shadow-card transition-all ${on ? "left-[22px]" : "left-0.5"}`}
+        />
+      </button>
+    </div>
+  );
+}
+
+/** The bottom-sheet editor: big controls, plain words, no codes. */
+function ShiftSheet({
   s,
-  expanded,
-  onToggle,
-  setShift,
+  tiers,
+  unitValueCents,
+  onSet,
   onRemove,
   onCallIn,
-  tiers,
+  onClose,
 }: {
   s: ShiftDraft;
-  expanded: boolean;
-  onToggle: () => void;
-  setShift: (key: keyof ShiftDraft, value: string) => void;
+  tiers: BonusTier[];
+  unitValueCents: number;
+  onSet: (key: keyof ShiftDraft, value: string) => void;
   onRemove: () => void;
   onCallIn: () => void;
-  tiers: BonusTier[];
+  onClose: () => void;
 }) {
-  const [tierMenuOpen, setTierMenuOpen] = useState(false);
-  const [confirmCallIn, setConfirmCallIn] = useState(false);
+  const [confirming, setConfirming] = useState<"" | "remove" | "callin">("");
   const wknd = s.date !== "" && isWeekend(s.date);
-  const extras: string[] = [];
-  if (num(s.charge) > 0) extras.push(`charge ${s.charge}h`);
-  if (num(s.premium) > 0) extras.push(`premium ${s.premium}h`);
-  if (num(s.preceptor) > 0) extras.push(`precept ${s.preceptor}h`);
+  const units = num(s.units548);
+  const stepUnits = (d: number) => onSet("units548", String(round2(Math.max(0, units + d))));
 
   return (
-    <section className="card p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <label className="flex flex-col">
+          <span className="label">Date</span>
           <input
             type="date"
             value={s.date}
-            onChange={(e) => setShift("date", e.target.value)}
-            className="input w-auto px-2.5 py-1.5 text-xs"
+            onChange={(e) => onSet("date", e.target.value)}
+            className="input px-3 py-2.5 text-[16px]"
           />
-          <div className={`mt-1 text-[10px] ${wknd ? "font-semibold text-pos" : "text-ink-dim"}`}>
-            {s.date ? dayLabel(s.date) + (wknd ? " · weekend pay" : "") : "no date — no weekend pay"}
+        </label>
+        <label className="flex flex-col">
+          <span className="label">Paid hours</span>
+          <input
+            value={s.hours}
+            onChange={(e) => onSet("hours", e.target.value)}
+            inputMode="decimal"
+            className="input px-3 py-2.5 text-[16px] tabular-nums"
+          />
+        </label>
+      </div>
+      <p className="text-footnote text-ink-dim">
+        {s.date
+          ? wknd
+            ? "Weekend — weekend pay adds itself. ✓"
+            : "Weekday — weekend pay adds itself on Saturday and Sunday."
+          : "Pick a date so weekend pay can apply itself."}
+      </p>
+
+      <div>
+        <span className="label">Critical shift bonus</span>
+        <div className="mt-1 flex items-center gap-3">
+          <button
+            onClick={() => stepUnits(-1)}
+            disabled={units <= 0}
+            className="btn btn-ghost pressable size-11 px-0"
+            aria-label="One bonus unit fewer"
+          >
+            <Minus size={17} />
+          </button>
+          <div className="w-20 text-center">
+            <div className="text-title-2 tabular-nums">{fmtUnits(units)}</div>
+            <div className="text-caption text-ink-dim">unit{units === 1 ? "" : "s"}</div>
           </div>
+          <button onClick={() => stepUnits(1)} className="btn btn-ghost pressable size-11 px-0" aria-label="One bonus unit more">
+            <Plus size={17} />
+          </button>
+          <span className="flex-1 text-right text-subhead tabular-nums text-ink-dim">
+            = {fmtCents(Math.round(units * unitValueCents))}
+          </span>
         </div>
-        <div className="flex items-start gap-3">
-          <Field label="Paid hrs" value={s.hours} onChange={(v) => setShift("hours", v)} w="w-16" />
-          <Field label="Bonus units" value={s.units548} onChange={(v) => setShift("units548", v)} w="w-14" />
+        <div className="mt-2.5 flex flex-wrap gap-1.5">
+          {tiers.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onSet("units548", String(round2(units + t.units)))}
+              className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1.5 text-left text-caption hover:border-accent hover:text-accent"
+            >
+              {t.label} <span className="font-semibold text-accent">+{fmtUnits(t.units)}</span>
+            </button>
+          ))}
         </div>
+        <p className="mt-1.5 text-footnote text-ink-dim">This week's tiers — edit them in Me → Bonus tiers.</p>
       </div>
 
-      <button
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="pressable mt-3 flex w-full items-center justify-between gap-2 border-t border-surface-line/60 pt-2.5 text-left"
-      >
-        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-dim">
-          {extras.length > 0 || s.note ? (
-            <>
-              {extras.join(" · ")}
-              {extras.length > 0 && s.note ? " · " : ""}
-              {s.note}
-            </>
-          ) : (
-            "extra pay · bonus tiers · note"
-          )}
-        </span>
-        <ChevronDown size={14} className={`shrink-0 text-ink-dim transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
+      <div>
+        <span className="label">Extra pay</span>
+        <AdderToggle
+          label="Charge"
+          hint="You ran the unit."
+          hours={s.charge}
+          defaultHours={s.hours || "12"}
+          onChange={(v) => onSet("charge", v)}
+        />
+        <AdderToggle
+          label="Premium"
+          hint="Premium-pay shift."
+          hours={s.premium}
+          defaultHours={s.hours || "12"}
+          onChange={(v) => onSet("premium", v)}
+        />
+        <AdderToggle
+          label="Precepting"
+          hint="You trained someone."
+          hours={s.preceptor}
+          defaultHours={s.hours || "12"}
+          onChange={(v) => onSet("preceptor", v)}
+        />
+      </div>
 
-      {expanded && (
-        <div className="reveal mt-3 space-y-3">
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Charge" value={s.charge} onChange={(v) => setShift("charge", v)} w="w-full" />
-            <Field label="Premium" value={s.premium} onChange={(v) => setShift("premium", v)} w="w-full" />
-            <Field label="Precept" value={s.preceptor} onChange={(v) => setShift("preceptor", v)} w="w-full" />
-          </div>
-          <div>
-            <button
-              onClick={() => setTierMenuOpen((v) => !v)}
-              aria-expanded={tierMenuOpen}
-              className="pressable flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim hover:text-ink"
-            >
-              Add bonus tier
-              <ChevronDown size={13} className={`transition-transform ${tierMenuOpen ? "rotate-180" : ""}`} />
+      <label className="flex flex-col">
+        <span className="label">Note</span>
+        <input
+          value={s.note}
+          onChange={(e) => onSet("note", e.target.value)}
+          placeholder="16-hr extra, transport run…"
+          className="input px-3 py-2.5 text-[16px]"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-line/60 pt-3">
+        {confirming === "callin" ? (
+          <span className="flex items-center gap-2 text-caption">
+            <button onClick={onCallIn} className="pressable min-h-11 font-semibold text-blue">
+              Log as sick time?
             </button>
-            {tierMenuOpen && (
-              <div className="reveal mt-2 flex flex-wrap gap-1.5">
-                {tiers.map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => {
-                      setShift("units548", String(round2(num(s.units548) + t.units)));
-                      setTierMenuOpen(false);
-                    }}
-                    className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left text-[11px] hover:border-accent hover:text-accent"
-                  >
-                    {t.label} <span className="font-semibold text-accent">+{t.units}u</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex min-w-32 flex-1 flex-col">
-              <span className="label">Note</span>
-              <input
-                value={s.note}
-                onChange={(e) => setShift("note", e.target.value)}
-                className="input px-2.5 py-1.5 text-xs"
-              />
-            </label>
-            {confirmCallIn ? (
-              <span className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider">
-                <button onClick={onCallIn} className="pressable font-semibold text-blue">
-                  Convert to STO?
-                </button>
-                <button onClick={() => setConfirmCallIn(false)} className="pressable text-ink-dim hover:text-ink">
-                  Keep
-                </button>
-              </span>
-            ) : (
-              <button
-                onClick={() => setConfirmCallIn(true)}
-                className="pressable mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-blue"
-              >
-                <HeartPulse size={13} /> Called in sick
-              </button>
-            )}
-            <button
-              onClick={onRemove}
-              className="pressable mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg"
-            >
-              <Trash2 size={13} /> Remove
+            <button onClick={() => setConfirming("")} className="pressable min-h-11 text-ink-dim">
+              Keep the shift
             </button>
-          </div>
-        </div>
-      )}
-    </section>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming("callin")}
+            className="pressable flex min-h-11 items-center gap-1 text-caption text-ink-dim hover:text-blue"
+          >
+            <HeartPulse size={14} /> Called in sick
+          </button>
+        )}
+        {confirming === "remove" ? (
+          <span className="flex items-center gap-2 text-caption">
+            <button onClick={onRemove} className="pressable min-h-11 font-semibold text-neg">
+              Really remove?
+            </button>
+            <button onClick={() => setConfirming("")} className="pressable min-h-11 text-ink-dim">
+              Keep
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirming("remove")}
+            className="pressable flex min-h-11 items-center gap-1 text-caption text-ink-dim hover:text-neg"
+          >
+            <Trash2 size={14} /> Remove shift
+          </button>
+        )}
+      </div>
+
+      <button onClick={onClose} className="btn btn-primary pressable w-full">
+        Done
+      </button>
+    </div>
   );
 }
 
@@ -171,14 +293,8 @@ export default function Shifts({
   periodStart: string;
   periodEnd: string;
 }) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const toggle = (id: string) =>
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = shifts.find((s) => s.id === editingId) ?? null;
 
   const setShift = (id: string, key: keyof ShiftDraft, value: string) =>
     setShifts((arr) => arr.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
@@ -186,7 +302,7 @@ export default function Shifts({
   const addShift = () => {
     const fresh = blankShift();
     setShifts((arr) => [...arr, fresh]);
-    setExpandedIds((prev) => new Set(prev).add(fresh.id)); // new shift opens ready to fill
+    setEditingId(fresh.id); // new shift opens in the sheet, ready to fill
   };
 
   return (
@@ -205,44 +321,58 @@ export default function Shifts({
         onApply={(mode, drafts) => setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]))}
       />
 
-      <p className="text-sm text-ink-dim">
-        Date, hours, and bonus units up front — the rest lives in each shift's drop-down. Weekend pay adds itself on
-        Saturday and Sunday. 1 bonus unit = {fmtCents(cfg.unit548Cents)}.
-      </p>
+      {shifts.length === 0 ? (
+        <Card>
+          <p className="text-body">Your shifts live here. The more you add, the sharper your paycheck check.</p>
+          <button onClick={addShift} className="btn btn-primary pressable mt-4">
+            <Plus size={16} /> Add a shift
+          </button>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+            {shifts.map((s) => (
+              <ShiftRow key={s.id} s={s} onOpen={() => setEditingId(s.id)} />
+            ))}
+          </div>
+          <button onClick={addShift} className="btn btn-ghost pressable">
+            <Plus size={15} /> Add shift
+          </button>
+        </>
+      )}
 
-      <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
-        {shifts.map((s) => (
-          <ShiftCard
-            key={s.id}
-            s={s}
-            expanded={expandedIds.has(s.id)}
-            onToggle={() => toggle(s.id)}
-            setShift={(key, value) => setShift(s.id, key, value)}
-            onRemove={() => setShifts((arr) => arr.filter((x) => x.id !== s.id))}
+      <Sheet open={editing !== null} onClose={() => setEditingId(null)} title={editing?.date ? dayLabel(editing.date) : "New shift"}>
+        {editing && (
+          <ShiftSheet
+            s={editing}
+            tiers={tiers}
+            unitValueCents={cfg.unit548Cents}
+            onSet={(key, value) => setShift(editing.id, key, value)}
+            onRemove={() => {
+              setShifts((arr) => arr.filter((x) => x.id !== editing.id));
+              setEditingId(null);
+            }}
             onCallIn={() => {
               // Called in for THIS day: the scheduled shift becomes STO leave
               // with the same date and hours.
-              const entry = { ...blankLeave("sto"), date: s.date || todayIso(), hours: s.hours };
+              const entry = { ...blankLeave("sto"), date: editing.date || todayIso(), hours: editing.hours };
               setLeave((arr) => [...arr, entry]);
-              setShifts((arr) => arr.filter((x) => x.id !== s.id));
+              setShifts((arr) => arr.filter((x) => x.id !== editing.id));
+              setEditingId(null);
             }}
-            tiers={tiers}
+            onClose={() => setEditingId(null)}
           />
-        ))}
-      </div>
-
-      <button onClick={addShift} className="btn btn-ghost pressable">
-        <Plus size={15} /> Add shift
-      </button>
+        )}
+      </Sheet>
 
       <Card>
         <div className="mb-1 flex items-center gap-1.5">
           <HeartPulse size={13} className="text-blue" />
           <span className="eyebrow">Leave — sick · LOA · medical</span>
         </div>
-        <p className="text-[11px] text-ink-dim">
-          Calling in? One tap logs today — hours prefill from today's scheduled shift when there is one. Paid at your base
-          rate (${fmtRate(cfg.baseRateCents)}/hr), never counts toward overtime, no weekend pay, and these hours
+        <p className="text-footnote text-ink-dim">
+          Calling in? One tap logs today — hours prefill from today's scheduled shift when there is one. Paid at your
+          base rate (${fmtRate(cfg.baseRateCents)}/hr), never counts toward overtime, no weekend pay, and these hours
           don't earn PTO. They show on your timecard as Time Off.
         </p>
 
@@ -263,13 +393,13 @@ export default function Shifts({
                   inputMode="decimal"
                   className="input w-16 px-2 py-1 text-right text-xs tabular-nums"
                 />
-                <span className="text-[11px] text-ink-dim">hrs</span>
+                <span className="text-footnote text-ink-dim">hrs</span>
                 <button
                   onClick={() => setLeave((arr) => arr.filter((x) => x.id !== l.id))}
-                  className="pressable p-1 text-ink-dim hover:text-neg"
+                  className="pressable p-2.5 text-ink-dim hover:text-neg"
                   aria-label="Remove leave"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={14} />
                 </button>
               </div>
             ))}

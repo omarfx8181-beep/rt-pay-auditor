@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         includeAssets: ["apple-touch-icon.png"],
         manifest: {
-          name: "RT Pay Auditor",
+          name: "RT Pay",
           short_name: "RT Pay",
           description: "Know what the check should say before it lands.",
           display: "standalone",
