@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Activity, CalendarClock, CalendarRange, FileCheck2, SlidersHorizontal } from "lucide-react";
+import { CalendarClock, CircleUserRound, House } from "lucide-react";
 import {
   AUDIT_TOLERANCE_CENTS,
   computeNet,
@@ -16,40 +16,23 @@ import {
   mergeBackup,
   nextPeriodRange,
   parseBackup,
-  periodLabel,
   rollupYtd,
   PERIOD_DAYS,
   type PayPeriod,
 } from "./lib/periods.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
-import { fmtCents, fmtNum, fmtSignedCents } from "./lib/format.ts";
-import { Eyebrow, Hero, TabBar, type Tab } from "./ui/kit.tsx";
+import { TabBar, type Tab } from "./ui/kit.tsx";
+import Home, { type StubStatus } from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
-import Paycheck, { type WhatIfDraft } from "./screens/Paycheck.tsx";
-import Audit from "./screens/Audit.tsx";
-import Rules, { type AppearanceMode, type QuestionAnswer } from "./screens/Rules.tsx";
-import Periods, { newOtherIncome } from "./screens/Periods.tsx";
+import type { WhatIfDraft } from "./screens/Paycheck.tsx";
+import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
 
 const TABS: Tab[] = [
+  { id: "home", label: "Home", Icon: House },
   { id: "shifts", label: "Shifts", Icon: CalendarClock },
-  { id: "paycheck", label: "Paycheck", Icon: Activity },
-  { id: "audit", label: "Audit", Icon: FileCheck2 },
-  { id: "rules", label: "Rules", Icon: SlidersHorizontal },
-  { id: "periods", label: "Periods", Icon: CalendarRange },
+  { id: "me", label: "Me", Icon: CircleUserRound },
 ];
-
-function VitalStat({ label, value, sub, color = "" }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div>
-      <div className="eyebrow text-hero-fg/50">{label}</div>
-      <div className={`mt-1 font-display text-[26px] font-semibold leading-none tabular-nums sm:text-[30px] ${color}`}>
-        {value}
-      </div>
-      {sub ? <div className="mt-1.5 text-[11px] text-hero-fg/50">{sub}</div> : null}
-    </div>
-  );
-}
 
 export default function App() {
   // Surface a storage failure instead of an eternal splash (private
@@ -88,12 +71,12 @@ export default function App() {
     return (
       <div className="grid min-h-screen place-items-center">
         <div className="max-w-sm px-6 text-center">
-          <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
-          <h1 className="mt-1.5 font-display text-3xl font-semibold">RT Pay Auditor</h1>
+          <h1 className="text-large-title tracking-tight">RT Pay</h1>
+          <p className="mt-2 text-subhead text-ink-dim">Know what the check should say — before it lands.</p>
           {dbError !== "" && (
             <p className="mt-4 text-sm text-neg">
-              This browser blocked local storage ({dbError}). Open the app directly in Safari or Chrome — everything
-              it saves lives on your device.
+              This browser blocked local storage ({dbError}). Open the app directly in Safari or Chrome — everything it
+              saves lives on your device.
             </p>
           )}
         </div>
@@ -146,7 +129,7 @@ function PeriodWorkspace({
   appearance: AppearanceMode;
   answers: Record<string, QuestionAnswer>;
 }) {
-  const [tab, setTab] = useState("shifts");
+  const [tab, setTab] = useState("home");
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
@@ -194,6 +177,7 @@ function PeriodWorkspace({
   // "Reconciled" only when net matches AND no line anywhere is red — a
   // matching net must not paper over a shorted line elsewhere.
   const reconciled = netDeltaCents !== null && Math.abs(netDeltaCents) <= AUDIT_TOLERANCE_CENTS && offCount === 0;
+  const stubStatus: StubStatus = netDeltaCents === null && offCount === 0 ? "unchecked" : reconciled ? "matched" : "off";
 
   const selectTab = (id: string, index: number) => {
     const dx = index > tabIndex.current ? 28 : index < tabIndex.current ? -28 : 0;
@@ -202,7 +186,7 @@ function PeriodWorkspace({
     setTab(id);
   };
 
-  /* ---- period management (Periods tab) ---- */
+  /* ---- period management ---- */
 
   const createNext = async () => {
     const latest = periods.reduce((a, b) => (a.endDate > b.endDate ? a : b));
@@ -276,47 +260,35 @@ function PeriodWorkspace({
   };
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-2xl px-4 pb-28 pt-[max(20px,env(safe-area-inset-top))] md:max-w-5xl md:pb-12">
-      <header>
-        <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
-        <h1 className="mt-1.5 text-large-title tracking-tight">RT Pay Auditor</h1>
-        <p className="mt-2 text-sm text-ink-dim">
-          Pay period {periodLabel(record.startDate, record.endDate)}
-          {record.archived ? " · archived" : ""}
-        </p>
-      </header>
-
+    <div className="mx-auto min-h-screen w-full max-w-2xl px-5 pb-28 pt-[max(20px,env(safe-area-inset-top))] md:max-w-5xl md:pb-12">
       <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
 
-      {/* one big number, one verdict — details live in the quiet rows below */}
-      <Hero className="mt-5">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-          <VitalStat label="Expected net" value={fmtCents(net.netCents)} sub="this period, to your account" />
-          <VitalStat
-            label="Stub check"
-            value={netDeltaCents === null ? "—" : reconciled ? "✓ Paid right" : fmtSignedCents(netDeltaCents)}
-            sub={netDeltaCents === null ? "enter the stub in Audit" : reconciled ? "matches to the penny" : `${offCount} line(s) off — see Audit`}
-            color={netDeltaCents === null ? "" : reconciled ? "text-hero-pos" : "text-hero-neg"}
+      <main key={tab} className="page-enter md:mt-5">
+        {tab === "home" && (
+          <Home
+            record={record}
+            periods={periods}
+            onSelectPeriod={(id) => void setCurrentPeriodId(id)}
+            onCreateNext={() => void createNext()}
+            period={period}
+            net={net}
+            stubStatus={stubStatus}
+            auditRows={auditRows}
+            actual={actual}
+            setActual={setActual}
+            cfg={cfg}
+            cfgDraft={cfgDraft}
+            shifts={shifts}
+            whatIf={whatIf}
+            setWhatIf={setWhatIf}
+            identity={identity}
+            onSaveIdentity={(id) => void db.settings.put({ key: "identity", value: JSON.stringify(id) })}
+            ytd={ytd}
+            year={year}
+            onGoToShifts={() => selectTab("shifts", 1)}
+            onGoToMe={() => selectTab("me", 2)}
           />
-        </div>
-        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-surface-line pt-3 text-[11px] tabular-nums text-hero-fg/60">
-          <span>gross {fmtCents(period.grossCents)}</span>
-          <span>{fmtNum(period.workedHours)} hrs</span>
-          <span>{fmtNum(period.units548)}u 548</span>
-        </div>
-        <button
-          onClick={() => selectTab("periods", TABS.length - 1)}
-          className="pressable mt-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-left text-[11px] tabular-nums text-hero-fg/60"
-        >
-          <span>
-            {year} so far · made <span className="text-hero-fg/90">{fmtCents(ytd.totalGrossCents)}</span> · take-home{" "}
-            <span className="font-semibold text-hero-pos">{fmtCents(ytd.totalNetCents)}</span>
-          </span>
-          <span className="text-hero-fg/40">→</span>
-        </button>
-      </Hero>
-
-      <main key={tab} className="page-enter mt-5">
+        )}
         {tab === "shifts" && (
           <Shifts
             shifts={shiftDrafts}
@@ -325,7 +297,6 @@ function PeriodWorkspace({
             setLeave={setLeaveDrafts}
             tiers={tiers}
             period={period}
-            unit548Label={fmtCents(cfg.unit548Cents)}
             cfg={cfg}
             apiKey={apiKey}
             feedUrl={feedUrl}
@@ -333,32 +304,8 @@ function PeriodWorkspace({
             periodEnd={record.endDate}
           />
         )}
-        {tab === "paycheck" && (
-          <Paycheck
-            period={period}
-            net={net}
-            shifts={shifts}
-            cfg={cfg}
-            cfgDraft={cfgDraft}
-            whatIf={whatIf}
-            setWhatIf={setWhatIf}
-          />
-        )}
-        {tab === "audit" && (
-          <Audit
-            rows={auditRows}
-            actual={actual}
-            setActual={setActual}
-            cfg={cfg}
-            shifts={shifts}
-            periodStart={record.startDate}
-            periodEnd={record.endDate}
-            identity={identity}
-            onSaveIdentity={(id) => void db.settings.put({ key: "identity", value: JSON.stringify(id) })}
-          />
-        )}
-        {tab === "rules" && (
-          <Rules
+        {tab === "me" && (
+          <Me
             cfgDraft={cfgDraft}
             setCfgDraft={setCfgDraft}
             tiers={tiers}
@@ -372,21 +319,13 @@ function PeriodWorkspace({
             onSetAppearance={(mode) => void db.settings.put({ key: "appearance", value: mode })}
             answers={answers}
             onSaveAnswers={(next) => void db.settings.put({ key: "questionAnswers", value: JSON.stringify(next) })}
-          />
-        )}
-        {tab === "periods" && (
-          <Periods
             periods={periods}
             currentId={record.id}
             ytd={ytd}
             otherIncome={otherIncome}
-            apiKey={apiKey}
             onSelect={(id) => void setCurrentPeriodId(id)}
             onCreateNext={() => void createNext()}
             onLogPastStub={(endDate, gross, net, startDate) => void logPastStub(endDate, gross, net, startDate)}
-            onAddOther={() => void db.otherIncome.add(newOtherIncome())}
-            onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
-            onDeleteOther={(id) => void db.otherIncome.delete(id)}
             onSetDates={(id, startDate) =>
               void db.periods.update(id, { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1), updatedAt: Date.now() })
             }
@@ -402,19 +341,15 @@ function PeriodWorkspace({
                 await setCurrentPeriodId(remaining[0].id);
               }
             }}
+            onAddOther={() => void db.otherIncome.add(newOtherIncome())}
+            onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
+            onDeleteOther={(id) => void db.otherIncome.delete(id)}
             onExport={() => void exportBackup()}
             onImportFile={(f) => void importFile(f)}
             importStatus={importStatus}
           />
         )}
       </main>
-
-      <TabBarSpacer />
     </div>
   );
-}
-
-/** Keeps the last content clear of the fixed bottom bar on phones. */
-function TabBarSpacer() {
-  return <div className="h-2 md:hidden" />;
 }

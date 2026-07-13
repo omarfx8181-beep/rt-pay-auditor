@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ChevronDown, HeartPulse, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
 import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
-import { dayLabel, fmtNum, fmtRate } from "../lib/format.ts";
+import { dayLabel, fmtCents, fmtNum, fmtRate } from "../lib/format.ts";
+import { periodLabel } from "../lib/periods.ts";
 import { Card, Field, StatTile } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
 
@@ -152,7 +153,6 @@ export default function Shifts({
   setLeave,
   tiers,
   period,
-  unit548Label,
   cfg,
   apiKey,
   feedUrl,
@@ -165,7 +165,6 @@ export default function Shifts({
   setLeave: (updater: (arr: LeaveDraft[]) => LeaveDraft[]) => void;
   tiers: BonusTier[];
   period: PeriodResult;
-  unit548Label: string;
   cfg: EngineConfig;
   apiKey: string;
   feedUrl: string;
@@ -192,6 +191,11 @@ export default function Shifts({
 
   return (
     <div className="space-y-3">
+      <div>
+        <h1 className="text-large-title tracking-tight">Shifts</h1>
+        <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
+      </div>
+
       <ScanPanel
         apiKey={apiKey}
         feedUrl={feedUrl}
@@ -203,7 +207,7 @@ export default function Shifts({
 
       <p className="text-sm text-ink-dim">
         Date, hours, and 548 units up front — everything else is in each card's drop-down. Weekend diff applies itself
-        on Sat/Sun. 1 unit = {unit548Label}.
+        on Sat/Sun. 1 unit = {fmtCents(cfg.unit548Cents)}.
       </p>
 
       <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
