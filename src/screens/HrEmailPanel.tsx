@@ -47,11 +47,11 @@ export default function HrEmailPanel({
   return (
     <CalloutCard tone="accent">
       <Eyebrow accent className="mb-1 flex items-center gap-1.5">
-        <Mail size={13} /> One-tap HR email
+        <Mail size={13} /> The email, ready to send
       </Eyebrow>
       <p className="text-sm">
         The format that won the June dispute: exact amounts line by line, the per-shift bonus table, and the
-        identical-shift comparison. Your details save on this device only.
+        identical-shift comparison. Edit anything before sending — your details save on this device only.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-3">
@@ -79,7 +79,13 @@ export default function HrEmailPanel({
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button onClick={() => void copy("body", body)} className="btn btn-primary pressable">
+        <a
+          href={`mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(body)}`}
+          className="btn btn-primary pressable"
+        >
+          <Mail size={15} /> Open in Mail
+        </a>
+        <button onClick={() => void copy("body", body)} className="btn btn-ghost pressable">
           {copied === "body" ? <Check size={15} /> : <Copy size={15} />}
           {copied === "body" ? "Copied ✓" : "Copy email"}
         </button>
@@ -87,12 +93,6 @@ export default function HrEmailPanel({
           {copied === "subject" ? <Check size={15} /> : <Copy size={15} />}
           {copied === "subject" ? "Copied ✓" : "Copy subject"}
         </button>
-        <a
-          href={`mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(body)}`}
-          className="btn btn-ghost pressable"
-        >
-          <Mail size={15} /> Open in Mail
-        </a>
         {manualBody !== null && (
           <button onClick={() => setManualBody(null)} className="btn btn-ghost pressable">
             <RotateCcw size={15} /> Regenerate

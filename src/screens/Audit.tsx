@@ -12,7 +12,7 @@ import { fmtCents, fmtUnits } from "../lib/format.ts";
 import { CalloutCard, Card } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
 import type { LineDelta, Verdict } from "../lib/verdict.ts";
-import type { EmailIdentity } from "../lib/hrEmail.ts";
+import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 
 /** "Your critical shift bonus was short 5.0 units ($250.00)." */
@@ -24,7 +24,18 @@ function shortSentence(d: LineDelta): string {
     : `Your ${label} was short ${dollars}.`;
 }
 
-function VerdictBanner({ verdict, onEmailHr }: { verdict: Verdict; onEmailHr: () => void }) {
+function VerdictBanner({
+  verdict,
+  emailHref,
+  identityMissing,
+  onReviewEmail,
+}: {
+  verdict: Verdict;
+  /** mailto: URL with the pre-written draft; null when no shortfall email exists. */
+  emailHref: string | null;
+  identityMissing: boolean;
+  onReviewEmail: () => void;
+}) {
   if (verdict.kind === "intro") return null;
 
   if (verdict.kind === "progress") {
@@ -68,9 +79,20 @@ function VerdictBanner({ verdict, onEmailHr }: { verdict: Verdict; onEmailHr: ()
           )}
           {clean && <> Everything else matched.</>}
         </p>
-        <button onClick={onEmailHr} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
-          <Mail size={16} /> Email HR — we've written it for you
+        {emailHref ? (
+          <a href={emailHref} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
+            <Mail size={16} /> Email HR — we've written it for you
+          </a>
+        ) : null}
+        <button onClick={onReviewEmail} className="pressable mt-2 block min-h-11 py-1 text-subhead font-medium text-accent">
+          Read or edit it first ↓
         </button>
+        {identityMissing && (
+          <p className="text-footnote text-ink-dim">
+            The draft signs with placeholders until you add your name and employee ID below — one time, saved on this
+            device.
+          </p>
+        )}
         {verdict.taxesFollow && (
           <p className="mt-2.5 text-footnote text-ink-dim">
             Good news: you caught it. The stub's tax lines follow the shorted pay — they'll straighten out when it's
@@ -129,12 +151,29 @@ export default function Audit({
   });
   // The HR email is about pay, not withholding: earnings lines only.
   const earningsOff = judged.filter((j) => j.delta !== null && !j.delta.ok && j.row.kind === "earnings");
+  const discrepancies = earningsOff.map(({ row, raw, delta }) => ({
+    key: row.key,
+    label: row.techLabel, // payroll needs the stub's own names and codes
+    expectedCents: row.expectedCents,
+    paidCents: dollarsToCents(num(raw)),
+    deltaCents: delta!.deltaCents,
+    deltaUnits: delta!.deltaUnits,
+  }));
+  const email =
+    discrepancies.length > 0
+      ? buildHrEmail({ periodStart, periodEnd, identity, discrepancies, shifts, unit548Cents: cfg.unit548Cents })
+      : null;
+  const emailHref = email
+    ? `mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
+    : null;
 
   return (
     <div className="space-y-3">
       <VerdictBanner
         verdict={verdict}
-        onEmailHr={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        emailHref={emailHref}
+        identityMissing={identity.name.trim() === "" || identity.employeeId.trim() === ""}
+        onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
       />
 
       <p className="text-subhead text-ink-dim">
@@ -178,17 +217,10 @@ export default function Audit({
         </div>
       </Card>
 
-      {earningsOff.length > 0 && (
+      {discrepancies.length > 0 && (
         <div ref={emailRef}>
           <HrEmailPanel
-            discrepancies={earningsOff.map(({ row, raw, delta }) => ({
-              key: row.key,
-              label: row.techLabel,
-              expectedCents: row.expectedCents,
-              paidCents: dollarsToCents(num(raw)),
-              deltaCents: delta!.deltaCents,
-              deltaUnits: delta!.deltaUnits,
-            }))}
+            discrepancies={discrepancies}
             shifts={shifts}
             periodStart={periodStart}
             periodEnd={periodEnd}
