@@ -4,8 +4,8 @@
  * in src/lib/periods.ts — this layer only reads and writes.
  */
 import Dexie, { type EntityTable } from "dexie";
-import { DEFAULT_TIERS } from "../lib/engine.ts";
-import { ACTUAL_SEED, DEFAULT_CFG_DRAFT, DEMO_SHIFTS } from "../lib/draft.ts";
+import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
+import { ACTUAL_SEED, DEMO_SHIFTS } from "../lib/draft.ts";
 import type { OtherIncomeDraft, PayPeriod } from "../lib/periods.ts";
 
 interface Setting {
@@ -32,6 +32,8 @@ db.version(2).stores({
 
 // First run: seed the validated 6/22–7/05 demo period so a fresh install
 // lands on real, reconciled numbers (Knockdown's seed.ts pattern).
+// Rules come from the Fairview RT preset — periods carry a snapshot of
+// preset data, never a reference (V3-M7, brief §6).
 db.on("populate", (tx) => {
   const now = Date.now();
   const seed: PayPeriod = {
@@ -40,8 +42,8 @@ db.on("populate", (tx) => {
     endDate: "2026-07-05",
     shifts: DEMO_SHIFTS,
     actual: ACTUAL_SEED,
-    cfgDraft: DEFAULT_CFG_DRAFT,
-    tiers: DEFAULT_TIERS,
+    cfgDraft: FAIRVIEW_RT_PRESET.cfgDraft,
+    tiers: FAIRVIEW_RT_PRESET.tiers,
     archived: false,
     createdAt: now,
     updatedAt: now,

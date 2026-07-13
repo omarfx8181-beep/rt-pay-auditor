@@ -5,6 +5,7 @@
  * DEFAULT_CFG / DEMO_SHIFTS / ACTUAL_SEED verbatim.
  */
 import { DEFAULT_CFG, dollarsToCents, type EngineConfig, type LeaveEntry, type LeaveType, type Shift } from "./engine.ts";
+import { FAIRVIEW_RT_PRESET } from "./presets.ts";
 
 /** v1's num(): parse-or-zero at the input boundary. */
 export const num = (v: string): number => {
@@ -49,38 +50,13 @@ export interface CfgDraft {
   mealThreshold: string;
 }
 
-/** v1 DEFAULT_CFG, decoded from the stub (PP 6/22–7/05). */
-export const DEFAULT_CFG_DRAFT: CfgDraft = {
-  baseRate: "52.53",
-  otMult: "1.5",
-  dtMult: "2.0",
-  otPeriod: "80",
-  dtDaily: "12",
-  otRateOverride: "85.74",
-  weekendDiff: "2.00",
-  eveningDiff: "2.00",
-  eveningHours: "18.45",
-  chargeRate: "3.00",
-  premiumRate: "3.00",
-  preceptorRate: "3.00",
-  unit548: "50",
-  imputed: "1.81",
-  k403bPct: "3.0",
-  med: "276.61",
-  dent: "64.55",
-  fsa: "76.92",
-  fedEff: "13.6977",
-  mnEff: "6.0205",
-  marginalFed: "22",
-  marginalMN: "6.8",
-  mnFam: "0.135",
-  mnMed: "0.305",
-  acc: "6.12",
-  crit: "5.19",
-  otherAfterTax: "87.73",
-  mealDeduct: "0.5",
-  mealThreshold: "6",
-};
+/**
+ * The seed config now LIVES in the Fairview RT preset (V3-M7, §6 —
+ * rules are data, not constants); this alias keeps every existing
+ * import working. Values are v1 DEFAULT_CFG decoded from the stub
+ * (PP 6/22–7/05), unchanged.
+ */
+export const DEFAULT_CFG_DRAFT: CfgDraft = FAIRVIEW_RT_PRESET.cfgDraft;
 
 export function draftToConfig(d: CfgDraft): EngineConfig {
   return {

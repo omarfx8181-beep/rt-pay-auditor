@@ -11,6 +11,8 @@
  * NEVER change math here without those tests passing (CLAUDE.md rule 1).
  */
 
+import { FAIRVIEW_RT_PRESET } from "./presets.ts";
+
 /** Integer number of cents. */
 export type Cents = number;
 
@@ -163,17 +165,13 @@ export const DEFAULT_CFG: EngineConfig = {
   mealThresholdHours: 6,
 };
 
-/** v1 DEFAULT_TIERS verbatim — tiers change weekly, so this is config, not law. */
-export const DEFAULT_TIERS: BonusTier[] = [
-  { id: "t1", label: "Shift extension > 4 hr", units: 2 },
-  { id: "t2", label: "Shift extension ≤ 4 hr (confirm)", units: 1 },
-  { id: "t3", label: "12-hr extra shift ($500)", units: 10 },
-  { id: "t4", label: "16-hr extra shift (current)", units: 8 },
-  { id: "t5", label: "Transport run ≤ 4 hr", units: 1 },
-  { id: "t6", label: "Transport run > 4 hr", units: 2 },
-  { id: "t7", label: "4-hr extra — old tier ($125)", units: 2.5 },
-  { id: "t8", label: "16-hr extra — old tier ($750)", units: 15 },
-];
+/**
+ * v1 DEFAULT_TIERS, now sourced from the Fairview RT preset (V3-M7 —
+ * tiers change weekly, so they're facility DATA, not engine law).
+ * Re-exported here so every existing import keeps working; values are
+ * identical and remain pinned by the golden tests.
+ */
+export const DEFAULT_TIERS: BonusTier[] = FAIRVIEW_RT_PRESET.tiers;
 
 /* ================= period gross ================= */
 

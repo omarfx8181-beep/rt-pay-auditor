@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { computeNet, computePeriod, type BonusTier } from "../lib/engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, num, todayIso, uid, type CfgDraft } from "../lib/draft.ts";
+import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
 import { periodLabel, prevPeriodRange, type OtherIncomeDraft, type PayPeriod, type YtdRollup } from "../lib/periods.ts";
 import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
@@ -278,10 +279,10 @@ export default function Me({
     <div className="space-y-3">
       <h1 className="text-large-title tracking-tight">Me</h1>
 
-      {/* ---- role & employer + the one number that matters ---- */}
+      {/* ---- role & employer (from the preset) + the one number that matters ---- */}
       <Card>
-        <div className="text-headline">M Health Fairview</div>
-        <div className="mt-0.5 text-subhead text-ink-dim">Respiratory Therapist · paid every two weeks</div>
+        <div className="text-headline">{FAIRVIEW_RT_PRESET.facility.name}</div>
+        <div className="mt-0.5 text-subhead text-ink-dim">{FAIRVIEW_RT_PRESET.role.name} · paid every two weeks</div>
         <div className="mt-3 border-t border-surface-line/60 pt-1">
           <RuleRow
             label="Your base hourly rate"

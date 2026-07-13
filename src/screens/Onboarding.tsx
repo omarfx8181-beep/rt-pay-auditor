@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { Camera, Check, ChevronLeft, Plus } from "lucide-react";
 import { num } from "../lib/draft.ts";
+import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
 
 const STEPS = 4;
 
@@ -94,8 +95,8 @@ export default function Onboarding({
             <div className="mt-4 rounded-2xl border border-accent bg-accent/10 p-5 shadow-card">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-headline">M Health Fairview</div>
-                  <div className="mt-0.5 text-subhead text-ink-dim">Respiratory Therapist</div>
+                  <div className="text-headline">{FAIRVIEW_RT_PRESET.facility.name}</div>
+                  <div className="mt-0.5 text-subhead text-ink-dim">{FAIRVIEW_RT_PRESET.role.name}</div>
                 </div>
                 <span className="grid size-7 place-items-center rounded-full bg-accent text-on-accent">
                   <Check size={16} strokeWidth={2.5} />
@@ -103,8 +104,8 @@ export default function Onboarding({
               </div>
             </div>
             <p className="mt-4 text-footnote text-ink-dim">
-              This loads Fairview's weekend, evening, overtime, and bonus rules for you. More hospitals and roles are
-              coming — they're presets, not code.
+              This loads {FAIRVIEW_RT_PRESET.facility.name}'s weekend, evening, overtime, and bonus rules for you.
+              More hospitals and roles are coming — they're presets, not code.
             </p>
             <p className="mt-2 text-footnote text-ink-dim">This stays on your device.</p>
             <button onClick={() => go(2)} className="btn btn-primary pressable mt-8 w-full">
