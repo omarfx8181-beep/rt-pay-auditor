@@ -22,6 +22,7 @@ import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
+import Onboarding from "./screens/Onboarding.tsx";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
@@ -46,6 +47,9 @@ export default function App() {
   const feedUrlRow = useLiveQuery(async () => (await db.settings.get("icalFeedUrl")) ?? null, []);
   const appearanceRow = useLiveQuery(async () => (await db.settings.get("appearance")) ?? null, []);
   const answersRow = useLiveQuery(async () => (await db.settings.get("questionAnswers")) ?? null, []);
+  const onboardingRow = useLiveQuery(async () => (await db.settings.get("onboarding")) ?? null, []);
+  // Where onboarding drops the user ("Scan my schedule" → Shifts).
+  const [postOnboardTab, setPostOnboardTab] = useState<"home" | "shifts">("home");
 
   // Reflect the chosen appearance on <html>; "system" removes the override.
   const appearance = (appearanceRow?.value as AppearanceMode) || "system";
@@ -61,7 +65,8 @@ export default function App() {
     apiKeyRow === undefined ||
     feedUrlRow === undefined ||
     appearanceRow === undefined ||
-    answersRow === undefined
+    answersRow === undefined ||
+    onboardingRow === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -80,6 +85,28 @@ export default function App() {
   }
 
   const current = periods.find((p) => p.id === currentIdSetting?.value) ?? periods[0];
+
+  // First run (and after updates until dismissed): the guided setup.
+  if (onboardingRow?.value !== "done") {
+    return (
+      <Onboarding
+        initialStep={Number.parseInt(onboardingRow?.value ?? "0", 10) || 0}
+        baseRate={current.cfgDraft.baseRate}
+        onStep={(step) => void db.settings.put({ key: "onboarding", value: String(step) })}
+        onSaveBaseRate={(rate) =>
+          void db.periods.update(current.id, {
+            cfgDraft: { ...current.cfgDraft, baseRate: rate },
+            updatedAt: Date.now(),
+          })
+        }
+        onDone={(goTo) => {
+          setPostOnboardTab(goTo);
+          void db.settings.put({ key: "onboarding", value: "done" });
+        }}
+      />
+    );
+  }
+
   let identity = EMPTY_IDENTITY;
   try {
     if (identityRow) identity = { ...EMPTY_IDENTITY, ...(JSON.parse(identityRow.value) as EmailIdentity) };
@@ -103,6 +130,7 @@ export default function App() {
       feedUrl={feedUrlRow?.value ?? ""}
       appearance={appearance}
       answers={answers}
+      initialTab={postOnboardTab}
     />
   );
 }
@@ -115,6 +143,7 @@ function PeriodWorkspace({
   feedUrl,
   appearance,
   answers,
+  initialTab = "home",
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -123,8 +152,9 @@ function PeriodWorkspace({
   feedUrl: string;
   appearance: AppearanceMode;
   answers: Record<string, QuestionAnswer>;
+  initialTab?: "home" | "shifts";
 }) {
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState<string>(initialTab);
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
@@ -132,7 +162,7 @@ function PeriodWorkspace({
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
-  const tabIndex = useRef(0);
+  const tabIndex = useRef(initialTab === "shifts" ? 1 : 0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
   const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers });
