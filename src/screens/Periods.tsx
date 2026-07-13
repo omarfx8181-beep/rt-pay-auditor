@@ -40,7 +40,7 @@ function StubScanPanel({
 
   if (!apiKey) {
     return (
-      <p className="font-mono text-[11px] text-ink-dim">
+      <p className="text-[11px] text-ink-dim">
         Uploading stubs needs your Anthropic API key (Rules → Schedule scan) — the files go straight from your browser
         to the API with your key.
       </p>
@@ -64,7 +64,7 @@ function StubScanPanel({
       </label>
 
       {state.status === "working" && (
-        <div className="flex items-center gap-2 font-mono text-sm text-accent">
+        <div className="flex items-center gap-2 text-sm text-accent">
           <Loader2 size={15} className="animate-spin" /> Reading your stubs…
         </div>
       )}
@@ -78,7 +78,7 @@ function StubScanPanel({
       )}
       {state.status === "preview" && (
         <div className="space-y-2">
-          <div className="divide-y divide-surface-line/60 font-mono text-xs tabular-nums">
+          <div className="divide-y divide-surface-line/60 text-xs tabular-nums">
             {state.toAdd.map((s) => (
               <div key={s.endDate} className="flex items-baseline justify-between gap-3 py-1.5">
                 <span className="font-sans">ends {dayLabel(s.endDate)}</span>
@@ -106,7 +106,7 @@ function StubScanPanel({
                 Add {state.toAdd.length} period{state.toAdd.length > 1 ? "s" : ""}
               </button>
             )}
-            <button onClick={() => setState({ status: "idle" })} className="pressable px-2 font-mono text-xs text-ink-dim">
+            <button onClick={() => setState({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
               Discard
             </button>
           </div>
@@ -179,7 +179,7 @@ export default function Periods({
               <div className="mt-1 font-display text-2xl font-semibold tabular-nums text-pos">{fmtCents(ytd.totalNetCents)}</div>
             </div>
           </div>
-          <p className="mt-3 font-mono text-[11px] text-ink-dim">
+          <p className="mt-3 text-[11px] text-ink-dim">
             Fairview {fmtCents(ytd.grossCents)} ({ytd.stubCount}/{ytd.periodCount} stub-true) · other{" "}
             {fmtCents(ytd.otherGrossCents)} · real stub numbers always outrank estimates.
           </p>
@@ -193,7 +193,7 @@ export default function Periods({
           <div className="space-y-4">
             <StubScanPanel apiKey={apiKey} periods={periods} onLogPastStub={onLogPastStub} />
             <div className="border-t border-surface-line/60 pt-3">
-              <p className="font-mono text-[11px] text-ink-dim">
+              <p className="text-[11px] text-ink-dim">
                 Or by hand — the date steps back one period per entry:
               </p>
               <div className="mt-2 flex flex-wrap items-end gap-3">
@@ -206,7 +206,7 @@ export default function Periods({
                       stubEndTouched.current = true;
                       setStubEnd(e.target.value);
                     }}
-                    className="input w-auto px-2 py-1.5 font-mono text-xs"
+                    className="input w-auto px-2 py-1.5 text-xs"
                   />
                 </label>
                 <label className="flex flex-col">
@@ -215,7 +215,7 @@ export default function Periods({
                     value={stubGross}
                     onChange={(e) => setStubGross(e.target.value)}
                     inputMode="decimal"
-                    className="input w-24 px-2 py-1.5 text-right font-mono text-xs tabular-nums"
+                    className="input w-24 px-2 py-1.5 text-right text-xs tabular-nums"
                   />
                 </label>
                 <label className="flex flex-col">
@@ -224,7 +224,7 @@ export default function Periods({
                     value={stubNet}
                     onChange={(e) => setStubNet(e.target.value)}
                     inputMode="decimal"
-                    className="input w-24 px-2 py-1.5 text-right font-mono text-xs tabular-nums"
+                    className="input w-24 px-2 py-1.5 text-right text-xs tabular-nums"
                   />
                 </label>
                 <button
@@ -249,7 +249,7 @@ export default function Periods({
           icon={<Banknote size={13} className="text-pos" />}
           hint="Money from anywhere else, so the year totals cover everything."
         >
-          <p className="font-mono text-[11px] text-ink-dim">
+          <p className="text-[11px] text-ink-dim">
             Leave net empty if nothing was withheld — take-home then equals gross.
           </p>
           {otherIncome.length > 0 && (
@@ -260,27 +260,27 @@ export default function Periods({
                     type="date"
                     value={o.date}
                     onChange={(e) => onUpdateOther(o.id, { date: e.target.value })}
-                    className="input w-auto px-2 py-1 font-mono text-xs"
+                    className="input w-auto px-2 py-1 text-xs"
                   />
                   <input
                     value={o.source}
                     onChange={(e) => onUpdateOther(o.id, { source: e.target.value })}
                     placeholder="where from"
-                    className="input min-w-24 flex-1 px-2 py-1 font-mono text-xs"
+                    className="input min-w-24 flex-1 px-2 py-1 text-xs"
                   />
                   <input
                     value={o.gross}
                     onChange={(e) => onUpdateOther(o.id, { gross: e.target.value })}
                     inputMode="decimal"
                     placeholder="gross"
-                    className="input w-20 px-2 py-1 text-right font-mono text-xs tabular-nums"
+                    className="input w-20 px-2 py-1 text-right text-xs tabular-nums"
                   />
                   <input
                     value={o.net}
                     onChange={(e) => onUpdateOther(o.id, { net: e.target.value })}
                     inputMode="decimal"
                     placeholder="net"
-                    className="input w-20 px-2 py-1 text-right font-mono text-xs tabular-nums"
+                    className="input w-20 px-2 py-1 text-right text-xs tabular-nums"
                   />
                   <button
                     onClick={() => onDeleteOther(o.id)}
@@ -322,13 +322,13 @@ export default function Periods({
               }}
             />
           </div>
-          {importStatus && <p className="mt-2 font-mono text-[11px] text-ink-dim">{importStatus}</p>}
+          {importStatus && <p className="mt-2 text-[11px] text-ink-dim">{importStatus}</p>}
         </Disclosure>
       </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-mono text-sm text-ink-dim">Pay periods, newest first.</p>
+          <p className="text-sm text-ink-dim">Pay periods, newest first.</p>
           <button onClick={onCreateNext} className="btn btn-primary pressable shrink-0">
             <Plus size={15} /> New period
           </button>
@@ -353,7 +353,7 @@ export default function Periods({
                   {active && <span className="eyebrow shrink-0 text-accent">Current</span>}
                   {p.archived && !active && <span className="eyebrow shrink-0">Archived</span>}
                 </div>
-                <div className="mt-1 font-mono text-xs tabular-nums text-ink-dim">
+                <div className="mt-1 text-xs tabular-nums text-ink-dim">
                   {hasStub ? (
                     <>
                       take-home <span className="text-pos">${p.actual.net}</span> · stub ✓
@@ -365,24 +365,24 @@ export default function Periods({
               </button>
 
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-line/60 pt-3">
-                <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-ink-dim">
+                <label className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-ink-dim">
                   Starts
                   <input
                     type="date"
                     value={p.startDate}
                     onChange={(e) => e.target.value && onSetDates(p.id, e.target.value)}
-                    className="input w-auto px-2 py-1 font-mono text-xs"
+                    className="input w-auto px-2 py-1 text-xs"
                   />
                 </label>
                 <button
                   onClick={() => onToggleArchived(p.id)}
-                  className="pressable flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-ink"
+                  className="pressable flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-ink"
                 >
                   {p.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
                   {p.archived ? "Unarchive" : "Archive"}
                 </button>
                 {confirmingDelete === p.id ? (
-                  <span className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider">
+                  <span className="flex items-center gap-2 text-[11px] uppercase tracking-wider">
                     <button onClick={() => onDelete(p.id)} className="pressable font-semibold text-neg">
                       Really delete?
                     </button>
@@ -394,7 +394,7 @@ export default function Periods({
                   <button
                     onClick={() => setConfirmingDelete(p.id)}
                     disabled={periods.length === 1}
-                    className="pressable flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg disabled:opacity-40"
+                    className="pressable flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg disabled:opacity-40"
                   >
                     <Trash2 size={13} /> Delete
                   </button>

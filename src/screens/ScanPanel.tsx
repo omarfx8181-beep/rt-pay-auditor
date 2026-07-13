@@ -149,14 +149,14 @@ export default function ScanPanel({
               rows={5}
               spellCheck={false}
               placeholder="Open the feed URL in Safari, Select All, Copy — then paste everything here (starts with BEGIN:VCALENDAR)."
-              className="input px-3 py-2 font-mono text-[11px] leading-relaxed"
+              className="input px-3 py-2 text-[11px] leading-relaxed"
             />
             <button onClick={() => readIcsText(pasteText)} className="btn btn-primary pressable text-xs">
               Read schedule
             </button>
           </div>
         )}
-        <p className="mt-2 font-mono text-[11px] text-ink-dim">
+        <p className="mt-2 text-[11px] text-ink-dim">
           {feedUrl
             ? `Feed pulls shifts posted for ${dayLabel(periodStart)} – ${dayLabel(periodEnd)} — no API key needed. `
             : "Best way: add your ScheduleAnywhere calendar-feed URL under Rules → Schedule scan (no API key needed). "}
@@ -165,7 +165,7 @@ export default function ScanPanel({
         </p>
 
         {scan.status === "working" && (
-          <div className="mt-3 flex items-center gap-2 font-mono text-sm text-accent">
+          <div className="mt-3 flex items-center gap-2 text-sm text-accent">
             <Loader2 size={15} className="animate-spin" /> {scan.msg}
           </div>
         )}
@@ -181,7 +181,7 @@ export default function ScanPanel({
 
         {scan.status === "preview" && (
           <div className="mt-3 space-y-3">
-            <div className="divide-y divide-accent/20 font-mono text-xs">
+            <div className="divide-y divide-accent/20 text-xs">
               {scan.rows.map((r) => (
                 <div key={r.id} className="flex items-center gap-3 py-1.5">
                   <span className="w-20 shrink-0 font-sans">{dayLabel(r.date)}</span>
@@ -212,11 +212,11 @@ export default function ScanPanel({
               <button onClick={() => apply("append", scan.rows)} className="btn btn-ghost pressable text-xs">
                 Add to existing
               </button>
-              <button onClick={() => setScan({ status: "idle" })} className="pressable px-2 font-mono text-xs text-ink-dim">
+              <button onClick={() => setScan({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
                 Discard
               </button>
             </div>
-            <p className="font-mono text-[11px] text-ink-dim">
+            <p className="text-[11px] text-ink-dim">
               These are scheduled hours — after each shift, adjust paid hrs to your actual punches and add 548 units.
             </p>
           </div>

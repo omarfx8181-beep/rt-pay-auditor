@@ -63,7 +63,7 @@ export default function HrEmailPanel({
 
       <div className="mt-4">
         <span className="label">Subject</span>
-        <div className="input px-3 py-2 font-mono text-xs">{email.subject}</div>
+        <div className="input px-3 py-2 text-xs">{email.subject}</div>
       </div>
 
       <div className="mt-3">

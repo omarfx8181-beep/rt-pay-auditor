@@ -20,8 +20,8 @@ export default defineConfig(({ mode }) => {
           short_name: "RT Pay",
           description: "Know what the check should say before it lands.",
           display: "standalone",
-          theme_color: "#f4efe6",
-          background_color: "#f4efe6",
+          theme_color: "#FAF9F6",
+          background_color: "#FAF9F6",
           // relative to the manifest URL so any base path works
           icons: [
             { src: "pwa-192.png", sizes: "192x192", type: "image/png" },

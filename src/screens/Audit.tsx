@@ -43,7 +43,7 @@ export default function Audit({
 
   return (
     <div className="space-y-3">
-      <p className="font-mono text-sm text-ink-dim">
+      <p className="text-sm text-ink-dim">
         Type each line from the real stub into Actual. Anything more than five cents off turns red — in dollars and 548
         units.
       </p>
@@ -58,16 +58,16 @@ export default function Audit({
             <div key={row.key} className="col-span-3 grid grid-cols-subgrid items-center border-t border-surface-line/60 py-1.5">
               <div className={`min-w-0 py-0.5 pr-1 ${row.strong ? "font-display text-[15px] font-semibold" : "text-sm"}`}>
                 <div className="leading-tight">{row.label}</div>
-                <div className="font-mono text-[11px] tabular-nums text-ink-dim">expected {fmtCents(row.expectedCents)}</div>
+                <div className="text-[11px] tabular-nums text-ink-dim">expected {fmtCents(row.expectedCents)}</div>
               </div>
               <input
                 value={raw}
                 onChange={(e) => setActual((a) => ({ ...a, [row.key]: e.target.value }))}
                 inputMode="decimal"
-                className="input w-24 px-2 py-1.5 text-right font-mono text-xs tabular-nums sm:w-28"
+                className="input w-24 px-2 py-1.5 text-right text-xs tabular-nums sm:w-28"
               />
               <div
-                className={`w-20 text-right font-mono text-xs tabular-nums sm:w-24 ${
+                className={`w-20 text-right text-xs tabular-nums sm:w-24 ${
                   delta === null ? "text-ink-dim/60" : delta.ok ? "text-pos" : "text-neg"
                 }`}
               >
@@ -94,7 +94,7 @@ export default function Audit({
               return (
                 <div key={row.key}>
                   {row.label}: paid {fmtCents(dollarsToCents(num(raw)))}, expected {fmtCents(row.expectedCents)} →{" "}
-                  <span className="font-mono font-semibold tabular-nums text-neg">
+                  <span className="font-semibold tabular-nums text-neg">
                     {short ? "Short" : "Over"} {fmtCents(Math.abs(d.deltaCents))}
                     {d.deltaUnits !== null ? ` (${fmtNum(Math.abs(d.deltaUnits))} units of 548)` : ""}
                   </span>

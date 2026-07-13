@@ -46,7 +46,7 @@ function VitalStat({ label, value, sub, color = "" }: { label: string; value: st
       <div className={`mt-1 font-display text-[26px] font-semibold leading-none tabular-nums sm:text-[30px] ${color}`}>
         {value}
       </div>
-      {sub ? <div className="mt-1.5 font-mono text-[11px] text-hero-fg/50">{sub}</div> : null}
+      {sub ? <div className="mt-1.5 text-[11px] text-hero-fg/50">{sub}</div> : null}
     </div>
   );
 }
@@ -91,7 +91,7 @@ export default function App() {
           <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
           <h1 className="mt-1.5 font-display text-3xl font-semibold">RT Pay Auditor</h1>
           {dbError !== "" && (
-            <p className="mt-4 font-mono text-sm text-neg">
+            <p className="mt-4 text-sm text-neg">
               This browser blocked local storage ({dbError}). Open the app directly in Safari or Chrome — everything
               it saves lives on your device.
             </p>
@@ -279,8 +279,8 @@ function PeriodWorkspace({
     <div className="mx-auto min-h-screen w-full max-w-2xl px-4 pb-28 pt-[max(20px,env(safe-area-inset-top))] md:max-w-5xl md:pb-12">
       <header>
         <Eyebrow accent>Fairview · Biweekly · Kronos</Eyebrow>
-        <h1 className="mt-1.5 font-display text-[40px] font-semibold leading-none tracking-tight">RT Pay Auditor</h1>
-        <p className="mt-2 font-mono text-sm text-ink-dim">
+        <h1 className="mt-1.5 text-large-title tracking-tight">RT Pay Auditor</h1>
+        <p className="mt-2 text-sm text-ink-dim">
           Pay period {periodLabel(record.startDate, record.endDate)}
           {record.archived ? " · archived" : ""}
         </p>
@@ -299,14 +299,14 @@ function PeriodWorkspace({
             color={netDeltaCents === null ? "" : reconciled ? "text-hero-pos" : "text-hero-neg"}
           />
         </div>
-        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-white/10 pt-3 font-mono text-[11px] tabular-nums text-hero-fg/60">
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-surface-line pt-3 text-[11px] tabular-nums text-hero-fg/60">
           <span>gross {fmtCents(period.grossCents)}</span>
           <span>{fmtNum(period.workedHours)} hrs</span>
           <span>{fmtNum(period.units548)}u 548</span>
         </div>
         <button
           onClick={() => selectTab("periods", TABS.length - 1)}
-          className="pressable mt-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-left font-mono text-[11px] tabular-nums text-hero-fg/60"
+          className="pressable mt-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-left text-[11px] tabular-nums text-hero-fg/60"
         >
           <span>
             {year} so far · made <span className="text-hero-fg/90">{fmtCents(ytd.totalGrossCents)}</span> · take-home{" "}

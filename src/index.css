@@ -1,89 +1,105 @@
 @import "tailwindcss";
 
 /* ============================================================
-   Knockdown design tokens — extracted, not invented.
-   Source: omarfx8181-beep/knockdown src/index.css @ 6dc6449;
-   see design/tokens.md. RGB channels so alpha modifiers work.
-   Editorial style only for now; light = :root, dark = espresso.
+   RT Pay V3 design tokens — design/V3_DESIGN_BRIEF.md §3.
+   Warm-minimal, Apple HIG (Clarity / Deference / Depth):
+   content leads, chrome recedes, one emerald accent reserved
+   for action and money. RGB channels so alpha modifiers work
+   (bg-accent/10, border-surface-line/60, …).
+
+   Values not named in the brief (ink-3 dark, sunken dark,
+   accent-pressed dark) are minimal derivations of its scale.
+   Legacy token names from V2 are kept as aliases where markup
+   still uses them (surface-soft → sunken, ink-dim → ink-2).
    ============================================================ */
 :root {
-  --ink: 20 17 15;
-  --ink-dim: 104 95 82;
-  --surface-bg: 244 239 230;
-  --surface-card: 255 255 255;
-  --surface-soft: 235 227 213;
-  --surface-line: 216 205 184;
-  --accent: 200 100 47;
-  --pos: 47 107 79;
-  --neg: 168 65 46;
-  --amber: 145 98 18;
-  --blue: 44 93 134;
-  --hero-bg: 20 17 15;
-  --hero-fg: 244 239 230;
-  --btn-bg: 20 17 15;
-  --btn-fg: 244 239 230;
+  --ink: 28 25 23; /* #1C1917 primary text */
+  --ink-dim: 107 101 96; /* #6B6560 secondary (ink-2) */
+  --ink-faint: 155 148 141; /* #9B948D tertiary / placeholder (ink-3) */
+  --surface-bg: 250 249 246; /* #FAF9F6 warm paper */
+  --surface-card: 255 255 255; /* #FFFFFF card */
+  --surface-soft: 242 240 235; /* #F2F0EB sunken fills */
+  --surface-line: 231 227 220; /* #E7E3DC hairline */
+  --accent: 14 124 90; /* #0E7C5A emerald — brand + interactive */
+  --accent-pressed: 10 94 68; /* #0A5E44 */
+  --pos: 14 124 90; /* "check is right" */
+  --neg: 196 54 43; /* #C4362B "you're owed" */
+  --amber: 201 138 43; /* #C98A2B "needs a look" */
+  --blue: 14 124 90; /* legacy informational → folded into the one accent */
+  --hero-bg: 255 255 255; /* status hero = surface card, not an ink block */
+  --hero-fg: 28 25 23;
+  --btn-bg: 14 124 90; /* primary action = accent */
+  --btn-fg: 255 255 255;
   --on-accent: 255 255 255;
-  --chart: 58 136 98;
+  --chart: 14 124 90;
 }
 
-/* Editorial · dark — warm espresso paper (explicit toggle wins) */
+/* V3 dark — on the warm near-black the app already ships (#14110D). */
 :root[data-mode="dark"] {
-  --ink: 238 232 222;
-  --ink-dim: 168 156 140;
-  --surface-bg: 23 19 16;
-  --surface-card: 33 28 23;
-  --surface-soft: 45 39 32;
-  --surface-line: 58 51 42;
-  --accent: 224 132 76;
-  --pos: 92 180 138;
-  --neg: 216 100 70;
-  --amber: 214 162 78;
-  --blue: 112 158 202;
-  --hero-bg: 41 35 28;
-  --hero-fg: 240 235 226;
-  --btn-bg: 240 235 226;
-  --btn-fg: 23 19 16;
-  --on-accent: 23 19 16;
-  --chart: 92 180 138;
+  --ink: 245 242 236; /* #F5F2EC */
+  --ink-dim: 184 176 166; /* #B8B0A6 */
+  --ink-faint: 138 129 117; /* derived tertiary */
+  --surface-bg: 20 17 13; /* #14110D */
+  --surface-card: 31 27 22; /* #1F1B16 */
+  --surface-soft: 26 22 17; /* derived sunken */
+  --surface-line: 51 44 36; /* #332C24 */
+  --accent: 47 185 138; /* #2FB98A */
+  --accent-pressed: 38 160 120;
+  --pos: 47 185 138;
+  --neg: 229 103 91; /* #E5675B */
+  --amber: 224 166 78; /* #E0A64E */
+  --blue: 47 185 138;
+  --hero-bg: 31 27 22;
+  --hero-fg: 245 242 236;
+  --btn-bg: 47 185 138;
+  --btn-fg: 20 17 13; /* dark ink on the brighter dark-mode emerald */
+  --on-accent: 20 17 13;
+  --chart: 47 185 138;
 }
 
-/* Follow the system until a mode is chosen in Settings (M2+). */
+/* Follow the system until a mode is chosen in Me → Appearance. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-mode]) {
-    --ink: 238 232 222;
-    --ink-dim: 168 156 140;
-    --surface-bg: 23 19 16;
-    --surface-card: 33 28 23;
-    --surface-soft: 45 39 32;
-    --surface-line: 58 51 42;
-    --accent: 224 132 76;
-    --pos: 92 180 138;
-    --neg: 216 100 70;
-    --amber: 214 162 78;
-    --blue: 112 158 202;
-    --hero-bg: 41 35 28;
-    --hero-fg: 240 235 226;
-    --btn-bg: 240 235 226;
-    --btn-fg: 23 19 16;
-    --on-accent: 23 19 16;
-    --chart: 92 180 138;
+    --ink: 245 242 236;
+    --ink-dim: 184 176 166;
+    --ink-faint: 138 129 117;
+    --surface-bg: 20 17 13;
+    --surface-card: 31 27 22;
+    --surface-soft: 26 22 17;
+    --surface-line: 51 44 36;
+    --accent: 47 185 138;
+    --accent-pressed: 38 160 120;
+    --pos: 47 185 138;
+    --neg: 229 103 91;
+    --amber: 224 166 78;
+    --blue: 47 185 138;
+    --hero-bg: 31 27 22;
+    --hero-fg: 245 242 236;
+    --btn-bg: 47 185 138;
+    --btn-fg: 20 17 13;
+    --on-accent: 20 17 13;
+    --chart: 47 185 138;
   }
 }
 
 @theme inline {
   --color-ink: rgb(var(--ink));
   --color-ink-dim: rgb(var(--ink-dim));
+  --color-ink-faint: rgb(var(--ink-faint));
   --color-surface-bg: rgb(var(--surface-bg));
   --color-surface-card: rgb(var(--surface-card));
   --color-surface-soft: rgb(var(--surface-soft));
   --color-surface-line: rgb(var(--surface-line));
   --color-accent: rgb(var(--accent));
+  --color-accent-pressed: rgb(var(--accent-pressed));
   --color-pos: rgb(var(--pos));
   --color-neg: rgb(var(--neg));
   --color-amber: rgb(var(--amber));
   --color-blue: rgb(var(--blue));
   --color-hero-bg: rgb(var(--hero-bg));
   --color-hero-fg: rgb(var(--hero-fg));
+  --color-hero-pos: rgb(var(--pos));
+  --color-hero-neg: rgb(var(--neg));
   --color-btn-bg: rgb(var(--btn-bg));
   --color-btn-fg: rgb(var(--btn-fg));
   --color-on-accent: rgb(var(--on-accent));
@@ -91,14 +107,50 @@
 }
 
 @theme {
-  --font-display: "Fraunces Variable", Georgia, serif;
-  --font-sans: "Spline Sans Variable", system-ui, -apple-system, sans-serif;
-  --font-mono: "Spline Sans Mono Variable", ui-monospace, monospace;
-  --shadow-card: 0 1px 2px rgba(20, 17, 15, 0.04), 0 1px 0 rgba(20, 17, 15, 0.03);
-  /* On-hero money colors = the espresso-mode pos/neg tokens (tokens.md §2);
-     the light-mode greens/reds lack contrast on the ink hero. */
-  --color-hero-pos: #5cb48a;
-  --color-hero-neg: #d86446;
+  /* One family: SF Pro wherever the platform has it, self-hosted Inter
+     everywhere else (offline, nothing leaves the device). Hierarchy comes
+     from size + weight, not family. font-display is a legacy alias. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", Roboto,
+    sans-serif;
+  --font-display:
+    -apple-system, BlinkMacSystemFont, "Inter Variable", "Segoe UI", Roboto,
+    sans-serif;
+  /* True monospace exists ONLY for character-grid content (the HR email
+     preview's aligned table). UI text never uses it. */
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* V3 type scale (§3.2) — size / line-height / weight via utilities:
+     text-hero-num, text-large-title, text-title-2, text-headline,
+     text-body, text-subhead, text-footnote, text-caption */
+  --text-hero-num: 40px;
+  --text-hero-num--line-height: 44px;
+  --text-hero-num--font-weight: 700;
+  --text-large-title: 34px;
+  --text-large-title--line-height: 40px;
+  --text-large-title--font-weight: 700;
+  --text-title-2: 22px;
+  --text-title-2--line-height: 28px;
+  --text-title-2--font-weight: 600;
+  --text-headline: 17px;
+  --text-headline--line-height: 22px;
+  --text-headline--font-weight: 600;
+  --text-body: 17px;
+  --text-body--line-height: 24px;
+  --text-subhead: 15px;
+  --text-subhead--line-height: 20px;
+  --text-footnote: 13px;
+  --text-footnote--line-height: 18px;
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-caption--font-weight: 500;
+
+  /* Cards: 20px radius (§3.3) — rounded-2xl everywhere cards live. */
+  --radius-2xl: 20px;
+
+  /* The only shadow: soft, near-flat (§3.3). */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 @layer base {
@@ -113,58 +165,51 @@
   }
   body {
     @apply bg-surface-bg text-ink font-sans antialiased;
-    /* Editorial-light paper washes; dark mode goes flat like Knockdown. */
-    background-image:
-      radial-gradient(circle at 12% 8%, rgb(var(--accent) / 0.06), transparent 40%),
-      radial-gradient(circle at 88% 92%, rgb(var(--pos) / 0.06), transparent 40%);
-    background-attachment: fixed;
+    /* V3: flat warm paper — no washes, chrome recedes. */
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
-    font-optical-sizing: auto;
     text-rendering: optimizeLegibility;
-  }
-  html[data-mode="dark"] body {
-    background-image: none;
-  }
-  @media (prefers-color-scheme: dark) {
-    html:not([data-mode]) body {
-      background-image: none;
-    }
+    /* Every number aligns; currency is always tabular (§3.2). */
+    font-variant-numeric: tabular-nums;
   }
 }
 
-/* Accessible keyboard focus ring (Knockdown verbatim) */
+/* Accessible keyboard focus ring */
 :where(a, button, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid rgb(var(--accent) / 0.9);
   outline-offset: 2px;
 }
 
 /* ============================================================
-   Knockdown component classes (ported from its @layer components;
-   compose .btn + .btn-primary/.btn-ghost in markup — Tailwind v4
-   can't @apply custom classes).
+   V3 component classes (§3.4). Compose .btn + .btn-primary /
+   .btn-ghost in markup — Tailwind v4 can't @apply custom classes.
    ============================================================ */
 @layer components {
   .card {
     @apply rounded-2xl border border-surface-line bg-surface-card shadow-card;
   }
+  /* Status hero = a surface card with the big number, Apple Card style. */
   .hero {
-    @apply rounded-2xl p-5 shadow-card;
+    @apply rounded-2xl border border-surface-line p-5 shadow-card;
     background: rgb(var(--hero-bg));
     color: rgb(var(--hero-fg));
   }
+  /* Caption-level section label (§3.2 Caption 12/16 Medium). */
   .eyebrow {
-    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-dim;
+    @apply text-[12px] leading-4 font-medium tracking-[0.08em] uppercase text-ink-dim;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-mono text-sm font-semibold tracking-wide transition active:scale-[.98] disabled:opacity-40 disabled:active:scale-100;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[15px] font-semibold transition active:scale-[.98] disabled:opacity-40 disabled:active:scale-100;
   }
   .btn-primary {
     background: rgb(var(--btn-bg));
     color: rgb(var(--btn-fg));
   }
   .btn-primary:hover {
-    opacity: 0.9;
+    opacity: 0.92;
+  }
+  .btn-primary:active {
+    background: rgb(var(--accent-pressed));
   }
   .btn-ghost {
     @apply border border-surface-line bg-surface-card text-ink;
@@ -179,31 +224,15 @@
     @apply w-full rounded-xl border border-surface-line bg-surface-card px-3.5 py-2.5 text-ink outline-none;
   }
   .input::placeholder {
-    color: rgb(var(--ink-dim) / 0.55);
+    color: rgb(var(--ink-faint));
   }
   .input:focus {
     @apply border-accent;
     box-shadow: 0 0 0 2px rgb(var(--accent) / 0.2);
   }
   .label {
-    @apply mb-1.5 block font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim;
+    @apply mb-1.5 block text-[12px] leading-4 font-medium tracking-[0.08em] uppercase text-ink-dim;
   }
-}
-
-/* ---- Hero accent wash — faint drift, gentle not shiny.
-   Layered over a solid hero-bg color (unlike Knockdown's shorthand,
-   which let the page bleed through the low-alpha middle stop). ---- */
-.hero-glow {
-  background-color: rgb(var(--hero-bg));
-  background-image: linear-gradient(120deg, rgb(var(--hero-bg)), rgb(var(--accent) / 0.09), rgb(var(--hero-bg)));
-  background-size: 220% 100%;
-}
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hero-glow { animation: gradientShift 20s linear infinite; }
 }
 
 /* ---- Drop-down reveal (shift card extras) ---- */

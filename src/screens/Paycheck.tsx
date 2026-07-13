@@ -58,17 +58,17 @@ export default function Paycheck({
               <div key={l.key} className="flex items-baseline justify-between gap-3 py-2">
                 <span className="min-w-0 flex-1 text-sm">{l.label}</span>
                 {l.qty !== 0 ? (
-                  <span className="whitespace-nowrap font-mono text-xs tabular-nums text-ink-dim">
+                  <span className="whitespace-nowrap text-xs tabular-nums text-ink-dim">
                     {fmtNum(l.qty)}
                     {l.isUnits ? "u" : "h"} @{fmtRate(l.rateCents)}
                   </span>
                 ) : null}
-                <span className="w-24 text-right font-mono text-sm tabular-nums">{fmtCents(l.amountCents)}</span>
+                <span className="w-24 text-right text-sm tabular-nums">{fmtCents(l.amountCents)}</span>
               </div>
             ))}
           <div className="flex items-baseline justify-between py-2.5">
             <span className="font-display text-base font-semibold">Total gross</span>
-            <span className="font-mono text-base font-semibold tabular-nums text-pos">{fmtCents(period.grossCents)}</span>
+            <span className="text-base font-semibold tabular-nums text-pos">{fmtCents(period.grossCents)}</span>
           </div>
         </div>
       </Card>
@@ -79,12 +79,12 @@ export default function Paycheck({
             {deductions.map(([label, cents]) => (
               <div key={label} className="flex items-baseline justify-between gap-3 py-2">
                 <span className="min-w-0 flex-1 text-sm">{label}</span>
-                <span className="font-mono text-sm tabular-nums text-neg">{fmtCents(-cents)}</span>
+                <span className="text-sm tabular-nums text-neg">{fmtCents(-cents)}</span>
               </div>
             ))}
             <div className="flex items-baseline justify-between py-2.5">
               <span className="font-display text-base font-semibold">Expected net</span>
-              <span className="font-mono text-base font-semibold tabular-nums text-pos">{fmtCents(net.netCents)}</span>
+              <span className="text-base font-semibold tabular-nums text-pos">{fmtCents(net.netCents)}</span>
             </div>
           </div>
         </Card>
@@ -97,7 +97,7 @@ export default function Paycheck({
             <Field label="Hours" value={whatIf.hours} onChange={(v) => setWhatIf({ ...whatIf, hours: v })} w="w-16" />
             <Field label="548 units" value={whatIf.units548} onChange={(v) => setWhatIf({ ...whatIf, units548: v })} w="w-16" />
             <Field label="Charge hrs" value={whatIf.charge} onChange={(v) => setWhatIf({ ...whatIf, charge: v })} w="w-16" />
-            <label className="mb-1.5 flex items-center gap-2 font-mono text-sm">
+            <label className="mb-1.5 flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={whatIf.weekend}
@@ -107,7 +107,7 @@ export default function Paycheck({
               Weekend
             </label>
           </div>
-          <div className="space-y-1 font-mono text-sm tabular-nums">
+          <div className="space-y-1 text-sm tabular-nums">
             <div className="flex justify-between gap-3">
               <span className="font-sans text-ink-dim">Gross added (OT/DT rules applied)</span>
               <span>{fmtCents(wi.dGrossCents)}</span>
@@ -123,7 +123,7 @@ export default function Paycheck({
               </span>
             </div>
           </div>
-          <p className="mt-2 font-mono text-[11px] text-ink-dim">
+          <p className="mt-2 text-[11px] text-ink-dim">
             Uses marginal W/H rates ({cfgDraft.marginalFed}% fed + {cfgDraft.marginalMN}% MN) — edit in Rules.
           </p>
         </CalloutCard>

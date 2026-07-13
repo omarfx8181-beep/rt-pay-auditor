@@ -90,9 +90,9 @@ export default function Rules({
                 value={String(t.units)}
                 onChange={(e) => setTiers((arr) => arr.map((x, j) => (j === i ? { ...x, units: num(e.target.value) } : x)))}
                 inputMode="decimal"
-                className="input w-16 px-2.5 py-1.5 text-right font-mono text-sm tabular-nums"
+                className="input w-16 px-2.5 py-1.5 text-right text-sm tabular-nums"
               />
-              <span className="w-20 font-mono text-xs tabular-nums text-ink-dim">= {fmtCents(Math.round(t.units * unit548Cents))}</span>
+              <span className="w-20 text-xs tabular-nums text-ink-dim">= {fmtCents(Math.round(t.units * unit548Cents))}</span>
               <button
                 onClick={() => setTiers((arr) => arr.filter((_, j) => j !== i))}
                 className="pressable p-1 text-ink-dim hover:text-neg"
@@ -127,7 +127,7 @@ export default function Rules({
           <Field label="Critical illness" value={cfgDraft.crit} onChange={set("crit")} suffix="$/check" w="w-16" />
           <Field label="Other after-tax" value={cfgDraft.otherAfterTax} onChange={set("otherAfterTax")} suffix="$ (coffee, cafeteria…)" w="w-20" />
         </div>
-        <p className="mt-3 font-mono text-[11px] leading-relaxed text-ink-dim">
+        <p className="mt-3 text-[11px] leading-relaxed text-ink-dim">
           Baked in: FICA wages = gross − medical/dental/FSA (403(b) stays FICA-taxable) · MN Paid Leave = % of full gross ·
           net subtracts the non-cash imputed life. These reconciled your 6/22–7/05 stub to within $0.02.
         </p>
@@ -150,7 +150,7 @@ export default function Rules({
               }}
               placeholder="https://www.scheduleanywhere.com/ical/…"
               autoComplete="off"
-              className="input px-2.5 py-1.5 font-mono text-sm"
+              className="input px-2.5 py-1.5 text-sm"
             />
           </label>
         </div>
@@ -170,7 +170,7 @@ export default function Rules({
               }}
               placeholder="sk-ant-…"
               autoComplete="off"
-              className="input px-2.5 py-1.5 font-mono text-sm"
+              className="input px-2.5 py-1.5 text-sm"
             />
           </label>
           <button
@@ -195,7 +195,7 @@ export default function Rules({
             </button>
           ))}
         </div>
-        <p className="mt-2 font-mono text-[11px] text-ink-dim">
+        <p className="mt-2 text-[11px] text-ink-dim">
           System follows your phone. Dark is the warm espresso set from the Knockdown tokens.
         </p>
       </Card>
@@ -214,7 +214,7 @@ export default function Rules({
                     value={drafts[q.id] ?? ""}
                     onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
                     placeholder="payroll's answer…"
-                    className="input min-w-48 flex-1 px-2.5 py-1.5 font-mono text-xs sm:max-w-md"
+                    className="input min-w-48 flex-1 px-2.5 py-1.5 text-xs sm:max-w-md"
                   />
                   <button
                     onClick={() => {
@@ -242,8 +242,8 @@ export default function Rules({
                 <div key={q.id} className="text-sm">
                   <div className="text-ink-dim">{q.text}</div>
                   <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="font-mono text-sm text-pos">✓ {a.answer}</span>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-ink-dim">
+                    <span className="text-sm text-pos">✓ {a.answer}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-ink-dim">
                       {new Date(a.answeredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </span>
                     <button
@@ -253,7 +253,7 @@ export default function Rules({
                         onSaveAnswers(next);
                         setDrafts((d) => ({ ...d, [q.id]: a.answer }));
                       }}
-                      className="pressable flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-dim hover:text-ink"
+                      className="pressable flex items-center gap-1 text-[10px] uppercase tracking-wider text-ink-dim hover:text-ink"
                     >
                       <RotateCcw size={11} /> Reopen
                     </button>
@@ -262,7 +262,7 @@ export default function Rules({
               );
             })}
           </div>
-          <p className="mt-3 font-mono text-[11px] text-ink-dim">
+          <p className="mt-3 text-[11px] text-ink-dim">
             Answers live here as history — remember to update the matching rate or tier above.
           </p>
         </Card>

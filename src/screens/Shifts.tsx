@@ -42,9 +42,9 @@ function ShiftCard({
             type="date"
             value={s.date}
             onChange={(e) => setShift("date", e.target.value)}
-            className="input w-auto px-2.5 py-1.5 font-mono text-xs"
+            className="input w-auto px-2.5 py-1.5 text-xs"
           />
-          <div className={`mt-1 font-mono text-[10px] ${wknd ? "font-semibold text-pos" : "text-ink-dim"}`}>
+          <div className={`mt-1 text-[10px] ${wknd ? "font-semibold text-pos" : "text-ink-dim"}`}>
             {s.date ? dayLabel(s.date) + (wknd ? " · wknd diff" : "") : "no date — no weekend diff"}
           </div>
         </div>
@@ -59,7 +59,7 @@ function ShiftCard({
         aria-expanded={expanded}
         className="pressable mt-3 flex w-full items-center justify-between gap-2 border-t border-surface-line/60 pt-2.5 text-left"
       >
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-dim">
+        <span className="min-w-0 flex-1 truncate text-[11px] text-ink-dim">
           {extras.length > 0 || s.note ? (
             <>
               {extras.join(" · ")}
@@ -84,7 +84,7 @@ function ShiftCard({
             <button
               onClick={() => setTierMenuOpen((v) => !v)}
               aria-expanded={tierMenuOpen}
-              className="pressable flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim hover:text-ink"
+              className="pressable flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-dim hover:text-ink"
             >
               Add bonus tier
               <ChevronDown size={13} className={`transition-transform ${tierMenuOpen ? "rotate-180" : ""}`} />
@@ -98,7 +98,7 @@ function ShiftCard({
                       setShift("units548", String(round2(num(s.units548) + t.units)));
                       setTierMenuOpen(false);
                     }}
-                    className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left font-mono text-[11px] hover:border-accent hover:text-accent"
+                    className="pressable rounded-full border border-surface-line bg-surface-card px-2.5 py-1 text-left text-[11px] hover:border-accent hover:text-accent"
                   >
                     {t.label} <span className="font-semibold text-accent">+{t.units}u</span>
                   </button>
@@ -112,11 +112,11 @@ function ShiftCard({
               <input
                 value={s.note}
                 onChange={(e) => setShift("note", e.target.value)}
-                className="input px-2.5 py-1.5 font-mono text-xs"
+                className="input px-2.5 py-1.5 text-xs"
               />
             </label>
             {confirmCallIn ? (
-              <span className="mb-1 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider">
+              <span className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-wider">
                 <button onClick={onCallIn} className="pressable font-semibold text-blue">
                   Convert to STO?
                 </button>
@@ -127,14 +127,14 @@ function ShiftCard({
             ) : (
               <button
                 onClick={() => setConfirmCallIn(true)}
-                className="pressable mb-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-blue"
+                className="pressable mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-blue"
               >
                 <HeartPulse size={13} /> Called in sick
               </button>
             )}
             <button
               onClick={onRemove}
-              className="pressable mb-1 flex items-center gap-1 font-mono text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg"
+              className="pressable mb-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-ink-dim hover:text-neg"
             >
               <Trash2 size={13} /> Remove
             </button>
@@ -201,7 +201,7 @@ export default function Shifts({
         onApply={(mode, drafts) => setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]))}
       />
 
-      <p className="font-mono text-sm text-ink-dim">
+      <p className="text-sm text-ink-dim">
         Date, hours, and 548 units up front — everything else is in each card's drop-down. Weekend diff applies itself
         on Sat/Sun. 1 unit = {unit548Label}.
       </p>
@@ -236,7 +236,7 @@ export default function Shifts({
           <HeartPulse size={13} className="text-blue" />
           <span className="eyebrow">Leave — sick · LOA · medical</span>
         </div>
-        <p className="font-mono text-[11px] text-ink-dim">
+        <p className="text-[11px] text-ink-dim">
           Calling in? One tap logs TODAY — hours prefill from today's scheduled shift when there is one. Paid at base
           rate ({fmtRate(cfg.baseRateCents)}/hr), never counts toward the 80-hr OT line, no weekend diff, and these
           hours don't accrue PTO. Kronos shows them as Time Off pay codes.
@@ -246,20 +246,20 @@ export default function Shifts({
           <div className="mt-3 space-y-2">
             {leave.map((l) => (
               <div key={l.id} className="flex flex-wrap items-center gap-2 border-t border-surface-line/60 pt-2">
-                <span className="w-32 font-mono text-xs">{LEAVE_LABELS[l.type]}</span>
+                <span className="w-32 text-xs">{LEAVE_LABELS[l.type]}</span>
                 <input
                   type="date"
                   value={l.date}
                   onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, date: e.target.value } : x)))}
-                  className="input w-auto px-2 py-1 font-mono text-xs"
+                  className="input w-auto px-2 py-1 text-xs"
                 />
                 <input
                   value={l.hours}
                   onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, hours: e.target.value } : x)))}
                   inputMode="decimal"
-                  className="input w-16 px-2 py-1 text-right font-mono text-xs tabular-nums"
+                  className="input w-16 px-2 py-1 text-right text-xs tabular-nums"
                 />
-                <span className="font-mono text-[11px] text-ink-dim">hrs</span>
+                <span className="text-[11px] text-ink-dim">hrs</span>
                 <button
                   onClick={() => setLeave((arr) => arr.filter((x) => x.id !== l.id))}
                   className="pressable p-1 text-ink-dim hover:text-neg"

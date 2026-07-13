@@ -1,3 +1,8 @@
+> **Superseded (V3).** As of the V3 redesign the live design system is the
+> one specified in `design/V3_DESIGN_BRIEF.md` §3 (warm-minimal Apple style,
+> emerald accent, SF Pro/Inter) and implemented in `src/index.css`. This
+> file remains as the historical record of the V2 Knockdown extraction.
+
 # RT Pay Auditor — design tokens, extracted from Knockdown
 
 Source of truth: `omarfx8181-beep/knockdown` @ `6dc6449` —

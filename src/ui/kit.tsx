@@ -35,9 +35,9 @@ export function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           inputMode="decimal"
-          className={`input ${w} px-2.5 py-1.5 font-mono text-sm tabular-nums`}
+          className={`input ${w} px-2.5 py-1.5 text-sm tabular-nums`}
         />
-        {suffix ? <span className="font-mono text-[11px] text-ink-dim">{suffix}</span> : null}
+        {suffix ? <span className="text-[11px] text-ink-dim">{suffix}</span> : null}
       </span>
     </label>
   );
@@ -102,20 +102,16 @@ export function Disclosure({
         </span>
         <ChevronDown size={14} className={`shrink-0 text-ink-dim transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {!open && hint ? <p className="mt-1.5 font-mono text-[11px] text-ink-dim">{hint}</p> : null}
+      {!open && hint ? <p className="mt-1.5 text-[11px] text-ink-dim">{hint}</p> : null}
       {open && <div className="reveal mt-3">{children}</div>}
     </section>
   );
 }
 
-/** Ink-block hero card with Knockdown's dot texture; the glow wash is opt-in (Boost-style). */
-export function Hero({ children, glow, className = "" }: { children: ReactNode; glow?: boolean; className?: string }) {
+/** Status hero — the surface card that carries the big number (V3 §3.4). */
+export function Hero({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <section className={`hero ${glow ? "hero-glow" : ""} relative overflow-hidden ${className}`}>
-      <div
-        className="hero-dots pointer-events-none absolute inset-0 opacity-[0.5]"
-        style={{ backgroundImage: "radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize: "14px 14px" }}
-      />
+    <section className={`hero relative overflow-hidden ${className}`}>
       <div className="relative">{children}</div>
     </section>
   );
@@ -146,7 +142,7 @@ export function StatTile({
     <div className="card p-4">
       <Eyebrow>{label}</Eyebrow>
       <div className={`mt-1 font-display text-2xl font-semibold leading-none tabular-nums ${STAT_TONES[tone]}`}>{value}</div>
-      {sub ? <div className="mt-1.5 font-mono text-[11px] text-ink-dim">{sub}</div> : null}
+      {sub ? <div className="mt-1.5 text-[11px] text-ink-dim">{sub}</div> : null}
     </div>
   );
 }
@@ -171,7 +167,7 @@ export function TabBar({ tabs, active, onSelect }: { tabs: Tab[]; active: string
               <button
                 key={id}
                 onClick={() => onSelect(id, i)}
-                className={`pressable flex flex-1 flex-col items-center gap-1 py-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition ${
+                className={`pressable flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-semibold uppercase tracking-wider transition ${
                   isActive ? "text-accent" : "text-ink-dim hover:text-ink"
                 }`}
               >
