@@ -44,3 +44,33 @@ describe("code computes the hours, not the model (SPEC §3 test 5 rules)", () =>
     expect(drafts.every((d) => d.note.length <= 42)).toBe(true);
   });
 });
+
+describe("role designations auto-fill extra-pay hours (payroll rules, Jul 2026)", () => {
+  const draftsFor = (label: string, start = "06:45", end = "19:15") =>
+    scanRowsToDrafts(
+      buildScanRows(parseScanResponse(JSON.stringify({ shifts: [{ date: "2026-07-08", start, end, label }] })), DEFAULT_CFG),
+    )[0];
+
+  test('"MICU Charge" → charge hours = the shift\'s paid hours', () => {
+    expect(draftsFor("MICU Charge")).toMatchObject({ hours: "12", charge: "12", premium: "0", preceptor: "0" });
+    expect(draftsFor("T2 CHG")).toMatchObject({ charge: "12" });
+  });
+
+  test('"Precept" in any form → preceptor hours', () => {
+    expect(draftsFor("Precepting — new grad")).toMatchObject({ preceptor: "12", charge: "0" });
+    expect(draftsFor("NICU PCPT")).toMatchObject({ preceptor: "12" });
+  });
+
+  test("a transport day earns premium for the WHOLE day", () => {
+    expect(draftsFor("Transport")).toMatchObject({ premium: "12", charge: "0", preceptor: "0" });
+  });
+
+  test("plain unit labels set nothing; detection follows the 12-hour fallback when times are missing", () => {
+    expect(draftsFor("MICU")).toMatchObject({ charge: "0", premium: "0", preceptor: "0" });
+    expect(draftsFor("Charge", "", "")).toMatchObject({ hours: "12", charge: "12" });
+  });
+
+  test('no false positives from lookalikes ("premie" is not premium)', () => {
+    expect(draftsFor("NICU premie team")).toMatchObject({ premium: "0" });
+  });
+});

@@ -34,9 +34,10 @@ export const scanInstruction = (todayIso: string): string =>
   todayIso +
   ". " +
   "Dates in the image may omit the year - infer the year that places each date closest to today (schedules usually cover the current or upcoming weeks). " +
-  'Extract every scheduled WORK shift. Respond with ONLY valid JSON, no markdown, no backticks, no commentary, using exactly this schema: {"shifts":[{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","label":"unit or shift code, else empty string"}]} ' +
+  'Extract every scheduled WORK shift. Respond with ONLY valid JSON, no markdown, no backticks, no commentary, using exactly this schema: {"shifts":[{"date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","label":"unit or shift code plus any role designation, else empty string"}]} ' +
   'Rules: times in 24-hour format ("6:45a" -> "06:45", "7:15p" -> "19:15", "11:15p" -> "23:15"). ' +
   'If a cell shows a shift code without readable times, include it with "start":"" and "end":"" and put the code in label. ' +
+  'If the cell or its notes carry a role designation - charge (or "chg"), preceptor/precepting, transport - include that word in label verbatim; never invent one. ' +
   "Skip OFF days, PTO, requests, holidays, and blank cells. If multiple images are parts of the same schedule, combine them and de-duplicate by date.";
 
 /** Strict parse of the model's text — strips accidental fences, validates shape. */
@@ -68,18 +69,50 @@ export function buildScanRows(raw: RawScanShift[], cfg: EngineConfig): ScanRow[]
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-/** Preview rows → shift drafts, v1's applyScan mapping (note ≤ 42 chars). */
+/**
+ * Role designations schedules print beside the shift code — CODE reads
+ * them; the model only carries the cell text through. Charge and
+ * precepting set their adder for the shift's hours; a transport day
+ * earns premium for the WHOLE day (payroll's rule, Jul 2026).
+ */
+const ADDER_PATTERNS = {
+  charge: /charge|\bchg\b/i,
+  premium: /transport|premium|\bprem\b/i,
+  preceptor: /precept|\bpcpt\b/i,
+} as const;
+
+export interface DetectedAdders {
+  charge: boolean;
+  premium: boolean;
+  preceptor: boolean;
+}
+
+export const detectAdders = (label: string): DetectedAdders => ({
+  charge: ADDER_PATTERNS.charge.test(label),
+  premium: ADDER_PATTERNS.premium.test(label),
+  preceptor: ADDER_PATTERNS.preceptor.test(label),
+});
+
+/**
+ * Preview rows → shift drafts, v1's applyScan mapping (note ≤ 42 chars).
+ * Detected role designations pre-fill their extra-pay hours to the
+ * shift's paid hours — editable like everything else after applying.
+ */
 export function scanRowsToDrafts(rows: ScanRow[]): ShiftDraft[] {
-  return rows.map((r) => ({
-    id: uid(),
-    date: r.date,
-    hours: r.hours != null ? String(r.hours) : "12",
-    charge: "0",
-    premium: "0",
-    preceptor: "0",
-    units548: "0",
-    note: ((r.label ? r.label + " · " : "") + (r.start ? "sched " + r.start + "–" + r.end : "sched — fill hrs")).slice(0, 42),
-  }));
+  return rows.map((r) => {
+    const hours = r.hours != null ? String(r.hours) : "12";
+    const adders = detectAdders(r.label);
+    return {
+      id: uid(),
+      date: r.date,
+      hours,
+      charge: adders.charge ? hours : "0",
+      premium: adders.premium ? hours : "0",
+      preceptor: adders.preceptor ? hours : "0",
+      units548: "0",
+      note: ((r.label ? r.label + " · " : "") + (r.start ? "sched " + r.start + "–" + r.end : "sched — fill hrs")).slice(0, 42),
+    };
+  });
 }
 
 export const fileToB64 = (file: File): Promise<string> =>

@@ -2,7 +2,7 @@ import { useState, type ClipboardEvent } from "react";
 import { CalendarArrowDown, Loader2, ScanLine, X } from "lucide-react";
 import { isWeekend, type EngineConfig } from "../lib/engine.ts";
 import type { ShiftDraft } from "../lib/draft.ts";
-import { buildScanRows, parseScheduleImages, scanRowsToDrafts, type ScanRow } from "../lib/scan.ts";
+import { buildScanRows, detectAdders, parseScheduleImages, scanRowsToDrafts, type ScanRow } from "../lib/scan.ts";
 import { icsToRawShifts } from "../lib/ical.ts";
 import { groupRowsByPeriod, type FutureBatch } from "../lib/scanRouting.ts";
 import { addDays, periodLabel, PERIOD_DAYS } from "../lib/periods.ts";
@@ -194,20 +194,29 @@ export default function ScanPanel({
             const groups = groupRowsByPeriod(scan.rows, periodStart, periodEnd);
             const removeRow = (id: string) =>
               setScan((s) => (s.status === "preview" ? { ...s, rows: s.rows.filter((x) => x.id !== id) } : s));
-            const RowLine = ({ r, dim }: { r: ScanRow; dim?: boolean }) => (
-              <div className={`flex items-center gap-3 py-1.5 ${dim ? "opacity-50" : ""}`}>
-                <span className="w-20 shrink-0 font-sans">{dayLabel(r.date)}</span>
-                <span className="w-28 shrink-0 text-ink-dim">{r.start ? `${r.start}–${r.end}` : "(no times)"}</span>
-                <span className="w-14 shrink-0 tabular-nums">{r.hours != null ? fmtNum(r.hours) + " h" : "—"}</span>
-                <span className="min-w-0 flex-1 truncate font-sans text-ink-dim">
-                  {r.label}
-                  {r.date && isWeekend(r.date) ? " · weekend" : ""}
-                </span>
-                <button onClick={() => removeRow(r.id)} className="pressable text-ink-dim hover:text-neg" aria-label="Remove row">
-                  <X size={12} />
-                </button>
-              </div>
+            const AdderChip = ({ children }: { children: string }) => (
+              <span className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-caption text-accent">{children}</span>
             );
+            const RowLine = ({ r, dim }: { r: ScanRow; dim?: boolean }) => {
+              const adders = detectAdders(r.label);
+              return (
+                <div className={`flex items-center gap-2 py-1.5 ${dim ? "opacity-50" : ""}`}>
+                  <span className="w-20 shrink-0 font-sans">{dayLabel(r.date)}</span>
+                  <span className="w-24 shrink-0 text-ink-dim">{r.start ? `${r.start}–${r.end}` : "(no times)"}</span>
+                  <span className="w-14 shrink-0 tabular-nums">{r.hours != null ? fmtNum(r.hours) + " h" : "—"}</span>
+                  <span className="min-w-0 flex-1 truncate font-sans text-ink-dim">
+                    {r.label}
+                    {r.date && isWeekend(r.date) ? " · weekend" : ""}
+                  </span>
+                  {adders.charge && <AdderChip>Charge ✓</AdderChip>}
+                  {adders.preceptor && <AdderChip>Precepting ✓</AdderChip>}
+                  {adders.premium && <AdderChip>Premium ✓</AdderChip>}
+                  <button onClick={() => removeRow(r.id)} className="pressable text-ink-dim hover:text-neg" aria-label="Remove row">
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            };
             const futureCount = groups.future.reduce((n, b) => n + b.rows.length, 0);
             return (
               <div className="mt-3 space-y-3">
@@ -269,7 +278,9 @@ export default function ScanPanel({
                   </p>
                 )}
                 <p className="text-[11px] text-ink-dim">
-                  These are scheduled hours — after each shift, adjust paid hours to your actual punches and add bonus units.
+                  These are scheduled hours — after each shift, adjust paid hours to your actual punches and add bonus
+                  units. Charge, precepting, and transport tags fill their extra-pay hours automatically (a transport
+                  day earns premium all day) — tweak any shift after applying.
                 </p>
               </div>
             );
