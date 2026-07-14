@@ -4,7 +4,7 @@
  * fully pinned here before any UI relies on them.
  */
 import { describe, expect, test } from "vitest";
-import { groupRowsByPeriod, matchStubPeriod } from "./scanRouting.ts";
+import { anchorEndFor, groupRowsByPeriod, matchStubPeriod, summaryToAnchor } from "./scanRouting.ts";
 import { ytdThroughDate, type PayPeriod } from "./periods.ts";
 import { DEMO_SHIFTS, DEFAULT_CFG_DRAFT, ACTUAL_SEED } from "./draft.ts";
 import { DEFAULT_TIERS } from "./engine.ts";
@@ -117,5 +117,45 @@ describe("ytdThroughDate — the app's own year total through a stub's YTD date"
     // Shiftless July still carries the $1.81 imputed-life line — an
     // estimate, exactly what the anchor comparison is meant to expose.
     expect(withEmptyJuly.grossCents).toBe(886522 + 181);
+  });
+});
+
+
+describe("YTD summary → year anchor (the Kronos 'Year to Date' screen)", () => {
+  // Omar's real summary, 7/14/2026: gross 103,320.11 · taxes 20,225.79 ·
+  // pretax 12,516.42 · after-tax 1,168.51 · imputed 24.13.
+  const SUMMARY = {
+    asOfDate: "2026-07-14",
+    grossCents: 10332011,
+    taxesCents: 2022579,
+    pretaxCents: 1251642,
+    aftertaxCents: 116851,
+    imputedCents: 2413,
+  };
+
+  test("net derives in cents: gross − taxes − pretax − aftertax − imputed", () => {
+    const a = summaryToAnchor(SUMMARY, PERIODS, 5, 1);
+    expect(a).not.toBeNull();
+    expect(a!.grossCents).toBe(10332011);
+    expect(a!.netCents).toBe(6938526); // $69,385.26
+    expect(a!.year).toBe("2026");
+  });
+
+  test("as-of 7/14 anchors through 7/5 — the 7/10 payday landed, 7/24 hasn't", () => {
+    expect(anchorEndFor("2026-07-14", PERIODS, 5)).toBe("2026-07-05");
+    // later in the month the next check is out → the anchor advances
+    expect(anchorEndFor("2026-07-24", PERIODS, 5)).toBe("2026-07-19");
+    // grid extends past known periods
+    expect(anchorEndFor("2026-08-10", PERIODS, 5)).toBe("2026-08-02");
+  });
+
+  test("a missing section leaves net unknown instead of guessed", () => {
+    const a = summaryToAnchor({ ...SUMMARY, pretaxCents: null }, PERIODS, 5, 1);
+    expect(a!.netCents).toBeNull();
+    expect(a!.grossCents).toBe(10332011);
+  });
+
+  test("no readable as-of date → the latest known period end", () => {
+    expect(anchorEndFor("", PERIODS, 5)).toBe("2026-07-19");
   });
 });

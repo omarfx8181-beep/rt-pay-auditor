@@ -1,6 +1,6 @@
 /** Stub upload — response parsing and duplicate-safe placement. */
 import { describe, expect, test } from "vitest";
-import { parseStubResponse, planStubImports, stubStartDate } from "./stubScan.ts";
+import { parseStubResponse, parseYtdSummary, planStubImports, stubStartDate } from "./stubScan.ts";
 import type { PayPeriod } from "./periods.ts";
 
 const RESPONSE = JSON.stringify({
@@ -36,5 +36,24 @@ describe("stub scan", () => {
     const twice = parseStubResponse(RESPONSE).concat(parseStubResponse(RESPONSE));
     const plan = planStubImports(existing, twice);
     expect(plan.toAdd).toHaveLength(1);
+  });
+});
+
+describe("YTD summary parsing", () => {
+  test("summary block parses to cents; absent or empty → null", () => {
+    const withSummary = JSON.stringify({
+      stubs: [],
+      ytdSummary: { asOfDate: "2026-07-14", gross: 103320.11, taxes: 20225.79, pretax: 12516.42, aftertax: 1168.51, imputed: 24.13 },
+    });
+    const s = parseYtdSummary(withSummary);
+    expect(s).toMatchObject({ asOfDate: "2026-07-14", grossCents: 10332011, taxesCents: 2022579 });
+    expect(parseYtdSummary(JSON.stringify({ stubs: [], ytdSummary: null }))).toBeNull();
+    expect(parseYtdSummary(RESPONSE)).toBeNull(); // stub-only responses unchanged
+  });
+
+  test("missing amounts stay null; junk gross rejects the summary", () => {
+    const partial = parseYtdSummary(JSON.stringify({ stubs: [], ytdSummary: { asOfDate: "", gross: "103,320.11", taxes: null } }));
+    expect(partial).toMatchObject({ grossCents: 10332011, taxesCents: null, asOfDate: "" });
+    expect(parseYtdSummary(JSON.stringify({ stubs: [], ytdSummary: { gross: "n/a" } }))).toBeNull();
   });
 });

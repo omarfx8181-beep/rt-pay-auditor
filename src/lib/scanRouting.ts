@@ -4,8 +4,10 @@
  * (or the window to create), and how schedule rows split across the
  * current period, upcoming periods, and out-of-range dates.
  */
-import { addDays, nextPeriodRange, PERIOD_DAYS, type PayPeriod } from "./periods.ts";
+import { addDays, nextPeriodRange, PERIOD_DAYS, type PayPeriod, type YtdAnchor } from "./periods.ts";
+import { paydayFor } from "./payday.ts";
 import type { ScanRow } from "./scan.ts";
+import type { ScannedYtdSummary } from "./stubScan.ts";
 
 /* ---------------- stub → period ---------------- */
 
@@ -28,6 +30,48 @@ export function matchStubPeriod(periods: PayPeriod[], currentId: string, parsedS
     startDate: parsedStart !== "" ? parsedStart : addDays(parsedEnd, -(PERIOD_DAYS - 1)),
     endDate: parsedEnd,
   };
+}
+
+/* ---------------- YTD summary → year anchor ---------------- */
+
+/**
+ * A YTD summary printed on `asOfDate` reflects every check PAID by that
+ * date — so the anchor runs through the latest period whose payday has
+ * already landed. Candidate ends are the known periods extended forward
+ * on the biweekly grid; no readable date → the latest known period end.
+ */
+export function anchorEndFor(asOfDate: string, periods: PayPeriod[], paydayDelayDays: number): string {
+  if (periods.length === 0) return asOfDate;
+  const ends = [...new Set(periods.map((p) => p.endDate))].sort();
+  let cursor = ends[ends.length - 1];
+  for (let i = 0; i < 27; i++) {
+    cursor = nextPeriodRange(cursor).endDate;
+    ends.push(cursor);
+  }
+  if (asOfDate === "") return [...new Set(periods.map((p) => p.endDate))].sort().pop()!;
+  const paid = ends.filter((end) => paydayFor(end, paydayDelayDays) <= asOfDate);
+  return paid.length > 0 ? paid[paid.length - 1] : asOfDate;
+}
+
+/**
+ * Summary totals → the year anchor. Net = gross − taxes − pretax −
+ * after-tax − imputed (imputed is taxed, never cash), all integer cents;
+ * any missing section → net stays unknown rather than guessed.
+ */
+export function summaryToAnchor(
+  summary: ScannedYtdSummary,
+  periods: PayPeriod[],
+  paydayDelayDays: number,
+  capturedAt: number,
+): YtdAnchor | null {
+  if (summary.grossCents <= 0) return null;
+  const parts = [summary.taxesCents, summary.pretaxCents, summary.aftertaxCents, summary.imputedCents];
+  const netCents = parts.every((v): v is number => v !== null)
+    ? summary.grossCents - parts.reduce((a, b) => a! + b!, 0)!
+    : null;
+  const asOfEnd = anchorEndFor(summary.asOfDate, periods, paydayDelayDays);
+  if (asOfEnd === "") return null;
+  return { year: asOfEnd.slice(0, 4), asOfEnd, grossCents: summary.grossCents, netCents, capturedAt };
 }
 
 /* ---------------- schedule rows → periods ---------------- */

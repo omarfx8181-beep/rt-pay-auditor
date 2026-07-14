@@ -508,6 +508,7 @@ function PeriodWorkspace({
             importStatus={importStatus}
             lastBackupAt={lastBackupAt}
             onShareBackup={() => void shareBackup()}
+            onYtdAnchor={saveYtdAnchor}
             onDownloadPaydays={downloadPaydays}
             paydayDelay={String(paydayDelayDays)}
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}

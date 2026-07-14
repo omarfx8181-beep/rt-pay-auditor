@@ -32,6 +32,7 @@ import { draftToConfig, draftToLeave, draftToShift, num, todayIso, uid, type Cfg
 import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
 import { periodLabel, prevPeriodRange, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
+import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow, UndoToast } from "../ui/kit.tsx";
 
@@ -90,17 +91,21 @@ function RuleRow({
 function StubScanPanel({
   apiKey,
   periods,
+  paydayDelayDays,
   onLogPastStub,
+  onYtdAnchor,
 }: {
   apiKey: string;
   periods: PayPeriod[];
+  paydayDelayDays: number;
   onLogPastStub: (endDate: string, gross: string, net: string, startDate?: string) => void;
+  onYtdAnchor: (anchor: YtdAnchor) => void;
 }) {
   const [state, setState] = useState<
     | { status: "idle" }
     | { status: "working" }
     | { status: "error"; msg: string }
-    | { status: "preview"; toAdd: ScannedStub[]; duplicates: ScannedStub[] }
+    | { status: "preview"; toAdd: ScannedStub[]; duplicates: ScannedStub[]; anchor: YtdAnchor | null }
   >({ status: "idle" });
 
   const handleFiles = async (fileList: FileList) => {
@@ -109,9 +114,12 @@ function StubScanPanel({
     setState({ status: "working" });
     try {
       const scanned = await scanStubFiles(files, apiKey);
-      const plan = planStubImports(periods, scanned);
-      if (plan.toAdd.length === 0 && plan.duplicates.length === 0) throw new Error("No stubs detected in those files.");
-      setState({ status: "preview", ...plan });
+      const plan = planStubImports(periods, scanned.stubs);
+      const anchor = scanned.summary ? summaryToAnchor(scanned.summary, periods, paydayDelayDays, Date.now()) : null;
+      if (plan.toAdd.length === 0 && plan.duplicates.length === 0 && anchor === null) {
+        throw new Error("No stubs or year-to-date summary detected in those files.");
+      }
+      setState({ status: "preview", ...plan, anchor });
     } catch (err) {
       setState({ status: "error", msg: String(err instanceof Error ? err.message : err) });
     }
@@ -163,6 +171,17 @@ function StubScanPanel({
       )}
       {state.status === "preview" && (
         <div className="space-y-2">
+          {state.anchor && (
+            <p className="rounded-xl bg-accent/10 px-3 py-2 text-footnote">
+              Year to date from the summary: <span className="font-semibold tabular-nums">{fmtCents(state.anchor.grossCents)}</span> made
+              {state.anchor.netCents !== null && (
+                <>
+                  {" "}· <span className="font-semibold tabular-nums">{fmtCents(state.anchor.netCents)}</span> take-home
+                </>
+              )}
+              , through {dayLabel(state.anchor.asOfEnd)} — this anchors the Year card above.
+            </p>
+          )}
           <div className="divide-y divide-surface-line/60 text-xs tabular-nums">
             {state.toAdd.map((s) => (
               <div key={s.endDate} className="flex items-baseline justify-between gap-3 py-1.5">
@@ -180,15 +199,18 @@ function StubScanPanel({
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            {state.toAdd.length > 0 && (
+            {(state.toAdd.length > 0 || state.anchor) && (
               <button
                 onClick={() => {
                   for (const s of state.toAdd) onLogPastStub(s.endDate, s.gross, s.net, stubStartDate(s));
+                  if (state.anchor) onYtdAnchor(state.anchor);
                   setState({ status: "idle" });
                 }}
                 className="btn btn-primary pressable text-xs"
               >
-                Add {state.toAdd.length} period{state.toAdd.length > 1 ? "s" : ""}
+                {state.toAdd.length > 0
+                  ? `Add ${state.toAdd.length} period${state.toAdd.length > 1 ? "s" : ""}${state.anchor ? " + set the year anchor" : ""}`
+                  : "Set the year anchor"}
               </button>
             )}
             <button onClick={() => setState({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
@@ -235,6 +257,7 @@ export default function Me({
   importStatus,
   lastBackupAt,
   onShareBackup,
+  onYtdAnchor,
   onDownloadPaydays,
   paydayDelay,
   onSetPaydayDelay,
@@ -272,6 +295,7 @@ export default function Me({
   importStatus: string;
   lastBackupAt: number | null;
   onShareBackup: () => void;
+  onYtdAnchor: (anchor: YtdAnchor) => void;
   onDownloadPaydays: () => void;
   paydayDelay: string;
   onSetPaydayDelay: (v: string) => void;
@@ -633,7 +657,13 @@ export default function Me({
             hint="Scan a whole year of stub PDFs or photos at once — or type each one by hand."
           >
             <div className="space-y-4">
-              <StubScanPanel apiKey={apiKey} periods={periods} onLogPastStub={onLogPastStub} />
+              <StubScanPanel
+                apiKey={apiKey}
+                periods={periods}
+                paydayDelayDays={Number(paydayDelay) || 5}
+                onLogPastStub={onLogPastStub}
+                onYtdAnchor={onYtdAnchor}
+              />
               <div className="border-t border-surface-line/60 pt-3">
                 <p className="text-footnote text-ink-dim">Or by hand — the date steps back one period per entry:</p>
                 <div className="mt-2 flex flex-wrap items-end gap-3">
