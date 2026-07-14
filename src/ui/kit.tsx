@@ -148,6 +148,33 @@ export function StatTile({
   );
 }
 
+/* ---------------- undo toast ---------------- */
+
+/** One-line safety net after a destructive action; sits above the tab bar. */
+export function UndoToast({
+  message,
+  onUndo,
+  onDismiss,
+}: {
+  message: string;
+  onUndo: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-4 bottom-20 z-40 mx-auto max-w-md md:bottom-6">
+      <div className="card flex items-center justify-between gap-3 p-3">
+        <span className="min-w-0 flex-1 text-subhead">{message}</span>
+        <button onClick={onUndo} className="btn btn-primary pressable min-h-9 px-3 py-1.5 text-xs">
+          Undo
+        </button>
+        <button onClick={onDismiss} aria-label="Dismiss" className="pressable p-1 text-ink-dim hover:text-ink">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- bottom sheet ---------------- */
 
 /**

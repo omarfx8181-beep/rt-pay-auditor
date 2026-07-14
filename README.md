@@ -54,10 +54,15 @@ math without them green (see `CLAUDE.md`).
 ## Development
 
 ```
-npm run dev      # Vite dev server
-npm run test     # Vitest (engine golden tests + verdict/preset/scan suites)
-npm run build    # tsc + production build (VITE_BASE=/rt-pay-auditor/ for Pages)
+npm run dev       # Vite dev server
+npm run test      # Vitest (engine golden tests + verdict/preset/scan suites)
+npm run test:e2e  # Playwright flows over the production build (API route-mocked)
+npm run build     # tsc + production build (VITE_BASE=/rt-pay-auditor/ for Pages)
 ```
+
+E2E note: set `PW_CHROMIUM=/path/to/chromium` to reuse a preinstalled
+browser instead of downloading one; CI installs Chromium itself and a
+failed flow blocks the deploy.
 
 Vite + React 19 + TypeScript + Tailwind v4 + Framer Motion + Dexie.
 Deploys to GitHub Pages from `main` via `.github/workflows/pages.yml`.

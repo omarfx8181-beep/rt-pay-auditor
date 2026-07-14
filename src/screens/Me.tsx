@@ -7,12 +7,13 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
   Banknote,
+  CalendarPlus,
   CheckCircle2,
   Download,
   Eye,
@@ -32,7 +33,7 @@ import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
 import { periodLabel, prevPeriodRange, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
-import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
+import { CalloutCard, Card, Disclosure, Eyebrow, UndoToast } from "../ui/kit.tsx";
 
 const OPEN_QUESTIONS: Array<{ id: string; text: string }> = [
   { id: "transport", text: "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?" },
@@ -219,12 +220,18 @@ export default function Me({
   onSetDates,
   onToggleArchived,
   onDelete,
+  onRestorePeriod,
   onAddOther,
   onUpdateOther,
   onDeleteOther,
   onExport,
   onImportFile,
   importStatus,
+  lastBackupAt,
+  onShareBackup,
+  onDownloadPaydays,
+  paydayDelay,
+  onSetPaydayDelay,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -250,23 +257,37 @@ export default function Me({
   onSetDates: (id: string, startDate: string) => void;
   onToggleArchived: (id: string) => void;
   onDelete: (id: string) => void;
+  onRestorePeriod: (period: PayPeriod) => void;
   onAddOther: () => void;
   onUpdateOther: (id: string, patch: Partial<OtherIncomeDraft>) => void;
   onDeleteOther: (id: string) => void;
   onExport: () => void;
   onImportFile: (file: File) => void;
   importStatus: string;
+  lastBackupAt: number | null;
+  onShareBackup: () => void;
+  onDownloadPaydays: () => void;
+  paydayDelay: string;
+  onSetPaydayDelay: (v: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   const [key, setKey] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
   const [feed, setFeed] = useState(feedUrl);
+  const [payDelay, setPayDelay] = useState(paydayDelay);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const unanswered = OPEN_QUESTIONS.filter((q) => !answers[q.id]);
   const answered = OPEN_QUESTIONS.filter((q) => answers[q.id]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  // One undo window after a period delete — the record rides in state.
+  const [deleted, setDeleted] = useState<PayPeriod | null>(null);
+  useEffect(() => {
+    if (deleted === null) return;
+    const t = setTimeout(() => setDeleted(null), 8000);
+    return () => clearTimeout(t);
+  }, [deleted]);
 
   // Manual past-stub entry walks backward from the earliest period.
   const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
@@ -453,6 +474,16 @@ export default function Me({
             <RuleRow label="Overtime blended rate" hint="From your stub; leave blank to use 1.5× base." value={cfgDraft.otRateOverride} onChange={set("otRateOverride")} suffix="$/hr" wide />
             <RuleRow label="Meal break taken off" hint="Hours the schedule scan subtracts from long shifts." value={cfgDraft.mealDeduct} onChange={set("mealDeduct")} suffix="hrs" />
             <RuleRow label="…on shifts longer than" hint="Shifts at or under this keep their full hours." value={cfgDraft.mealThreshold} onChange={set("mealThreshold")} suffix="hrs" />
+            <RuleRow
+              label="Payday lands after"
+              hint="Days from period end to the money arriving — Fairview pays the Friday after."
+              value={payDelay}
+              onChange={(v) => {
+                setPayDelay(v);
+                onSetPaydayDelay(v.trim());
+              }}
+              suffix="days"
+            />
           </div>
           <p className="text-footnote leading-relaxed text-ink-dim">
             Baked in: Social Security 6.2% and Medicare 1.45% apply to gross minus your pretax medical, dental, and FSA
@@ -554,12 +585,25 @@ export default function Me({
                 const through = ytdThroughDate(periods, ytdAnchor.asOfEnd);
                 const deltaCents = through.grossCents - ytdAnchor.grossCents;
                 const ok = Math.abs(deltaCents) <= 5;
+                const netDeltaCents = ytdAnchor.netCents !== null ? through.netCents - ytdAnchor.netCents : null;
+                const netOk = netDeltaCents === null || Math.abs(netDeltaCents) <= 5;
                 return (
-                  <p className={`mt-2 border-t border-surface-line/60 pt-2 text-footnote ${ok ? "text-pos" : "text-amber"}`}>
+                  <p
+                    className={`mt-2 border-t border-surface-line/60 pt-2 text-footnote ${ok && netOk ? "text-pos" : "text-amber"}`}
+                  >
                     {ok ? (
                       <>
                         ✓ Your newest stub agrees: {fmtCents(ytdAnchor.grossCents)} made through{" "}
-                        {dayLabel(ytdAnchor.asOfEnd)}.
+                        {dayLabel(ytdAnchor.asOfEnd)}
+                        {netOk ? (
+                          ytdAnchor.netCents !== null ? ", take-home included." : "."
+                        ) : (
+                          <>
+                            {" "}
+                            — but take-home drifts {fmtCents(Math.abs(netDeltaCents!))}: a deduction changed somewhere.
+                            Check a recent stub's tax lines against Me → Advanced.
+                          </>
+                        )}
                       </>
                     ) : (
                       <>
@@ -687,14 +731,28 @@ export default function Me({
           <Disclosure
             title="Backup — yours, on your device"
             icon={<Download size={13} className="text-accent" />}
-            hint="Export or merge-import everything as one JSON file."
+            hint={
+              lastBackupAt
+                ? `Last backed up ${new Date(lastBackupAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} — everything as one JSON file.`
+                : "Never backed up yet — two taps puts everything in iCloud Drive."
+            }
           >
-            <div className="flex flex-wrap gap-2">
-              <button onClick={onExport} className="btn btn-primary pressable">
-                <Download size={15} /> Export JSON
+            <p className="text-footnote text-ink-dim">
+              {lastBackupAt
+                ? `Last backed up ${new Date(lastBackupAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`
+                : "Never backed up yet."}{" "}
+              Back up now opens the share sheet — Save to Files → iCloud Drive and your whole pay history survives a
+              lost phone.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={onShareBackup} className="btn btn-primary pressable">
+                <Upload size={15} /> Back up now
+              </button>
+              <button onClick={onExport} className="btn btn-ghost pressable">
+                <Download size={15} /> Download JSON
               </button>
               <button onClick={() => fileRef.current?.click()} className="btn btn-ghost pressable">
-                <Upload size={15} /> Import JSON
+                Import
               </button>
               <input
                 ref={fileRef}
@@ -710,6 +768,16 @@ export default function Me({
             </div>
             {importStatus && <p className="mt-2 text-footnote text-ink-dim">{importStatus}</p>}
           </Disclosure>
+
+          <Card title="Paydays on your calendar">
+            <p className="text-footnote text-ink-dim">
+              The next 13 paydays as calendar events — let iOS do the reminding, since nothing here ever phones home.
+              Payday timing is set under Advanced.
+            </p>
+            <button onClick={onDownloadPaydays} className="btn btn-ghost pressable mt-3">
+              <CalendarPlus size={15} /> Add paydays to your calendar
+            </button>
+          </Card>
 
           <div className="flex items-center justify-between gap-3 pt-1">
             <p className="text-sm text-ink-dim">Pay periods, newest first.</p>
@@ -762,7 +830,14 @@ export default function Me({
                   </button>
                   {confirmingDelete === p.id ? (
                     <span className="flex items-center gap-2 text-caption">
-                      <button onClick={() => onDelete(p.id)} className="pressable min-h-11 font-semibold text-neg">
+                      <button
+                        onClick={() => {
+                          setDeleted(p);
+                          setConfirmingDelete(null);
+                          onDelete(p.id);
+                        }}
+                        className="pressable min-h-11 font-semibold text-neg"
+                      >
                         Really delete?
                       </button>
                       <button onClick={() => setConfirmingDelete(null)} className="pressable min-h-11 text-ink-dim hover:text-ink">
@@ -784,6 +859,18 @@ export default function Me({
           })}
         </div>
       </div>
+
+      {deleted && (
+        <UndoToast
+          message={`Deleted ${periodLabel(deleted.startDate, deleted.endDate)}.`}
+          onUndo={() => {
+            const p = deleted;
+            setDeleted(null);
+            onRestorePeriod(p);
+          }}
+          onDismiss={() => setDeleted(null)}
+        />
+      )}
     </div>
   );
 }

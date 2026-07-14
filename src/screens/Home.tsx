@@ -13,7 +13,9 @@ import type { AuditRow } from "../lib/audit.ts";
 import type { Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
 import { periodLabel, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
-import { fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
+import { daysUntil, paydayFor } from "../lib/payday.ts";
+import { todayIso } from "../lib/draft.ts";
+import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
 import Audit from "./Audit.tsx";
 import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
@@ -161,6 +163,8 @@ export default function Home({
   onYtdAnchor,
   ytd,
   year,
+  paydayDelayDays,
+  backupStale,
   onGoToShifts,
   onGoToMe,
 }: {
@@ -187,6 +191,8 @@ export default function Home({
   onYtdAnchor: (anchor: YtdAnchor) => void;
   ytd: YtdRollup;
   year: string;
+  paydayDelayDays: number;
+  backupStale: boolean;
   onGoToShifts: () => void;
   onGoToMe: () => void;
 }) {
@@ -194,6 +200,18 @@ export default function Home({
   const [showGross, setShowGross] = useState(false);
   const heroCents = useCountUp(showGross ? period.grossCents : net.netCents);
   const empty = shifts.length === 0 && period.leaveHours === 0;
+
+  // Quiet payday line while the check hasn't happened yet.
+  const payday = paydayFor(record.endDate, paydayDelayDays);
+  const untilPayday = daysUntil(todayIso(), payday);
+  const showPayday =
+    (verdict.kind === "intro" || verdict.kind === "progress") && untilPayday <= 3 && untilPayday >= -10;
+  const paydayLine =
+    untilPayday > 0
+      ? `Payday ${dayLabel(payday)} — the stub lands in Workday then.`
+      : untilPayday === 0
+        ? "Payday is today — snap the stub when you have it."
+        : `Payday was ${dayLabel(payday)} — snap the stub when you have it.`;
 
   if (view !== "main") {
     return (
@@ -286,6 +304,7 @@ export default function Home({
           <button onClick={() => setView("check")} className="btn btn-primary pressable w-full">
             Check my paycheck
           </button>
+          {showPayday && <p className="text-center text-footnote text-ink-dim">{paydayLine}</p>}
           <button
             onClick={() => setView("breakdown")}
             className="pressable mx-auto block min-h-11 px-3 py-2 text-subhead font-medium text-accent"
@@ -312,6 +331,12 @@ export default function Home({
         </span>
         <span className="text-ink-dim">→</span>
       </button>
+
+      {backupStale && (
+        <button onClick={onGoToMe} className="pressable block w-full px-2 py-1 text-center text-footnote text-amber">
+          Your pay history isn't backed up lately — it's two taps in Me → Backup.
+        </button>
+      )}
     </div>
   );
 }

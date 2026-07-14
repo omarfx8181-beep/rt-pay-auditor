@@ -4,8 +4,8 @@
  * you're owed and hands you the HR email, amber asks one guided
  * question. The line-by-line table sits below in plain language.
  */
-import { useRef } from "react";
-import { CircleAlert, Mail } from "lucide-react";
+import { useRef, useState } from "react";
+import { CircleAlert, FileDown, Mail } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num } from "../lib/draft.ts";
 import { fmtCents, fmtUnits } from "../lib/format.ts";
@@ -16,6 +16,7 @@ import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import type { PayPeriod, YtdAnchor } from "../lib/periods.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
+import ProofPacket from "./ProofPacket.tsx";
 
 /** The clean-audit celebration: a checkmark that draws itself. */
 function CheckDraw() {
@@ -161,6 +162,7 @@ export default function Audit({
   onYtdAnchor: (anchor: YtdAnchor) => void;
 }) {
   const emailRef = useRef<HTMLDivElement>(null);
+  const [proofOpen, setProofOpen] = useState(false);
 
   const judged = rows.map((row) => {
     const raw = actual[row.key] ?? "";
@@ -252,6 +254,28 @@ export default function Audit({
           ))}
         </div>
       </Card>
+
+      {verdict.kind !== "intro" && (
+        <button
+          onClick={() => setProofOpen(true)}
+          className="pressable flex min-h-11 items-center gap-1.5 py-1 text-subhead font-medium text-accent"
+        >
+          <FileDown size={16} /> Save this check as a record (PDF)
+        </button>
+      )}
+      {proofOpen && (
+        <ProofPacket
+          rows={rows}
+          actual={actual}
+          verdict={verdict}
+          cfg={cfg}
+          shifts={shifts}
+          periodStart={periodStart}
+          periodEnd={periodEnd}
+          identity={identity}
+          onClose={() => setProofOpen(false)}
+        />
+      )}
 
       {discrepancies.length > 0 && (
         <div ref={emailRef}>

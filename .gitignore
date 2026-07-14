@@ -13,3 +13,7 @@ coverage
 .DS_Store
 npm-debug.log*
 dist-artifact
+
+# playwright artifacts
+test-results/
+playwright-report/

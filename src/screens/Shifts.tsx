@@ -6,14 +6,14 @@
  * and the weekly tier chips. Scan stays on top; leave keeps one-tap
  * call-ins; the hour tiles read the period at a glance.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HeartPulse, Minus, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
 import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
 import type { FutureBatch } from "../lib/scanRouting.ts";
-import { Card, Sheet, StatTile } from "../ui/kit.tsx";
+import { Card, Sheet, StatTile, UndoToast } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -299,6 +299,15 @@ export default function Shifts({
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
 
+  // Replacing shifts from a scan is the one bulk-destructive action here —
+  // keep the previous set for one undo window.
+  const [replaced, setReplaced] = useState<ShiftDraft[] | null>(null);
+  useEffect(() => {
+    if (replaced === null) return;
+    const t = setTimeout(() => setReplaced(null), 8000);
+    return () => clearTimeout(t);
+  }, [replaced]);
+
   const setShift = (id: string, key: keyof ShiftDraft, value: string) =>
     setShifts((arr) => arr.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
 
@@ -321,9 +330,24 @@ export default function Shifts({
         periodStart={periodStart}
         periodEnd={periodEnd}
         cfg={cfg}
-        onApply={(mode, drafts) => setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]))}
+        onApply={(mode, drafts) => {
+          if (mode === "replace" && shifts.length > 0) setReplaced(shifts);
+          setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]));
+        }}
         onFileFuture={onFileFuture}
       />
+
+      {replaced && (
+        <UndoToast
+          message={`Replaced ${replaced.length} shift${replaced.length === 1 ? "" : "s"}.`}
+          onUndo={() => {
+            const prev = replaced;
+            setReplaced(null);
+            setShifts(() => prev);
+          }}
+          onDismiss={() => setReplaced(null)}
+        />
+      )}
 
       {shifts.length === 0 ? (
         <Card>

@@ -24,6 +24,8 @@ import { TabBar, type Tab } from "./ui/kit.tsx";
 import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
+import { FAIRVIEW_RT_PRESET } from "./lib/presets.ts";
+import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
 import Onboarding from "./screens/Onboarding.tsx";
 
@@ -52,6 +54,8 @@ export default function App() {
   const answersRow = useLiveQuery(async () => (await db.settings.get("questionAnswers")) ?? null, []);
   const onboardingRow = useLiveQuery(async () => (await db.settings.get("onboarding")) ?? null, []);
   const anchorsRow = useLiveQuery(async () => (await db.settings.get("ytdAnchors")) ?? null, []);
+  const lastBackupRow = useLiveQuery(async () => (await db.settings.get("lastBackupAt")) ?? null, []);
+  const paydayDelayRow = useLiveQuery(async () => (await db.settings.get("paydayDelayDays")) ?? null, []);
   // Where onboarding drops the user ("Scan my schedule" → Shifts).
   const [postOnboardTab, setPostOnboardTab] = useState<"home" | "shifts">("home");
 
@@ -71,7 +75,9 @@ export default function App() {
     appearanceRow === undefined ||
     answersRow === undefined ||
     onboardingRow === undefined ||
-    anchorsRow === undefined
+    anchorsRow === undefined ||
+    lastBackupRow === undefined ||
+    paydayDelayRow === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -142,6 +148,8 @@ export default function App() {
       appearance={appearance}
       answers={answers}
       ytdAnchors={ytdAnchors}
+      lastBackupAt={lastBackupRow ? Number(lastBackupRow.value) || null : null}
+      paydayDelayDays={paydayDelayRow ? Number(paydayDelayRow.value) || FAIRVIEW_RT_PRESET.facility.paydayDelayDays : FAIRVIEW_RT_PRESET.facility.paydayDelayDays}
       initialTab={postOnboardTab}
     />
   );
@@ -156,6 +164,8 @@ function PeriodWorkspace({
   appearance,
   answers,
   ytdAnchors,
+  lastBackupAt,
+  paydayDelayDays,
   initialTab = "home",
 }: {
   record: PayPeriod;
@@ -166,6 +176,8 @@ function PeriodWorkspace({
   appearance: AppearanceMode;
   answers: Record<string, QuestionAnswer>;
   ytdAnchors: Record<string, YtdAnchor>;
+  lastBackupAt: number | null;
+  paydayDelayDays: number;
   initialTab?: "home" | "shifts";
 }) {
   const [tab, setTab] = useState<string>(initialTab);
@@ -330,17 +342,53 @@ function PeriodWorkspace({
     }
   };
 
-  const exportBackup = async () => {
+  const backupJson = async () => {
     const all = await db.periods.toArray();
     const others = await db.otherIncome.toArray();
-    const json = JSON.stringify(buildBackup(all, others, new Date().toISOString()), null, 2);
-    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    return JSON.stringify(buildBackup(all, others, new Date().toISOString()), null, 2);
+  };
+  const stampBackup = () => void db.settings.put({ key: "lastBackupAt", value: String(Date.now()) });
+  const backupName = () => `rt-pay-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+  const exportBackup = async () => {
+    const url = URL.createObjectURL(new Blob([await backupJson()], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `rt-pay-auditor-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = backupName();
+    a.click();
+    URL.revokeObjectURL(url);
+    stampBackup();
+  };
+
+  // The two-tap path: share sheet → Save to Files → iCloud Drive.
+  const shareBackup = async () => {
+    const file = new File([await backupJson()], backupName(), { type: "application/json" });
+    const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+    if (nav.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "RT Pay backup" });
+        stampBackup();
+      } catch {
+        /* user closed the sheet — no stamp, no error */
+      }
+    } else {
+      await exportBackup(); // desktop browsers: plain download, still stamped
+    }
+  };
+
+  const downloadPaydays = () => {
+    const ics = buildPaydayCalendar(upcomingPaydays(record.endDate, paydayDelayDays, 13));
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "rt-pay-paydays.ics";
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  // Nudge once real data exists and the last backup is old news.
+  const backupStale =
+    periods.length > 1 && (lastBackupAt === null || Date.now() - lastBackupAt > 28 * 24 * 60 * 60 * 1000);
 
   const importFile = async (file: File) => {
     try {
@@ -360,7 +408,9 @@ function PeriodWorkspace({
   };
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-2xl px-5 pb-28 pt-[max(20px,env(safe-area-inset-top))] md:max-w-5xl md:pb-12">
+    // print:hidden — printing is reserved for the proof packet, which
+    // portals outside this shell and prints alone.
+    <div className="mx-auto min-h-screen w-full max-w-2xl px-5 pb-28 pt-[max(20px,env(safe-area-inset-top))] print:hidden md:max-w-5xl md:pb-12">
       <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
 
       <main key={tab} className="page-enter md:mt-5">
@@ -389,6 +439,8 @@ function PeriodWorkspace({
             onYtdAnchor={saveYtdAnchor}
             ytd={ytd}
             year={year}
+            paydayDelayDays={paydayDelayDays}
+            backupStale={backupStale}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 2)}
           />
@@ -447,12 +499,18 @@ function PeriodWorkspace({
                 await setCurrentPeriodId(remaining[0].id);
               }
             }}
+            onRestorePeriod={(period) => void db.periods.add(period)}
             onAddOther={() => void db.otherIncome.add(newOtherIncome())}
             onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
             onDeleteOther={(id) => void db.otherIncome.delete(id)}
             onExport={() => void exportBackup()}
             onImportFile={(f) => void importFile(f)}
             importStatus={importStatus}
+            lastBackupAt={lastBackupAt}
+            onShareBackup={() => void shareBackup()}
+            onDownloadPaydays={downloadPaydays}
+            paydayDelay={String(paydayDelayDays)}
+            onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
           />
         )}
       </main>

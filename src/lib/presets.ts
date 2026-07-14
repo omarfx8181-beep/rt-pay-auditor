@@ -23,6 +23,8 @@ export interface FacilityProfile {
   timekeeping: string;
   payCycle: "biweekly";
   periodDays: number;
+  /** Days from period end to the money landing (Fairview: the Friday after). */
+  paydayDelayDays: number;
   /**
    * The stub codes this facility uses, by engine line key. Receipts and
    * the HR email speak these; default views never do.
@@ -62,6 +64,7 @@ export const FAIRVIEW_RT_PRESET: PayRulesPreset = {
     timekeeping: "Kronos",
     payCycle: "biweekly",
     periodDays: 14,
+    paydayDelayDays: 5,
     codes: { bonus548: "548", charge: "308", premium: "320" },
   },
   role: {

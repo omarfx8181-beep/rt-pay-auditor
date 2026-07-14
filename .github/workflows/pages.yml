@@ -30,6 +30,9 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - run: npm test
+      # Flow tests over the production build — a failed flow blocks deploy.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - run: npm run build
         env:
           VITE_BASE: /rt-pay-auditor/
