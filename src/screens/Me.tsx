@@ -117,30 +117,36 @@ function StubScanPanel({
     }
   };
 
-  if (!apiKey) {
-    return (
-      <p className="text-footnote text-ink-dim">
-        Uploading stubs needs your Anthropic API key (Me → Schedule scan) — the files go straight from your browser to
-        the API with your key.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-3">
-      <label className="btn btn-ghost pressable cursor-pointer text-xs">
-        <FileScan size={14} /> Upload stub PDFs / screenshots
-        <input
-          type="file"
-          accept="application/pdf,.pdf,image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            e.target.value = "";
+      {apiKey ? (
+        <label className="btn btn-ghost pressable cursor-pointer text-xs">
+          <FileScan size={14} /> Scan stub PDFs or photos
+          <input
+            type="file"
+            accept="application/pdf,.pdf,image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) void handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      ) : (
+        <button
+          onClick={() => {
+            setState({
+              status: "error",
+              msg: "Scanning needs your Anthropic API key — it's the Scans card just above. Add it once and this button does the rest.",
+            });
+            document.getElementById("scan-credentials")?.scrollIntoView({ behavior: "smooth", block: "center" });
           }}
-        />
-      </label>
+          className="btn btn-ghost pressable text-xs"
+        >
+          <FileScan size={14} /> Scan stub PDFs or photos
+        </button>
+      )}
 
       {state.status === "working" && (
         <div className="flex items-center gap-2 text-sm text-accent">
@@ -373,8 +379,9 @@ export default function Me({
         </div>
       </Card>
 
-      {/* ---- schedule scan credentials ---- */}
-      <Card title="Schedule scan — your credentials, your device">
+      {/* ---- scan credentials (schedule + stub scans share these) ---- */}
+      <div id="scan-credentials">
+      <Card title="Scans — your credentials, your device">
         <p className="text-sm">
           Best way to pull shifts: your ScheduleAnywhere <strong>calendar feed</strong> — in ScheduleAnywhere go to
           Employee → iCalendar → Copy URL. No API key needed. Both values below live only in this browser: never in the
@@ -396,8 +403,8 @@ export default function Me({
           </label>
         </div>
         <p className="mt-4 text-sm">
-          Screenshot scanning is the fallback (schedule grids the feed doesn't cover). It uses your own Anthropic API
-          key, sending screenshots straight from your browser to the API.
+          The Anthropic API key powers every scan — schedule screenshots, stub photos on the check screen, and the
+          bulk stub upload below. Images go straight from your browser to the API; nothing is stored anywhere else.
         </p>
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <label className="flex min-w-64 flex-1 flex-col sm:max-w-md">
@@ -423,6 +430,7 @@ export default function Me({
           </button>
         </div>
       </Card>
+      </div>
 
       <Card title="Appearance">
         <div className="flex gap-1.5">
@@ -620,9 +628,9 @@ export default function Me({
           </Card>
 
           <Disclosure
-            title="Add your year — stubs in bulk"
+            title="Add your year — scan old stubs"
             icon={<ReceiptText size={13} className="text-accent" />}
-            hint="Upload a year of stub PDFs at once, or type them one per period."
+            hint="Scan a whole year of stub PDFs or photos at once — or type each one by hand."
           >
             <div className="space-y-4">
               <StubScanPanel apiKey={apiKey} periods={periods} onLogPastStub={onLogPastStub} />

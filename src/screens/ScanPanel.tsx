@@ -92,7 +92,7 @@ export default function ScanPanel({
       }
       if (!images.length) return;
       if (!apiKey) {
-        throw new Error("Screenshot scanning needs your Anthropic API key — add it under Me → Schedule scan, or pull from the calendar feed instead.");
+        throw new Error("Screenshot scanning needs your Anthropic API key — add it under Me → Scans, or pull from the calendar feed instead.");
       }
       setScan({ status: "working", msg: `Reading ${images.length} screenshot${images.length > 1 ? "s" : ""}…` });
       const raw = await parseScheduleImages(images, apiKey);
@@ -169,7 +169,7 @@ export default function ScanPanel({
         <p className="mt-2 text-[11px] text-ink-dim">
           {feedUrl
             ? `Feed pulls shifts posted for ${dayLabel(periodStart)} – ${dayLabel(periodEnd)} — no API key needed. `
-            : "Best way: add your ScheduleAnywhere calendar-feed URL under Me → Schedule scan (no API key needed). "}
+            : "Best way: add your ScheduleAnywhere calendar-feed URL under Me → Scans (no API key needed). "}
           Screenshots also work{apiKey ? "" : " once an Anthropic API key is set in Me"} · scheduled hours take the{" "}
           {cfg.mealDeductHours} hr meal off shifts &gt; {cfg.mealThresholdHours} hrs.
         </p>

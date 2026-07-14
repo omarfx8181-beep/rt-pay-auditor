@@ -72,14 +72,6 @@ export default function StubFillPanel({
     setState({ status: "idle" });
   };
 
-  if (!apiKey) {
-    return (
-      <p className="text-footnote text-ink-dim">
-        Tip: add your Anthropic API key in Me → Schedule scan and this check can fill itself from a photo of the stub.
-      </p>
-    );
-  }
-
   return (
     <CalloutCard tone="accent">
       <Eyebrow accent className="mb-1 flex items-center gap-1.5">
@@ -92,19 +84,33 @@ export default function StubFillPanel({
             Snap the stub — we'll read every line, file it into the right pay period, and note the year-to-date totals.
             The photo goes straight from your browser to the API with your key; nothing is stored anywhere.
           </p>
-          <label className="btn btn-primary pressable mt-3 cursor-pointer">
-            <Camera size={16} /> Scan the stub
-            <input
-              type="file"
-              accept="application/pdf,.pdf,image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) void handleFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          {apiKey ? (
+            <label className="btn btn-primary pressable mt-3 cursor-pointer">
+              <Camera size={16} /> Scan the stub
+              <input
+                type="file"
+                accept="application/pdf,.pdf,image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) void handleFiles(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          ) : (
+            <button
+              onClick={() =>
+                setState({
+                  status: "error",
+                  msg: "One-time setup: add your Anthropic API key in Me → Scans, then this button reads stubs by itself.",
+                })
+              }
+              className="btn btn-primary pressable mt-3"
+            >
+              <Camera size={16} /> Scan the stub
+            </button>
+          )}
         </>
       )}
 
