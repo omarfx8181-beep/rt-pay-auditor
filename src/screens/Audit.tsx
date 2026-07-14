@@ -14,6 +14,7 @@ import type { AuditRow } from "../lib/audit.ts";
 import type { LineDelta, Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
+import StubFillPanel from "./StubFillPanel.tsx";
 
 /** The clean-audit celebration: a checkmark that draws itself. */
 function CheckDraw() {
@@ -134,6 +135,7 @@ export default function Audit({
   periodEnd,
   identity,
   onSaveIdentity,
+  apiKey,
 }: {
   rows: AuditRow[];
   actual: Record<string, string>;
@@ -145,6 +147,7 @@ export default function Audit({
   periodEnd: string;
   identity: EmailIdentity;
   onSaveIdentity: (identity: EmailIdentity) => void;
+  apiKey: string;
 }) {
   const emailRef = useRef<HTMLDivElement>(null);
 
@@ -186,9 +189,16 @@ export default function Audit({
         onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
       />
 
+      <StubFillPanel
+        apiKey={apiKey}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+        onFill={(filled) => setActual((a) => ({ ...a, ...filled }))}
+      />
+
       <p className="text-subhead text-ink-dim">
-        Type each line from your stub. Anything more than a nickel off gets flagged — in dollars, and in bonus units
-        where that's what was shorted.
+        Or type each line from your stub. Anything more than a nickel off gets flagged — in dollars, and in bonus
+        units where that's what was shorted.
       </p>
 
       <Card>

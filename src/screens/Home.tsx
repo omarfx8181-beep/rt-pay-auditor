@@ -155,6 +155,7 @@ export default function Home({
   setWhatIf,
   identity,
   onSaveIdentity,
+  apiKey,
   ytd,
   year,
   onGoToShifts,
@@ -177,6 +178,7 @@ export default function Home({
   setWhatIf: (wi: WhatIfDraft) => void;
   identity: EmailIdentity;
   onSaveIdentity: (identity: EmailIdentity) => void;
+  apiKey: string;
   ytd: YtdRollup;
   year: string;
   onGoToShifts: () => void;
@@ -209,6 +211,7 @@ export default function Home({
             periodEnd={record.endDate}
             identity={identity}
             onSaveIdentity={onSaveIdentity}
+            apiKey={apiKey}
           />
         ) : (
           <BreakdownCards period={period} net={net} cfgDraft={cfgDraft} />

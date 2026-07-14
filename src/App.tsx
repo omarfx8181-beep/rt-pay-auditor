@@ -300,6 +300,7 @@ function PeriodWorkspace({
             setWhatIf={setWhatIf}
             identity={identity}
             onSaveIdentity={(id) => void db.settings.put({ key: "identity", value: JSON.stringify(id) })}
+            apiKey={apiKey}
             ytd={ytd}
             year={year}
             onGoToShifts={() => selectTab("shifts", 1)}

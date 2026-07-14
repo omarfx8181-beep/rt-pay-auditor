@@ -13,6 +13,16 @@ v1 lives at `reference/v1-artifact.jsx` — a working single-file React artifact
 5. The schedule-scan feature calls the Anthropic API with Omar's own key, entered in Settings and stored locally only. Never hardcode, never commit; .gitignore any env files.
 6. Pay rules change (bonus tiers move week to week). Everything that can change is config, not constants.
 
+## Current state (V3, July 2026)
+V3 shipped: a presentation/IA rebuild per `design/V3_DESIGN_BRIEF.md`, with one deviation Omar chose at the M2 review gate — **colors stayed Knockdown** (terracotta/cream/espresso, `design/tokens.md` §2) on the V3 structure (3-tab IA, SF Pro/Inter single family, V3 type scale, 20px cards). Do not swap the palette again without asking.
+
+- IA: **Home "This Check"** (period picker, status hero, Check my paycheck → verdict, breakdown, what-if) · **Shifts** (cards + bottom-sheet editor, schedule scan) · **Me** (pay rules in plain rows, Advanced disclosure for all tax config, open questions, periods/data/backup). First run shows a 4-screen onboarding (skippable; `settings.onboarding`).
+- The verdict is a pure lib (`src/lib/verdict.ts`, tested): green/red/amber; only EARNINGS shortfalls make a red and sum into "you're owed" — gross/net echoes and stub tax drift never double-count. Red opens a prewritten `mailto:` (generator: `src/lib/hrEmail.ts`).
+- Plain language is a hard rule in default views; payroll codes (548/308/320) appear only in breakdown *receipts* (two taps down), `techLabel`s, and the HR email. Label map: `src/lib/labels.ts`.
+- Pay rules are preset DATA: `src/lib/presets.ts` (Facility Profile + Role, `presetSource`/`version`; Fairview RT is preset #1). `DEFAULT_CFG_DRAFT`/`DEFAULT_TIERS` are aliases into it; a presets test pins `draftToConfig(preset.cfgDraft) === DEFAULT_CFG`.
+- Scans (all with Omar's own key, browser → API only): schedule screenshots/.ics (`scan.ts`, `ical.ts`), bulk past-stub gross/net (`stubScan.ts`), and current-stub line extraction that auto-fills the check (`stubFill.ts` — the mapper is code, tested; the model only reads).
+- Deploy: push to `main` → `.github/workflows/pages.yml` (tests must pass) → gh-pages → https://omarfx8181-beep.github.io/rt-pay-auditor/.
+
 ## Stack
 Vite + React 19 + TypeScript + Tailwind + Framer Motion (Omar's standard web stack). Vitest for engine tests. PWA: manifest + service worker, installable on iPhone/iPad.
 
