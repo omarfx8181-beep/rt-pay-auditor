@@ -12,7 +12,7 @@ import type { CfgDraft } from "../lib/draft.ts";
 import type { AuditRow } from "../lib/audit.ts";
 import type { Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
-import { periodLabel, type PayPeriod, type YtdRollup } from "../lib/periods.ts";
+import { periodLabel, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
 import Audit from "./Audit.tsx";
@@ -156,6 +156,9 @@ export default function Home({
   identity,
   onSaveIdentity,
   apiKey,
+  onFillExisting,
+  onCreateAndFill,
+  onYtdAnchor,
   ytd,
   year,
   onGoToShifts,
@@ -179,6 +182,9 @@ export default function Home({
   identity: EmailIdentity;
   onSaveIdentity: (identity: EmailIdentity) => void;
   apiKey: string;
+  onFillExisting: (periodId: string, actual: Record<string, string>) => void;
+  onCreateAndFill: (startDate: string, endDate: string, actual: Record<string, string>) => void;
+  onYtdAnchor: (anchor: YtdAnchor) => void;
   ytd: YtdRollup;
   year: string;
   onGoToShifts: () => void;
@@ -212,6 +218,11 @@ export default function Home({
             identity={identity}
             onSaveIdentity={onSaveIdentity}
             apiKey={apiKey}
+            periods={periods}
+            currentId={record.id}
+            onFillExisting={onFillExisting}
+            onCreateAndFill={onCreateAndFill}
+            onYtdAnchor={onYtdAnchor}
           />
         ) : (
           <BreakdownCards period={period} net={net} cfgDraft={cfgDraft} />

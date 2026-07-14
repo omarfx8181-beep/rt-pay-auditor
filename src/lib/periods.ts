@@ -157,6 +157,54 @@ export function rollupYtd(periods: PayPeriod[], year: string, otherIncome: Other
   return rollup;
 }
 
+/* ---------------- YTD anchor (scanned from a stub's YTD column) ---------------- */
+
+/**
+ * A stub's own year-to-date totals, captured during a stub scan. The one
+ * number payroll and the app must agree on: if the app's periods through
+ * the same date sum to something else, a period is missing, duplicated,
+ * or still an estimate.
+ */
+export interface YtdAnchor {
+  year: string;
+  /** The period-end date the stub's YTD column runs through. */
+  asOfEnd: string;
+  grossCents: Cents;
+  netCents: Cents | null;
+  capturedAt: number;
+}
+
+export interface YtdThroughDate {
+  grossCents: Cents;
+  netCents: Cents;
+  periodCount: number;
+  /** Periods in range whose numbers are stub-true (real gross/net entered). */
+  stubCount: number;
+}
+
+/**
+ * Fairview totals across periods ending in asOfEnd's year, through
+ * asOfEnd inclusive — same stub-outranks-estimate resolution as
+ * rollupYtd, so an anchor comparison is apples to apples.
+ */
+export function ytdThroughDate(periods: PayPeriod[], asOfEnd: string): YtdThroughDate {
+  const year = asOfEnd.slice(0, 4);
+  const out: YtdThroughDate = { grossCents: 0, netCents: 0, periodCount: 0, stubCount: 0 };
+  for (const p of periods) {
+    if (p.endDate.slice(0, 4) !== year || p.endDate > asOfEnd) continue;
+    const cfg = draftToConfig(p.cfgDraft);
+    const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
+    const net = computeNet(period.grossCents, cfg);
+    const actualGross = parseDollars(p.actual?.gross);
+    const actualNet = parseDollars(p.actual?.net);
+    out.periodCount += 1;
+    if (actualNet !== null) out.stubCount += 1;
+    out.grossCents += actualGross ?? period.grossCents;
+    out.netCents += actualNet ?? net.netCents;
+  }
+  return out;
+}
+
 /* ---------------- backup export / import ---------------- */
 
 export interface BackupFile {

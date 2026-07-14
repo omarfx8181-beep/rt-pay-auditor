@@ -12,6 +12,7 @@ import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig
 import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
+import type { FutureBatch } from "../lib/scanRouting.ts";
 import { Card, Sheet, StatTile } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
 
@@ -280,6 +281,7 @@ export default function Shifts({
   feedUrl,
   periodStart,
   periodEnd,
+  onFileFuture,
 }: {
   shifts: ShiftDraft[];
   setShifts: (updater: (arr: ShiftDraft[]) => ShiftDraft[]) => void;
@@ -292,6 +294,7 @@ export default function Shifts({
   feedUrl: string;
   periodStart: string;
   periodEnd: string;
+  onFileFuture: (batches: FutureBatch[]) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
@@ -319,6 +322,7 @@ export default function Shifts({
         periodEnd={periodEnd}
         cfg={cfg}
         onApply={(mode, drafts) => setShifts((arr) => (mode === "replace" ? drafts : [...arr, ...drafts]))}
+        onFileFuture={onFileFuture}
       />
 
       {shifts.length === 0 ? (

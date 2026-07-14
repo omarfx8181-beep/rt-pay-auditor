@@ -29,7 +29,7 @@ import {
 import { computeNet, computePeriod, type BonusTier } from "../lib/engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, num, todayIso, uid, type CfgDraft } from "../lib/draft.ts";
 import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
-import { periodLabel, prevPeriodRange, type OtherIncomeDraft, type PayPeriod, type YtdRollup } from "../lib/periods.ts";
+import { periodLabel, prevPeriodRange, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
@@ -211,6 +211,7 @@ export default function Me({
   periods,
   currentId,
   ytd,
+  ytdAnchor,
   otherIncome,
   onSelect,
   onCreateNext,
@@ -241,6 +242,7 @@ export default function Me({
   periods: PayPeriod[];
   currentId: string;
   ytd: YtdRollup;
+  ytdAnchor: YtdAnchor | null;
   otherIncome: OtherIncomeDraft[];
   onSelect: (id: string) => void;
   onCreateNext: () => void;
@@ -547,6 +549,30 @@ export default function Me({
               Fairview {fmtCents(ytd.grossCents)} ({ytd.stubCount}/{ytd.periodCount} stub-true) · other{" "}
               {fmtCents(ytd.otherGrossCents)} · real stub numbers always outrank estimates.
             </p>
+            {ytdAnchor &&
+              (() => {
+                const through = ytdThroughDate(periods, ytdAnchor.asOfEnd);
+                const deltaCents = through.grossCents - ytdAnchor.grossCents;
+                const ok = Math.abs(deltaCents) <= 5;
+                return (
+                  <p className={`mt-2 border-t border-surface-line/60 pt-2 text-footnote ${ok ? "text-pos" : "text-amber"}`}>
+                    {ok ? (
+                      <>
+                        ✓ Your newest stub agrees: {fmtCents(ytdAnchor.grossCents)} made through{" "}
+                        {dayLabel(ytdAnchor.asOfEnd)}.
+                      </>
+                    ) : (
+                      <>
+                        Your newest stub says {fmtCents(ytdAnchor.grossCents)} made through {dayLabel(ytdAnchor.asOfEnd)} —
+                        the app has {fmtCents(through.grossCents)} across {through.periodCount} period
+                        {through.periodCount === 1 ? "" : "s"} ({deltaCents > 0 ? "+" : "−"}
+                        {fmtCents(Math.abs(deltaCents))}). A period may be missing, doubled, or still an estimate — scan
+                        or log its stub and this line turns green.
+                      </>
+                    )}
+                  </p>
+                );
+              })()}
           </Card>
 
           <Disclosure

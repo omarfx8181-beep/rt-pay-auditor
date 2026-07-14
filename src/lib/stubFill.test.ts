@@ -42,6 +42,8 @@ const REAL_STUB: StubLines = {
   ],
   gross: 8865.22,
   net: 5781.99,
+  ytdGross: 17768.03,
+  ytdNet: 11590.2,
 };
 
 describe("stubLinesToActual — the real stub maps onto every check line", () => {
@@ -78,6 +80,13 @@ describe("stubLinesToActual — the real stub maps onto every check line", () =>
     expect(r.unmatched).toHaveLength(0);
     expect(r.ignored).toEqual([{ label: "Imputed – Basic Term Life", amount: "1.81" }]);
     expect(r.periodEnd).toBe("2026-07-05");
+  });
+
+  test("the stub's YTD totals surface in cents — never mixed into the line fill", () => {
+    expect(r.ytdGrossCents).toBe(1776803);
+    expect(r.ytdNetCents).toBe(1159020);
+    expect(r.actual.ytdGross).toBeUndefined();
+    expect(stubLinesToActual({ ...REAL_STUB, ytdGross: null, ytdNet: null }).ytdGrossCents).toBeNull();
   });
 
   test("critical-illness insurance stays after-tax — never mistaken for the 548 bonus", () => {

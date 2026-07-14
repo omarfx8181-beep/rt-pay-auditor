@@ -14,7 +14,10 @@ import {
   rollupYtd,
   PERIOD_DAYS,
   type PayPeriod,
+  type YtdAnchor,
 } from "./lib/periods.ts";
+import type { FutureBatch } from "./lib/scanRouting.ts";
+import { scanRowsToDrafts } from "./lib/scan.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
 import { TabBar, type Tab } from "./ui/kit.tsx";
@@ -48,6 +51,7 @@ export default function App() {
   const appearanceRow = useLiveQuery(async () => (await db.settings.get("appearance")) ?? null, []);
   const answersRow = useLiveQuery(async () => (await db.settings.get("questionAnswers")) ?? null, []);
   const onboardingRow = useLiveQuery(async () => (await db.settings.get("onboarding")) ?? null, []);
+  const anchorsRow = useLiveQuery(async () => (await db.settings.get("ytdAnchors")) ?? null, []);
   // Where onboarding drops the user ("Scan my schedule" → Shifts).
   const [postOnboardTab, setPostOnboardTab] = useState<"home" | "shifts">("home");
 
@@ -66,7 +70,8 @@ export default function App() {
     feedUrlRow === undefined ||
     appearanceRow === undefined ||
     answersRow === undefined ||
-    onboardingRow === undefined
+    onboardingRow === undefined ||
+    anchorsRow === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -119,6 +124,12 @@ export default function App() {
   } catch {
     /* corrupt setting → all questions open */
   }
+  let ytdAnchors: Record<string, YtdAnchor> = {};
+  try {
+    if (anchorsRow) ytdAnchors = JSON.parse(anchorsRow.value) as Record<string, YtdAnchor>;
+  } catch {
+    /* corrupt setting → no anchors until the next stub scan */
+  }
   // key by period id: switching periods remounts the workspace with fresh drafts
   return (
     <PeriodWorkspace
@@ -130,6 +141,7 @@ export default function App() {
       feedUrl={feedUrlRow?.value ?? ""}
       appearance={appearance}
       answers={answers}
+      ytdAnchors={ytdAnchors}
       initialTab={postOnboardTab}
     />
   );
@@ -143,6 +155,7 @@ function PeriodWorkspace({
   feedUrl,
   appearance,
   answers,
+  ytdAnchors,
   initialTab = "home",
 }: {
   record: PayPeriod;
@@ -152,6 +165,7 @@ function PeriodWorkspace({
   feedUrl: string;
   appearance: AppearanceMode;
   answers: Record<string, QuestionAnswer>;
+  ytdAnchors: Record<string, YtdAnchor>;
   initialTab?: "home" | "shifts";
 }) {
   const [tab, setTab] = useState<string>(initialTab);
@@ -247,6 +261,75 @@ function PeriodWorkspace({
     });
   };
 
+  /* ---- scan routing: fills and shifts land in the period they belong to ---- */
+
+  /** Rules snapshot for a period created from a scan: nearest in time. */
+  const nearestCfg = (endDate: string) => {
+    const ms = (s: string) => new Date(s + "T12:00:00").getTime();
+    return periods.reduce((a, b) => (Math.abs(ms(a.endDate) - ms(endDate)) <= Math.abs(ms(b.endDate) - ms(endDate)) ? a : b));
+  };
+
+  const fillOtherPeriod = async (id: string, filled: Record<string, string>) => {
+    const target = periods.find((p) => p.id === id);
+    if (!target) return;
+    await db.periods.update(id, { actual: { ...target.actual, ...filled }, updatedAt: Date.now() });
+    await setCurrentPeriodId(id); // open the period the stub belongs to
+  };
+
+  const createPeriodAndFill = async (startDate: string, endDate: string, filled: Record<string, string>) => {
+    const nearest = nearestCfg(endDate);
+    const now = Date.now();
+    const fresh: PayPeriod = {
+      id: crypto.randomUUID(),
+      startDate,
+      endDate,
+      shifts: [],
+      leave: [],
+      actual: filled,
+      cfgDraft: { ...nearest.cfgDraft, eveningHours: "0" },
+      tiers: nearest.tiers,
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await db.periods.add(fresh);
+    await setCurrentPeriodId(fresh.id);
+  };
+
+  /** Keep the newest stub's YTD per year — older scans never regress it. */
+  const saveYtdAnchor = (anchor: YtdAnchor) => {
+    const existing = ytdAnchors[anchor.year];
+    if (existing && existing.asOfEnd > anchor.asOfEnd) return;
+    void db.settings.put({ key: "ytdAnchors", value: JSON.stringify({ ...ytdAnchors, [anchor.year]: anchor }) });
+  };
+
+  /** Schedule rows for upcoming periods: find-or-create each window, append. */
+  const fileFutureShifts = async (batches: FutureBatch[]) => {
+    for (const batch of [...batches].sort((a, b) => (a.startDate < b.startDate ? -1 : 1))) {
+      const drafts = scanRowsToDrafts(batch.rows);
+      const existing = periods.find((p) => batch.startDate >= p.startDate && batch.startDate <= p.endDate);
+      if (existing) {
+        await db.periods.update(existing.id, { shifts: [...existing.shifts, ...drafts], updatedAt: Date.now() });
+      } else {
+        const nearest = nearestCfg(batch.endDate);
+        const now = Date.now();
+        await db.periods.add({
+          id: crypto.randomUUID(),
+          startDate: batch.startDate,
+          endDate: batch.endDate,
+          shifts: drafts,
+          leave: [],
+          actual: {},
+          cfgDraft: { ...nearest.cfgDraft, eveningHours: "0" },
+          tiers: nearest.tiers,
+          archived: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+  };
+
   const exportBackup = async () => {
     const all = await db.periods.toArray();
     const others = await db.otherIncome.toArray();
@@ -301,6 +384,9 @@ function PeriodWorkspace({
             identity={identity}
             onSaveIdentity={(id) => void db.settings.put({ key: "identity", value: JSON.stringify(id) })}
             apiKey={apiKey}
+            onFillExisting={(id, filled) => void fillOtherPeriod(id, filled)}
+            onCreateAndFill={(startDate, endDate, filled) => void createPeriodAndFill(startDate, endDate, filled)}
+            onYtdAnchor={saveYtdAnchor}
             ytd={ytd}
             year={year}
             onGoToShifts={() => selectTab("shifts", 1)}
@@ -320,6 +406,7 @@ function PeriodWorkspace({
             feedUrl={feedUrl}
             periodStart={record.startDate}
             periodEnd={record.endDate}
+            onFileFuture={(batches) => void fileFutureShifts(batches)}
           />
         )}
         {tab === "me" && (
@@ -340,6 +427,7 @@ function PeriodWorkspace({
             periods={periods}
             currentId={record.id}
             ytd={ytd}
+            ytdAnchor={ytdAnchors[year] ?? null}
             otherIncome={otherIncome}
             onSelect={(id) => void setCurrentPeriodId(id)}
             onCreateNext={() => void createNext()}

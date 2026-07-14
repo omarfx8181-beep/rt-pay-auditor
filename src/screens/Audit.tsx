@@ -13,6 +13,7 @@ import { CalloutCard, Card } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
 import type { LineDelta, Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
+import type { PayPeriod, YtdAnchor } from "../lib/periods.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
 
@@ -136,6 +137,11 @@ export default function Audit({
   identity,
   onSaveIdentity,
   apiKey,
+  periods,
+  currentId,
+  onFillExisting,
+  onCreateAndFill,
+  onYtdAnchor,
 }: {
   rows: AuditRow[];
   actual: Record<string, string>;
@@ -148,6 +154,11 @@ export default function Audit({
   identity: EmailIdentity;
   onSaveIdentity: (identity: EmailIdentity) => void;
   apiKey: string;
+  periods: PayPeriod[];
+  currentId: string;
+  onFillExisting: (periodId: string, actual: Record<string, string>) => void;
+  onCreateAndFill: (startDate: string, endDate: string, actual: Record<string, string>) => void;
+  onYtdAnchor: (anchor: YtdAnchor) => void;
 }) {
   const emailRef = useRef<HTMLDivElement>(null);
 
@@ -191,9 +202,14 @@ export default function Audit({
 
       <StubFillPanel
         apiKey={apiKey}
+        periods={periods}
+        currentId={currentId}
         periodStart={periodStart}
         periodEnd={periodEnd}
-        onFill={(filled) => setActual((a) => ({ ...a, ...filled }))}
+        onFillCurrent={(filled) => setActual((a) => ({ ...a, ...filled }))}
+        onFillExisting={onFillExisting}
+        onCreateAndFill={onCreateAndFill}
+        onYtdAnchor={onYtdAnchor}
       />
 
       <p className="text-subhead text-ink-dim">

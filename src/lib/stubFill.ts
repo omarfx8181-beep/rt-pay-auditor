@@ -22,6 +22,9 @@ export interface StubLines {
   aftertax: StubLineItem[];
   gross: number | null;
   net: number | null;
+  /** The stub's own YTD column TOTALS — the only YTD values we read. */
+  ytdGross: number | null;
+  ytdNet: number | null;
 }
 
 export const stubFillInstruction =
@@ -33,11 +36,12 @@ export const stubFillInstruction =
   '"taxes":[{"label":"...","amount":123.45}],' +
   '"pretax":[{"label":"...","amount":123.45}],' +
   '"aftertax":[{"label":"...","amount":123.45}],' +
-  '"gross":8865.22,"net":5781.99} ' +
+  '"gross":8865.22,"net":5781.99,"ytdGross":17768.03,"ytdNet":11590.20} ' +
   "Rules: earnings = every pay/earnings line (regular, overtime, double time, differentials, adders, bonuses, imputed income, paid leave). " +
   "taxes = withholding lines (federal, state, Social Security, Medicare, paid-leave premiums). " +
   "pretax = before-tax deductions (retirement, medical, dental, FSA). aftertax = after-tax deductions. " +
   "Keep every line as its own item with the stub's exact label — do NOT merge or sum lines. " +
+  "ytdGross/ytdNet are the ONLY year-to-date values to read: the YTD column's TOTAL gross and TOTAL net, null if not shown. " +
   "Amounts are plain positive numbers without $ or commas. Use null for gross/net only if truly not shown.";
 
 const asItems = (v: unknown): StubLineItem[] =>
@@ -80,6 +84,8 @@ export function parseStubLinesResponse(text: string): StubLines {
     aftertax: asItems(p.aftertax),
     gross: asMoney(p.gross),
     net: asMoney(p.net),
+    ytdGross: asMoney(p.ytdGross),
+    ytdNet: asMoney(p.ytdNet),
   };
   if (lines.earnings.length === 0 && lines.gross === null && lines.net === null) {
     throw new Error("No pay lines found — is that a full stub? Try a clearer photo.");
@@ -126,6 +132,9 @@ export interface StubFillResult {
   ignored: Array<{ label: string; amount: string }>;
   periodStart: string;
   periodEnd: string;
+  /** The stub's YTD totals in cents, when its YTD column was readable. */
+  ytdGrossCents: number | null;
+  ytdNetCents: number | null;
 }
 
 const toCents = (amount: number): number => Math.round(amount * 100);
@@ -187,7 +196,16 @@ export function stubLinesToActual(lines: StubLines): StubFillResult {
   const actual: Record<string, string> = {};
   for (const [key, c] of cents) actual[key] = centsStr(c);
 
-  return { actual, matched, unmatched, ignored, periodStart: lines.periodStart, periodEnd: lines.periodEnd };
+  return {
+    actual,
+    matched,
+    unmatched,
+    ignored,
+    periodStart: lines.periodStart,
+    periodEnd: lines.periodEnd,
+    ytdGrossCents: lines.ytdGross !== null ? toCents(lines.ytdGross) : null,
+    ytdNetCents: lines.ytdNet !== null ? toCents(lines.ytdNet) : null,
+  };
 }
 
 export async function scanStubForFill(files: File[], apiKey: string): Promise<StubLines> {

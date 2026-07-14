@@ -1,14 +1,17 @@
 /**
  * "Snap the stub — we'll fill it in": photo/PDF → every check line
- * typed for you (V3 follow-up to M5; the brief's core positioning).
- * The model only reads; the mapper in lib/stubFill.ts does the matching
- * and math, and nothing applies without the preview's say-so.
+ * typed for you. The stub files itself into the period it belongs to
+ * (created if the app has never seen it), and its YTD column anchors
+ * the year totals. The model only reads; lib/stubFill.ts does the
+ * matching and math, lib/scanRouting.ts picks the destination, and
+ * nothing applies without the preview's say-so.
  */
 import { useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { scanStubForFill, stubLinesToActual, type StubFillResult } from "../lib/stubFill.ts";
+import { matchStubPeriod, type StubRoute } from "../lib/scanRouting.ts";
+import { periodLabel, type PayPeriod, type YtdAnchor } from "../lib/periods.ts";
 import { plainLabel } from "../lib/labels.ts";
-import { dayLabel } from "../lib/format.ts";
 import { CalloutCard, Eyebrow } from "../ui/kit.tsx";
 
 type State =
@@ -19,14 +22,24 @@ type State =
 
 export default function StubFillPanel({
   apiKey,
+  periods,
+  currentId,
   periodStart,
   periodEnd,
-  onFill,
+  onFillCurrent,
+  onFillExisting,
+  onCreateAndFill,
+  onYtdAnchor,
 }: {
   apiKey: string;
+  periods: PayPeriod[];
+  currentId: string;
   periodStart: string;
   periodEnd: string;
-  onFill: (actual: Record<string, string>) => void;
+  onFillCurrent: (actual: Record<string, string>) => void;
+  onFillExisting: (periodId: string, actual: Record<string, string>) => void;
+  onCreateAndFill: (startDate: string, endDate: string, actual: Record<string, string>) => void;
+  onYtdAnchor: (anchor: YtdAnchor) => void;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
 
@@ -40,6 +53,23 @@ export default function StubFillPanel({
     } catch (err) {
       setState({ status: "error", msg: String(err instanceof Error ? err.message : err) });
     }
+  };
+
+  const apply = (result: StubFillResult, route: StubRoute) => {
+    if (route.kind === "current") onFillCurrent(result.actual);
+    else if (route.kind === "existing") onFillExisting(route.period.id, result.actual);
+    else onCreateAndFill(route.startDate, route.endDate, result.actual);
+    if (result.ytdGrossCents !== null) {
+      const asOfEnd = result.periodEnd !== "" ? result.periodEnd : periodEnd;
+      onYtdAnchor({
+        year: asOfEnd.slice(0, 4),
+        asOfEnd,
+        grossCents: result.ytdGrossCents,
+        netCents: result.ytdNetCents,
+        capturedAt: Date.now(),
+      });
+    }
+    setState({ status: "idle" });
   };
 
   if (!apiKey) {
@@ -59,8 +89,8 @@ export default function StubFillPanel({
       {state.status !== "preview" && (
         <>
           <p className="text-sm">
-            Snap the stub — we'll read every line and fill the check for you. The photo goes straight from your browser
-            to the API with your key; nothing is stored anywhere.
+            Snap the stub — we'll read every line, file it into the right pay period, and note the year-to-date totals.
+            The photo goes straight from your browser to the API with your key; nothing is stored anywhere.
           </p>
           <label className="btn btn-primary pressable mt-3 cursor-pointer">
             <Camera size={16} /> Scan the stub
@@ -92,66 +122,86 @@ export default function StubFillPanel({
         </div>
       )}
 
-      {state.status === "preview" && (
-        <div className="space-y-3">
-          <p className="text-sm">
-            We read {state.result.matched.length} line{state.result.matched.length === 1 ? "" : "s"} — look right?
-          </p>
+      {state.status === "preview" &&
+        (() => {
+          const { result } = state;
+          const route = matchStubPeriod(periods, currentId, result.periodStart, result.periodEnd);
+          const destLabel =
+            route.kind === "existing"
+              ? periodLabel(route.period.startDate, route.period.endDate)
+              : route.kind === "create"
+                ? periodLabel(route.startDate, route.endDate)
+                : periodLabel(periodStart, periodEnd);
+          return (
+            <div className="space-y-3">
+              <p className="text-sm">
+                We read {result.matched.length} line{result.matched.length === 1 ? "" : "s"} — look right?
+              </p>
 
-          {state.result.periodEnd !== "" && state.result.periodEnd !== periodEnd && (
-            <p className="rounded-xl bg-amber/10 px-3 py-2 text-footnote text-amber">
-              Heads up: this stub says {dayLabel(state.result.periodEnd)}, but you're checking{" "}
-              {dayLabel(periodStart)} – {dayLabel(periodEnd)}. Switch periods on Home if it's the wrong one.
-            </p>
-          )}
+              {route.kind === "existing" && (
+                <p className="rounded-xl bg-accent/10 px-3 py-2 text-footnote">
+                  This stub is <span className="font-semibold">{destLabel}</span> — it'll fill that period and open it.
+                </p>
+              )}
+              {route.kind === "create" && (
+                <p className="rounded-xl bg-accent/10 px-3 py-2 text-footnote">
+                  This stub is <span className="font-semibold">{destLabel}</span> — new to the app. We'll start that
+                  period and fill it.
+                </p>
+              )}
 
-          <div className="divide-y divide-accent/20 text-xs tabular-nums">
-            {state.result.matched.map((m, i) => (
-              <div key={m.key + i} className="flex items-baseline justify-between gap-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate">{plainLabel(m.key, m.label)}</span>
-                <span>${m.amount}</span>
+              <div className="divide-y divide-accent/20 text-xs tabular-nums">
+                {result.matched.map((m, i) => (
+                  <div key={m.key + i} className="flex items-baseline justify-between gap-3 py-1.5">
+                    <span className="min-w-0 flex-1 truncate">{plainLabel(m.key, m.label)}</span>
+                    <span>${m.amount}</span>
+                  </div>
+                ))}
+                {"gross" in result.actual && (
+                  <div className="flex items-baseline justify-between gap-3 py-1.5 font-semibold">
+                    <span>Total before taxes</span>
+                    <span>${result.actual.gross}</span>
+                  </div>
+                )}
+                {"net" in result.actual && (
+                  <div className="flex items-baseline justify-between gap-3 py-1.5 font-semibold">
+                    <span>Take-home</span>
+                    <span>${result.actual.net}</span>
+                  </div>
+                )}
+                {result.ytdGrossCents !== null && (
+                  <div className="flex items-baseline justify-between gap-3 py-1.5 text-ink-dim">
+                    <span>Year to date so far (anchors your year totals)</span>
+                    <span>${(result.ytdGrossCents / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                {result.unmatched.map((u, i) => (
+                  <div key={"u" + i} className="flex items-baseline justify-between gap-3 py-1.5 text-ink-dim/70">
+                    <span className="min-w-0 flex-1 truncate">{u.label} — didn't recognize, left out</span>
+                    <span>${u.amount}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-            {"gross" in state.result.actual && (
-              <div className="flex items-baseline justify-between gap-3 py-1.5 font-semibold">
-                <span>Total before taxes</span>
-                <span>${state.result.actual.gross}</span>
-              </div>
-            )}
-            {"net" in state.result.actual && (
-              <div className="flex items-baseline justify-between gap-3 py-1.5 font-semibold">
-                <span>Take-home</span>
-                <span>${state.result.actual.net}</span>
-              </div>
-            )}
-            {state.result.unmatched.map((u, i) => (
-              <div key={"u" + i} className="flex items-baseline justify-between gap-3 py-1.5 text-ink-dim/70">
-                <span className="min-w-0 flex-1 truncate">{u.label} — didn't recognize, left out</span>
-                <span>${u.amount}</span>
-              </div>
-            ))}
-          </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => {
-                onFill(state.result.actual);
-                setState({ status: "idle" });
-              }}
-              className="btn btn-primary pressable text-xs"
-            >
-              Fill the check ({Object.keys(state.result.actual).length} lines)
-            </button>
-            <button onClick={() => setState({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
-              Discard
-            </button>
-          </div>
-          <p className="text-footnote text-ink-dim">
-            Filling replaces just these lines — anything else you typed stays. Every number is still checked by the
-            engine, not the photo.
-          </p>
-        </div>
-      )}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => apply(result, route)} className="btn btn-primary pressable text-xs">
+                  {route.kind === "current"
+                    ? `Fill the check (${Object.keys(result.actual).length} lines)`
+                    : route.kind === "existing"
+                      ? `Fill ${destLabel}`
+                      : `Start ${destLabel} and fill it`}
+                </button>
+                <button onClick={() => setState({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
+                  Discard
+                </button>
+              </div>
+              <p className="text-footnote text-ink-dim">
+                Filling replaces just these lines — anything else you typed stays. Every number is still checked by the
+                engine, not the photo.
+              </p>
+            </div>
+          );
+        })()}
     </CalloutCard>
   );
 }
