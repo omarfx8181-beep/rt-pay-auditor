@@ -65,12 +65,16 @@ The design system is NOT invented here. Extract it from the Knockdown repo (Omar
 
 If the Knockdown repo path is unavailable, STOP and ask for 2–3 screenshots to extract tokens from instead. Do not proceed on a guessed palette.
 
-## 6 · Open pay-rule questions (amber until payroll answers)
+## 6 · Open pay-rule questions — ANSWERED by payroll, Jul 12 2026
 
 1. Transport bonus: $50 up to 4 h, $100 beyond — does door-to-door time count, or only transferred hours? (6/24 run: 3.0 h transferred but paid 2u.)
+   **Answer:** only transferred hours count toward the bonus duration; a transport day earns the premium adder for the WHOLE day; the bonus applies per run (every time you leave). App: premium hint updated; tiers already per-run.
 2. "12 = $500": confirmed as the 12-hour extra-shift tier (10 units)?
+   **Answer (verbatim): "15=500" — ambiguous (15 hours? 15 units? new tier?). Tier table left unchanged pending Omar's clarification.**
 3. Code 301 (Eve Mgr, −4.00/day): what does it remove? Blocks auto-computing evening hours.
+   **Answer:** it removes 4 evening-credit hours per day for straight-day staff. Evening hours stay a manual timecard copy — shifts don't carry punch spans, so the app can't derive them.
 4. Preceptor adder rate: stub shows YTD only; seeded $3/hr.
+   **Answer:** $3/hr confirmed. Warn styling removed in Me.
 
 ## 7 · Milestones (each ends with tests green + a demo)
 

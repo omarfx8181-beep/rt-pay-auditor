@@ -200,7 +200,7 @@ function ShiftSheet({
         />
         <AdderToggle
           label="Premium"
-          hint="Premium-pay shift."
+          hint="Premium-pay shift — a transport day counts the whole day."
           hours={s.premium}
           defaultHours={s.hours || "12"}
           onChange={(v) => onSet("premium", v)}

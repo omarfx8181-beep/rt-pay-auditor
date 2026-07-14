@@ -302,7 +302,7 @@ export default function Me({
         <RuleRow label="Evening pay" hint="Extra per hour on evening shifts." value={cfgDraft.eveningDiff} onChange={set("eveningDiff")} suffix="$/hr" />
         <RuleRow
           label="Evening hours this period"
-          hint="From your timecard for now — payroll hasn't explained how it's computed."
+          hint="Copied from your timecard each period — Kronos credits evening hours, then removes 4 a day for day staff, so shifts alone can't compute it."
           value={cfgDraft.eveningHours}
           onChange={set("eveningHours")}
           suffix="hrs"
@@ -312,7 +312,7 @@ export default function Me({
         <RuleRow label="Double time starts after" hint="Hours in a single day before double time kicks in." value={cfgDraft.dtDaily} onChange={set("dtDaily")} suffix="hrs" />
         <RuleRow label="Charge pay" hint="Extra per hour when you're charge." value={cfgDraft.chargeRate} onChange={set("chargeRate")} suffix="$/hr" />
         <RuleRow label="Premium pay" hint="Extra per hour on premium shifts." value={cfgDraft.premiumRate} onChange={set("premiumRate")} suffix="$/hr" />
-        <RuleRow label="Preceptor pay" hint="Extra per hour while precepting — rate not confirmed yet." value={cfgDraft.preceptorRate} onChange={set("preceptorRate")} suffix="$/hr" warn />
+        <RuleRow label="Preceptor pay" hint="Extra per hour while precepting — confirmed with payroll." value={cfgDraft.preceptorRate} onChange={set("preceptorRate")} suffix="$/hr" />
         <RuleRow label="Critical shift bonus" hint="What one bonus unit is worth." value={cfgDraft.unit548} onChange={set("unit548")} suffix="$/unit" />
       </Card>
 

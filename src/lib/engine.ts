@@ -103,7 +103,7 @@ export interface EngineConfig {
   eveningHours: number;
   chargeRateCents: Cents;
   premiumRateCents: Cents;
-  /** Unconfirmed — stub shows YTD only (SPEC §6 Q4). */
+  /** $3/hr confirmed by payroll, Jul 2026 (SPEC §6 Q4 — answered). */
   preceptorRateCents: Cents;
   unit548Cents: Cents;
   imputedCents: Cents;
