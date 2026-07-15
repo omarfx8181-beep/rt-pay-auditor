@@ -73,6 +73,48 @@ describe("YTD rollup — stub actuals outrank engine estimates", () => {
     expect(ytd.periodCount).toBe(1);
   });
 
+  test("deduction buckets: stub lines outrank engine estimates, and split gross − net exactly", () => {
+    const ytd = rollupYtd([demoPeriod()], "2026");
+    expect(ytd.bucketPeriodCount).toBe(1);
+    expect(ytd.bucketSkippedCount).toBe(0);
+    expect(ytd.taxesCents).toBe(229840); // fed+mn+ss+medicare+mnFam+mnMed off the stub
+    expect(ytd.pretaxCents).toBe(68398);
+    expect(ytd.aftertaxCents).toBe(9904);
+    expect(ytd.imputedCents).toBe(181);
+    expect(ytd.taxesCents + ytd.pretaxCents + ytd.aftertaxCents + ytd.imputedCents).toBe(ytd.grossCents - ytd.netCents);
+  });
+
+  test("deduction buckets: engine estimates fill in when no stub lines exist — still exact", () => {
+    const ytd = rollupYtd([demoPeriod({ actual: {} })], "2026");
+    expect(ytd.bucketPeriodCount).toBe(1);
+    expect(ytd.taxesCents + ytd.pretaxCents + ytd.aftertaxCents + ytd.imputedCents).toBe(886520 - 578197);
+  });
+
+  test("deduction buckets: line actuals alone are detail — a stub-filled period with no shifts splits", () => {
+    const filled = demoPeriod({ id: "pf", shifts: [] });
+    const ytd = rollupYtd([filled], "2026");
+    expect(ytd.bucketPeriodCount).toBe(1);
+    expect(ytd.taxesCents).toBe(229840);
+    expect(ytd.pretaxCents).toBe(68398);
+  });
+
+  test("deduction buckets: a totals-only period can't be split — counted, never guessed", () => {
+    const totalsOnly = demoPeriod({ id: "pt", shifts: [], actual: { gross: "3000", net: "2000" } });
+    const ytd = rollupYtd([demoPeriod(), totalsOnly], "2026");
+    expect(ytd.bucketPeriodCount).toBe(1);
+    expect(ytd.bucketSkippedCount).toBe(1);
+    expect(ytd.grossCents).toBe(886522 + 300000); // totals still count in the year
+    expect(ytd.taxesCents).toBe(229840); // buckets stay stub-true — no invented split
+  });
+
+  test("deduction buckets: an empty period contributes nothing and isn't 'totals only'", () => {
+    const empty = demoPeriod({ id: "pe", shifts: [], actual: {} });
+    const ytd = rollupYtd([empty], "2026");
+    expect(ytd.bucketPeriodCount).toBe(0);
+    expect(ytd.bucketSkippedCount).toBe(0);
+    expect(ytd.taxesCents).toBe(0);
+  });
+
   test("other income rolls into the totals; blank net means nothing withheld", () => {
     const ytd = rollupYtd([demoPeriod()], "2026", [
       { id: "o1", date: "2026-03-15", source: "Side gig", gross: "1,200.50", net: "1000", updatedAt: 1 },

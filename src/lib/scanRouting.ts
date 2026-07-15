@@ -71,7 +71,17 @@ export function summaryToAnchor(
     : null;
   const asOfEnd = anchorEndFor(summary.asOfDate, periods, paydayDelayDays);
   if (asOfEnd === "") return null;
-  return { year: asOfEnd.slice(0, 4), asOfEnd, grossCents: summary.grossCents, netCents, capturedAt };
+  return {
+    year: asOfEnd.slice(0, 4),
+    asOfEnd,
+    grossCents: summary.grossCents,
+    netCents,
+    taxesCents: summary.taxesCents,
+    pretaxCents: summary.pretaxCents,
+    aftertaxCents: summary.aftertaxCents,
+    imputedCents: summary.imputedCents,
+    capturedAt,
+  };
 }
 
 /* ---------------- schedule rows → periods ---------------- */

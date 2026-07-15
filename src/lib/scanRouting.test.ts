@@ -155,6 +155,16 @@ describe("YTD summary → year anchor (the Kronos 'Year to Date' screen)", () =>
     expect(a!.grossCents).toBe(10332011);
   });
 
+  test("payroll's own buckets ride along, and reconstruct net exactly", () => {
+    const a = summaryToAnchor(SUMMARY, PERIODS, 5, 1)!;
+    expect(a.taxesCents).toBe(2022579);
+    expect(a.pretaxCents).toBe(1251642);
+    expect(a.aftertaxCents).toBe(116851);
+    expect(a.imputedCents).toBe(2413);
+    // the Year card's "where the money went" split must sum with no residue
+    expect(a.grossCents - a.taxesCents! - a.pretaxCents! - a.aftertaxCents! - a.imputedCents!).toBe(a.netCents);
+  });
+
   test("no readable as-of date → the latest known period end", () => {
     expect(anchorEndFor("", PERIODS, 5)).toBe("2026-07-19");
   });

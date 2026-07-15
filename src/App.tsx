@@ -312,6 +312,9 @@ function PeriodWorkspace({
   const saveYtdAnchor = (anchor: YtdAnchor) => {
     const existing = ytdAnchors[anchor.year];
     if (existing && existing.asOfEnd > anchor.asOfEnd) return;
+    // Same as-of day: a stub-column capture (gross/net only) must not wipe
+    // a summary anchor that carries payroll's own deduction buckets.
+    if (existing && existing.asOfEnd === anchor.asOfEnd && existing.taxesCents != null && anchor.taxesCents == null) return;
     void db.settings.put({ key: "ytdAnchors", value: JSON.stringify({ ...ytdAnchors, [anchor.year]: anchor }) });
   };
 

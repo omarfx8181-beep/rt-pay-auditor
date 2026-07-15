@@ -94,7 +94,24 @@ export interface YtdRollup {
   dtHours: number;
   workedHours: number;
   leaveHours: number;
+  /**
+   * Where the Fairview money went, summed only across periods that carry
+   * line detail (shifts entered, or stub deduction lines filled in) —
+   * stub lines outrank engine estimates per line. A period logged as
+   * bare gross/net can't be split, so it counts in `bucketSkippedCount`
+   * instead of polluting the buckets.
+   */
+  bucketPeriodCount: number;
+  bucketSkippedCount: number;
+  taxesCents: Cents;
+  pretaxCents: Cents;
+  aftertaxCents: Cents;
+  imputedCents: Cents;
 }
+
+/** Audit-row keys for the six employee taxes; actual values live under these. */
+const TAX_KEYS = ["fed", "mn", "ss", "medicare", "mnFam", "mnMed"] as const;
+const DEDUCTION_KEYS = [...TAX_KEYS, "pretax", "aftertax"] as const;
 
 const parseDollars = (raw: string | undefined): Cents | null => {
   const trimmed = (raw ?? "").trim();
@@ -125,6 +142,12 @@ export function rollupYtd(periods: PayPeriod[], year: string, otherIncome: Other
     dtHours: 0,
     workedHours: 0,
     leaveHours: 0,
+    bucketPeriodCount: 0,
+    bucketSkippedCount: 0,
+    taxesCents: 0,
+    pretaxCents: 0,
+    aftertaxCents: 0,
+    imputedCents: 0,
   };
   for (const p of periods) {
     if (p.endDate.slice(0, 4) !== year) continue;
@@ -142,6 +165,27 @@ export function rollupYtd(periods: PayPeriod[], year: string, otherIncome: Other
     rollup.dtHours += period.dtHours;
     rollup.workedHours += period.workedHours;
     rollup.leaveHours += period.leaveHours;
+    const hasLineDetail =
+      p.shifts.length > 0 ||
+      (p.leave?.length ?? 0) > 0 ||
+      DEDUCTION_KEYS.some((k) => (p.actual?.[k] ?? "").trim() !== "");
+    if (hasLineDetail) {
+      const engineTax: Record<(typeof TAX_KEYS)[number], Cents> = {
+        fed: net.fedCents,
+        mn: net.mnCents,
+        ss: net.ssCents,
+        medicare: net.medicareCents,
+        mnFam: net.mnFamCents,
+        mnMed: net.mnMedCents,
+      };
+      rollup.bucketPeriodCount += 1;
+      for (const k of TAX_KEYS) rollup.taxesCents += parseDollars(p.actual?.[k]) ?? engineTax[k];
+      rollup.pretaxCents += parseDollars(p.actual?.pretax) ?? net.pretaxCents;
+      rollup.aftertaxCents += parseDollars(p.actual?.aftertax) ?? net.afterTaxCents;
+      rollup.imputedCents += net.imputedCents;
+    } else if (actualGross !== null || actualNet !== null) {
+      rollup.bucketSkippedCount += 1;
+    }
   }
   for (const o of otherIncome) {
     if (o.date.slice(0, 4) !== year) continue;
@@ -171,6 +215,15 @@ export interface YtdAnchor {
   asOfEnd: string;
   grossCents: Cents;
   netCents: Cents | null;
+  /**
+   * Payroll's own YTD buckets, when the anchor came from a scanned
+   * Year-to-Date summary (absent on stub-column anchors and anchors
+   * stored before these fields existed).
+   */
+  taxesCents?: Cents | null;
+  pretaxCents?: Cents | null;
+  aftertaxCents?: Cents | null;
+  imputedCents?: Cents | null;
   capturedAt: number;
 }
 

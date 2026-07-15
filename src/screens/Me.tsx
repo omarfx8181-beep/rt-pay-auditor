@@ -223,6 +223,132 @@ function StubScanPanel({
   );
 }
 
+/* ---- the year money story: pay in, everything taken out, take-home ---- */
+
+function MoneyRow({
+  label,
+  hint,
+  amount,
+  tone,
+  strong,
+}: {
+  label: string;
+  hint?: string;
+  amount: string;
+  tone?: "dim" | "pos";
+  strong?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <div className="min-w-0">
+        <div className={`text-subhead ${strong ? "font-semibold" : ""}`}>{label}</div>
+        {hint ? <div className="text-caption text-ink-dim">{hint}</div> : null}
+      </div>
+      <span
+        className={`shrink-0 text-subhead tabular-nums ${strong ? "font-semibold" : ""} ${
+          tone === "dim" ? "text-ink-dim" : tone === "pos" ? "text-pos" : ""
+        }`}
+      >
+        {amount}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Gross → every bucket that comes out → take-home. Payroll's own YTD
+ * split (a scanned Year-to-Date summary) outranks the app's per-period
+ * sums; the app path keeps its arithmetic exact with a "not itemized"
+ * line covering checks logged only as totals.
+ */
+function YearMoneyStory({ ytd, anchor }: { ytd: YtdRollup; anchor: YtdAnchor | null }) {
+  const payroll =
+    anchor !== null &&
+    anchor.taxesCents != null &&
+    anchor.pretaxCents != null &&
+    anchor.aftertaxCents != null &&
+    anchor.netCents !== null
+      ? {
+          source: `Payroll's own totals through ${dayLabel(anchor.asOfEnd)}, from your scanned year-to-date summary.`,
+          grossCents: anchor.grossCents,
+          taxesCents: anchor.taxesCents,
+          pretaxCents: anchor.pretaxCents,
+          aftertaxCents: anchor.aftertaxCents,
+          imputedCents: anchor.imputedCents ?? 0,
+          netCents: anchor.netCents,
+        }
+      : null;
+  if (payroll === null && (ytd.periodCount === 0 || ytd.grossCents <= 0)) return null;
+  const rows = payroll ?? {
+    source:
+      "App totals for Fairview checks — real stub numbers where you've scanned or typed them, estimates elsewhere. Scan a year-to-date summary and payroll's own split takes over.",
+    grossCents: ytd.grossCents,
+    taxesCents: ytd.taxesCents,
+    pretaxCents: ytd.pretaxCents,
+    aftertaxCents: ytd.aftertaxCents,
+    imputedCents: ytd.imputedCents,
+    netCents: ytd.netCents,
+  };
+  // Exactly zero on the payroll path (net was derived from these buckets);
+  // on the app path it's whatever the buckets can't account for.
+  const residualCents =
+    rows.grossCents - rows.taxesCents - rows.pretaxCents - rows.aftertaxCents - rows.imputedCents - rows.netCents;
+  const showResidual = Math.abs(residualCents) >= 100;
+  return (
+    <div className="mt-3 border-t border-surface-line/60 pt-3">
+      <Eyebrow>Where the money went</Eyebrow>
+      <div className="mt-2">
+        <MoneyRow label="Pay before anything comes out" amount={fmtCents(rows.grossCents)} />
+        <MoneyRow
+          label="Taxes withheld"
+          hint="Federal, Minnesota, Social Security, Medicare, MN paid leave"
+          amount={"−" + fmtCents(rows.taxesCents)}
+          tone="dim"
+        />
+        <MoneyRow
+          label="Retirement + health insurance"
+          hint="Pretax — 403(b), medical, dental, FSA"
+          amount={"−" + fmtCents(rows.pretaxCents)}
+          tone="dim"
+        />
+        <MoneyRow
+          label="After-tax deductions"
+          hint="Accident, critical illness, the rest"
+          amount={"−" + fmtCents(rows.aftertaxCents)}
+          tone="dim"
+        />
+        {rows.imputedCents !== 0 && (
+          <MoneyRow
+            label="Life insurance the hospital adds"
+            hint="Counted as pay for taxes — never cash in your check"
+            amount={"−" + fmtCents(rows.imputedCents)}
+            tone="dim"
+          />
+        )}
+        {showResidual && (
+          <MoneyRow
+            label={residualCents >= 0 ? "Not itemized yet" : "Line estimates run a little high"}
+            hint={
+              ytd.bucketSkippedCount > 0
+                ? `${ytd.bucketSkippedCount} check${ytd.bucketSkippedCount === 1 ? " is" : "s are"} logged as totals only — scan ${
+                    ytd.bucketSkippedCount === 1 ? "its stub" : "those stubs"
+                  } to fill this in`
+                : "The gap between stub totals and the app's line estimates"
+            }
+            amount={(residualCents >= 0 ? "−" : "+") + fmtCents(Math.abs(residualCents))}
+            tone="dim"
+          />
+        )}
+        <div className="mt-1.5 border-t border-surface-line/60 pt-2">
+          <MoneyRow label="Take-home" amount={fmtCents(rows.netCents)} tone="pos" strong />
+          <MoneyRow label="Taken out altogether" amount={fmtCents(rows.grossCents - rows.netCents)} tone="dim" />
+        </div>
+      </div>
+      <p className="mt-2 text-caption text-ink-dim">{rows.source}</p>
+    </div>
+  );
+}
+
 export default function Me({
   cfgDraft,
   setCfgDraft,
@@ -612,6 +738,7 @@ export default function Me({
               Fairview {fmtCents(ytd.grossCents)} ({ytd.stubCount}/{ytd.periodCount} stub-true) · other{" "}
               {fmtCents(ytd.otherGrossCents)} · real stub numbers always outrank estimates.
             </p>
+            <YearMoneyStory ytd={ytd} anchor={ytdAnchor} />
             {ytdAnchor &&
               (() => {
                 const through = ytdThroughDate(periods, ytdAnchor.asOfEnd);
