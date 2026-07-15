@@ -115,22 +115,77 @@ export function scanRowsToDrafts(rows: ScanRow[]): ShiftDraft[] {
   });
 }
 
-export const fileToB64 = (file: File): Promise<string> =>
+export const fileToB64 = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
-    reader.onerror = () => reject(new Error("Could not read " + file.name));
-    reader.readAsDataURL(file);
+    reader.onerror = () => reject(new Error("Could not read the file"));
+    reader.readAsDataURL(blob);
   });
 
-/** Images become image blocks; PDFs become document blocks. */
+/**
+ * The API caps a base64 image around 10 MB and a modern phone photo
+ * blows straight past that — shrink big images in the browser before
+ * upload. 2200px on the long edge keeps stub text crisp; the quality
+ * ladder keeps the result comfortably under the cap. Anything that
+ * can't be decoded (odd formats, non-browsers) falls back to the
+ * original file, and the API's own error still surfaces if that fails.
+ */
+const SHRINK_OVER_BYTES = 3.5 * 1024 * 1024;
+const MAX_EDGE_PX = 2200;
+
+async function shrinkImage(file: File): Promise<Blob | null> {
+  let bitmap: ImageBitmap;
+  try {
+    // "from-image" applies the photo's EXIF rotation where supported.
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);
+  } catch {
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.85, 0.7, 0.55]) {
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", quality));
+      if (blob && blob.size <= SHRINK_OVER_BYTES) return blob;
+    }
+    return null;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Images become image blocks (downscaled when huge); PDFs become document blocks. */
 export async function filesToContentBlocks(files: File[]): Promise<unknown[]> {
   const blocks: unknown[] = [];
   for (const f of files) {
     const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+    if (isPdf && f.size > 7 * 1024 * 1024) {
+      throw new Error(
+        `${f.name} is ${(f.size / 1024 / 1024).toFixed(1)} MB — too big to send. Export a smaller PDF, or screenshot its pages instead.`,
+      );
+    }
+    let payload: Blob = f;
+    let mediaType = isPdf ? "application/pdf" : f.type || "image/png";
+    if (!isPdf && f.size > SHRINK_OVER_BYTES) {
+      const shrunk = await shrinkImage(f);
+      if (shrunk) {
+        payload = shrunk;
+        mediaType = "image/jpeg";
+      }
+    }
     blocks.push({
       type: isPdf ? "document" : "image",
-      source: { type: "base64", media_type: isPdf ? "application/pdf" : f.type || "image/png", data: await fileToB64(f) },
+      source: { type: "base64", media_type: mediaType, data: await fileToB64(payload) },
     });
   }
   return blocks;
