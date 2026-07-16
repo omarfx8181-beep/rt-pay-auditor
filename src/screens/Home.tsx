@@ -93,7 +93,7 @@ function PeriodPicker({
   const [open, setOpen] = useState(false);
   const current = periods.find((p) => p.id === currentId) ?? periods[0];
   return (
-    <div className="relative">
+    <div id="tour-period" className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -280,6 +280,7 @@ export default function Home({
         </Card>
       ) : (
         <>
+          <div id="tour-hero">
           <Hero>
             <div className="flex items-start justify-between gap-3">
               <Eyebrow className="text-hero-fg/50">This check</Eyebrow>
@@ -308,8 +309,9 @@ export default function Home({
               <span>{fmtCents(period.grossCents)} before taxes</span>
             </div>
           </Hero>
+          </div>
 
-          <button onClick={() => setView("check")} className="btn btn-primary pressable w-full">
+          <button id="tour-check" onClick={() => setView("check")} className="btn btn-primary pressable w-full">
             Check my paycheck
           </button>
           {showPayday && <p className="text-center text-footnote text-ink-dim">{paydayLine}</p>}

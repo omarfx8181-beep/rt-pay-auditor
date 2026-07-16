@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-/** Load the app and clear first-run onboarding if it appears. */
+/** Load the app; clear first-run onboarding and the auto-offered tour. */
 export async function gotoApp(page: Page): Promise<void> {
   await page.goto("/", { waitUntil: "networkidle" });
   await page.waitForTimeout(800); // Dexie seed + first render
@@ -8,6 +8,11 @@ export async function gotoApp(page: Page): Promise<void> {
   if (await skip.count()) {
     await skip.click();
     await page.waitForTimeout(600);
+  }
+  const skipTour = page.locator('button:has-text("Skip tour")').first();
+  if (await skipTour.count()) {
+    await skipTour.click();
+    await page.waitForTimeout(400);
   }
 }
 

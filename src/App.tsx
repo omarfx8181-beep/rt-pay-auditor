@@ -30,6 +30,7 @@ import { FAIRVIEW_RT_PRESET } from "./lib/presets.ts";
 import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
 import Onboarding from "./screens/Onboarding.tsx";
+import Tour from "./screens/Tour.tsx";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
@@ -70,6 +71,18 @@ export default function App() {
     const t = setTimeout(() => setDeletedPeriod(null), 8000);
     return () => clearTimeout(t);
   }, [deletedPeriod]);
+
+  // The guided tour hops tabs, so it lives up here too. It offers itself
+  // exactly once (after onboarding), and replays from Me → How to use.
+  const tourRow = useLiveQuery(async () => (await db.settings.get("tourDone")) ?? null, []);
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  useEffect(() => {
+    if (tourRow === null && onboardingRow?.value === "done") setTourStep((s) => s ?? 0);
+  }, [tourRow, onboardingRow]);
+  const endTour = () => {
+    setTourStep(null);
+    void db.settings.put({ key: "tourDone", value: "1" });
+  };
 
   // Reflect the chosen appearance on <html>; "system" removes the override.
   const appearance = (appearanceRow?.value as AppearanceMode) || "system";
@@ -185,6 +198,7 @@ export default function App() {
         tab={tab}
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
+        onStartTour={() => setTourStep(0)}
       />
       {deletedPeriod && (
         <UndoToast
@@ -193,6 +207,7 @@ export default function App() {
           onDismiss={() => setDeletedPeriod(null)}
         />
       )}
+      {tourStep !== null && <Tour step={tourStep} onStep={setTourStep} onDone={endTour} setTab={setTab} />}
     </>
   );
 }
@@ -218,6 +233,7 @@ function PeriodWorkspace({
   tab,
   setTab,
   onDeletePeriod,
+  onStartTour,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -232,6 +248,7 @@ function PeriodWorkspace({
   tab: string;
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
+  onStartTour: () => void;
 }) {
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
@@ -584,6 +601,7 @@ function PeriodWorkspace({
             paydayDelay={String(paydayDelayDays)}
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
             onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
+            onStartTour={onStartTour}
             onDownloadYearCsv={downloadYearCsv}
           />
         )}

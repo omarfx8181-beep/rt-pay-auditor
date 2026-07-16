@@ -421,6 +421,7 @@ export default function Me({
   paydayDelay,
   onSetPaydayDelay,
   onReplayTour,
+  onStartTour,
   onDownloadYearCsv,
 }: {
   cfgDraft: CfgDraft;
@@ -461,6 +462,7 @@ export default function Me({
   paydayDelay: string;
   onSetPaydayDelay: (v: string) => void;
   onReplayTour: () => void;
+  onStartTour: () => void;
   onDownloadYearCsv: (year: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
@@ -523,7 +525,7 @@ export default function Me({
         <p className="mt-3 text-footnote text-ink-dim">Everything you enter stays on this device.</p>
       </Card>
 
-      <HowToCard onReplayTour={onReplayTour} />
+      <HowToCard onStartTour={onStartTour} onReplayTour={onReplayTour} />
 
       {/* ---- pay rules, in human rows ---- */}
       <div className="pt-3">
@@ -778,6 +780,7 @@ export default function Me({
       <div className="pt-3">
         <Eyebrow className="mb-2">Your periods & data</Eyebrow>
         <div className="space-y-3">
+          <div id="tour-year">
           <Card title={`Year total — ${yearView}`}>
             {years.length > 1 && (
               <div className="mb-3 flex flex-wrap gap-1.5">
@@ -851,6 +854,7 @@ export default function Me({
               Every period with gross, take-home, and the deduction split — for taxes or a loan file.
             </p>
           </Card>
+          </div>
 
           <Disclosure
             title="Add your year — scan old stubs"
@@ -967,6 +971,7 @@ export default function Me({
             </button>
           </Disclosure>
 
+          <div id="tour-backup">
           <Disclosure
             title="Backup — yours, on your device"
             icon={<Download size={13} className="text-accent" />}
@@ -1007,6 +1012,7 @@ export default function Me({
             </div>
             {importStatus && <p className="mt-2 text-footnote text-ink-dim">{importStatus}</p>}
           </Disclosure>
+          </div>
 
           <Card title="Paydays on your calendar">
             <p className="text-footnote text-ink-dim">

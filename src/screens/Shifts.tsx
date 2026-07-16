@@ -359,6 +359,7 @@ export default function Shifts({
         <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
       </div>
 
+      <div id="tour-scan">
       <ScanPanel
         apiKey={apiKey}
         feedUrl={feedUrl}
@@ -371,6 +372,7 @@ export default function Shifts({
         }}
         onFileFuture={onFileFuture}
       />
+      </div>
 
       {replaced && (
         <UndoToast
@@ -488,7 +490,9 @@ export default function Shifts({
         </div>
       </Card>
 
-      <OvertimeMeter period={period} cfg={cfg} />
+      <div id="tour-ot">
+        <OvertimeMeter period={period} cfg={cfg} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
         <StatTile label="Regular" value={fmtNum(period.regHours) + " h"} />

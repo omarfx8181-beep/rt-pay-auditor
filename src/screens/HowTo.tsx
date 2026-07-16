@@ -4,7 +4,7 @@
  * step by step, using the app's real button names so nothing has to be
  * guessed. Ends with a way to replay the intro tour.
  */
-import { BookOpen, RotateCcw } from "lucide-react";
+import { BookOpen, Footprints, RotateCcw } from "lucide-react";
 import { Disclosure } from "../ui/kit.tsx";
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
@@ -21,14 +21,17 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   );
 }
 
-export default function HowToCard({ onReplayTour }: { onReplayTour: () => void }) {
+export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: () => void; onReplayTour: () => void }) {
   return (
     <Disclosure
       title="How to use this app"
       icon={<BookOpen size={13} className="text-accent" />}
-      hint="The whole routine, step by step — two minutes to read."
+      hint="A guided walk of the real screens, or the whole routine in writing."
     >
       <div className="space-y-3">
+        <button onClick={onStartTour} className="btn btn-primary pressable w-full text-xs">
+          <Footprints size={14} /> Take the guided tour — it walks you through each step
+        </button>
         <Step n={1} title="The rhythm, every two weeks">
           <p>
             Add shifts as you work them (Shifts tab). On payday, open Home → <strong>Check my paycheck</strong> and
