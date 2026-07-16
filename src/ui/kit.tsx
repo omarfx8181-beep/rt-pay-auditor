@@ -243,7 +243,7 @@ export interface Tab {
 export function TabBar({ tabs, active, onSelect }: { tabs: Tab[]; active: string; onSelect: (id: string, index: number) => void }) {
   return (
     <>
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-line bg-surface-bg/85 backdrop-blur-lg md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-line bg-surface-bg/85 backdrop-blur-lg md:hidden">
         <div className="mx-auto flex max-w-2xl items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">
           {tabs.map(({ id, label, Icon }, i) => {
             const isActive = active === id;
@@ -251,6 +251,7 @@ export function TabBar({ tabs, active, onSelect }: { tabs: Tab[]; active: string
               <button
                 key={id}
                 onClick={() => onSelect(id, i)}
+                aria-current={isActive ? "page" : undefined}
                 className={`pressable flex flex-1 flex-col items-center gap-1 py-3 text-[10px] font-semibold uppercase tracking-wider transition ${
                   isActive ? "text-accent" : "text-ink-dim hover:text-ink"
                 }`}
@@ -263,13 +264,14 @@ export function TabBar({ tabs, active, onSelect }: { tabs: Tab[]; active: string
         </div>
       </nav>
 
-      <nav className="mt-5 hidden gap-1.5 md:flex">
+      <nav aria-label="Main" className="mt-5 hidden gap-1.5 md:flex">
         {tabs.map(({ id, label, Icon }, i) => {
           const isActive = active === id;
           return (
             <button
               key={id}
               onClick={() => onSelect(id, i)}
+              aria-current={isActive ? "page" : undefined}
               className={`btn px-3.5 py-2 text-xs ${isActive ? "btn-primary" : "btn-ghost"} pressable`}
             >
               <Icon size={14} strokeWidth={isActive ? 2.2 : 1.8} />

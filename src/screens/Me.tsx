@@ -7,7 +7,7 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -34,7 +34,8 @@ import { periodLabel, prevPeriodRange, ytdThroughDate, type OtherIncomeDraft, ty
 import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
-import { CalloutCard, Card, Disclosure, Eyebrow, UndoToast } from "../ui/kit.tsx";
+import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
+import HowToCard from "./HowTo.tsx";
 
 const OPEN_QUESTIONS: Array<{ id: string; text: string }> = [
   { id: "transport", text: "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?" },
@@ -84,6 +85,36 @@ function RuleRow({
         {suffix ? <span className="w-9 text-footnote text-ink-dim">{suffix}</span> : null}
       </span>
     </div>
+  );
+}
+
+/**
+ * Tier units keep a local draft string while typing — parsing on every
+ * keystroke ate decimal points ("2.5" became "25" because "2." parsed
+ * to 2 and re-rendered before the 5 landed).
+ */
+function TierUnitsInput({ units, onCommit }: { units: number; onCommit: (units: number) => void }) {
+  const [draft, setDraft] = useState(String(units));
+  const editing = useRef(false);
+  if (!editing.current && draft !== String(units)) setDraft(String(units));
+  return (
+    <input
+      value={draft}
+      onFocus={() => {
+        editing.current = true;
+      }}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onCommit(num(e.target.value));
+      }}
+      onBlur={() => {
+        editing.current = false;
+        setDraft(String(units));
+      }}
+      inputMode="decimal"
+      className="input w-16 px-2.5 py-1.5 text-right text-sm tabular-nums"
+      aria-label="Tier bonus units"
+    />
   );
 }
 
@@ -374,7 +405,6 @@ export default function Me({
   onSetDates,
   onToggleArchived,
   onDelete,
-  onRestorePeriod,
   onAddOther,
   onUpdateOther,
   onDeleteOther,
@@ -387,6 +417,7 @@ export default function Me({
   onDownloadPaydays,
   paydayDelay,
   onSetPaydayDelay,
+  onReplayTour,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -412,7 +443,6 @@ export default function Me({
   onSetDates: (id: string, startDate: string) => void;
   onToggleArchived: (id: string) => void;
   onDelete: (id: string) => void;
-  onRestorePeriod: (period: PayPeriod) => void;
   onAddOther: () => void;
   onUpdateOther: (id: string, patch: Partial<OtherIncomeDraft>) => void;
   onDeleteOther: (id: string) => void;
@@ -425,6 +455,7 @@ export default function Me({
   onDownloadPaydays: () => void;
   paydayDelay: string;
   onSetPaydayDelay: (v: string) => void;
+  onReplayTour: () => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   const [key, setKey] = useState(apiKey);
@@ -436,14 +467,9 @@ export default function Me({
   const answered = OPEN_QUESTIONS.filter((q) => answers[q.id]);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  // Delete needs a second tap; the undo toast itself lives in App, above
+  // the workspace remount that deleting the current period triggers.
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
-  // One undo window after a period delete — the record rides in state.
-  const [deleted, setDeleted] = useState<PayPeriod | null>(null);
-  useEffect(() => {
-    if (deleted === null) return;
-    const t = setTimeout(() => setDeleted(null), 8000);
-    return () => clearTimeout(t);
-  }, [deleted]);
 
   // Manual past-stub entry walks backward from the earliest period.
   const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
@@ -475,6 +501,8 @@ export default function Me({
         <p className="mt-3 text-footnote text-ink-dim">Everything you enter stays on this device.</p>
       </Card>
 
+      <HowToCard onReplayTour={onReplayTour} />
+
       {/* ---- pay rules, in human rows ---- */}
       <Card title="Your pay rules">
         <RuleRow label="Weekend pay" hint="Extra per hour on Saturday and Sunday — applies itself." value={cfgDraft.weekendDiff} onChange={set("weekendDiff")} suffix="$/hr" />
@@ -504,11 +532,9 @@ export default function Me({
                 onChange={(e) => setTiers((arr) => arr.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
                 className="input min-w-0 flex-1 px-2.5 py-1.5 text-sm"
               />
-              <input
-                value={String(t.units)}
-                onChange={(e) => setTiers((arr) => arr.map((x, j) => (j === i ? { ...x, units: num(e.target.value) } : x)))}
-                inputMode="decimal"
-                className="input w-16 px-2.5 py-1.5 text-right text-sm tabular-nums"
+              <TierUnitsInput
+                units={t.units}
+                onCommit={(units) => setTiers((arr) => arr.map((x, j) => (j === i ? { ...x, units } : x)))}
               />
               <span className="w-20 text-xs tabular-nums text-ink-dim">= {fmtCents(Math.round(t.units * unit548Cents))}</span>
               <button
@@ -968,7 +994,11 @@ export default function Me({
                   <div className="mt-1 text-xs tabular-nums text-ink-dim">
                     {hasStub ? (
                       <>
-                        take-home <span className="text-pos">${p.actual.net}</span> · stub ✓
+                        take-home{" "}
+                        <span className="text-pos">
+                          {fmtCents(Math.round(num(p.actual.net.replace(/[$,]/g, "")) * 100))}
+                        </span>{" "}
+                        · stub ✓
                       </>
                     ) : (
                       <>take-home {fmtCents(net.netCents)} · expected</>
@@ -997,7 +1027,6 @@ export default function Me({
                     <span className="flex items-center gap-2 text-caption">
                       <button
                         onClick={() => {
-                          setDeleted(p);
                           setConfirmingDelete(null);
                           onDelete(p.id);
                         }}
@@ -1025,17 +1054,6 @@ export default function Me({
         </div>
       </div>
 
-      {deleted && (
-        <UndoToast
-          message={`Deleted ${periodLabel(deleted.startDate, deleted.endDate)}.`}
-          onUndo={() => {
-            const p = deleted;
-            setDeleted(null);
-            onRestorePeriod(p);
-          }}
-          onDismiss={() => setDeleted(null)}
-        />
-      )}
     </div>
   );
 }

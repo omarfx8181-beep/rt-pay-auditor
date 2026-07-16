@@ -104,6 +104,14 @@ function PeriodPicker({
         <ChevronDown size={15} className={`text-ink-dim transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
+        <button
+          aria-hidden
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-20 cursor-default"
+        />
+      )}
+      {open && (
         <div className="reveal absolute left-0 top-full z-30 mt-2 w-80 max-w-[calc(100vw-40px)] rounded-2xl border border-surface-line bg-surface-card p-2 shadow-lg">
           <div className="max-h-72 overflow-y-auto">
             {periods.map((p) => (

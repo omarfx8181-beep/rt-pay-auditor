@@ -11,6 +11,7 @@ import {
   mergeBackup,
   nextPeriodRange,
   parseBackup,
+  periodLabel,
   rollupYtd,
   PERIOD_DAYS,
   type PayPeriod,
@@ -20,7 +21,7 @@ import type { FutureBatch } from "./lib/scanRouting.ts";
 import { scanRowsToDrafts } from "./lib/scan.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
-import { TabBar, type Tab } from "./ui/kit.tsx";
+import { TabBar, UndoToast, type Tab } from "./ui/kit.tsx";
 import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
@@ -56,8 +57,18 @@ export default function App() {
   const anchorsRow = useLiveQuery(async () => (await db.settings.get("ytdAnchors")) ?? null, []);
   const lastBackupRow = useLiveQuery(async () => (await db.settings.get("lastBackupAt")) ?? null, []);
   const paydayDelayRow = useLiveQuery(async () => (await db.settings.get("paydayDelayDays")) ?? null, []);
-  // Where onboarding drops the user ("Scan my schedule" → Shifts).
-  const [postOnboardTab, setPostOnboardTab] = useState<"home" | "shifts">("home");
+  // The active tab lives HERE, above the per-period workspace: switching
+  // periods remounts the workspace (key=id) and must not yank the user
+  // back to Home. Onboarding's "Scan my schedule" lands on Shifts.
+  const [tab, setTab] = useState<string>("home");
+  // Same reason for the delete-undo window: deleting the CURRENT period
+  // switches periods, and the toast must survive that remount.
+  const [deletedPeriod, setDeletedPeriod] = useState<{ period: PayPeriod; wasCurrent: boolean } | null>(null);
+  useEffect(() => {
+    if (deletedPeriod === null) return;
+    const t = setTimeout(() => setDeletedPeriod(null), 8000);
+    return () => clearTimeout(t);
+  }, [deletedPeriod]);
 
   // Reflect the chosen appearance on <html>; "system" removes the override.
   const appearance = (appearanceRow?.value as AppearanceMode) || "system";
@@ -111,7 +122,7 @@ export default function App() {
           })
         }
         onDone={(goTo) => {
-          setPostOnboardTab(goTo);
+          setTab(goTo);
           void db.settings.put({ key: "onboarding", value: "done" });
         }}
       />
@@ -136,23 +147,60 @@ export default function App() {
   } catch {
     /* corrupt setting → no anchors until the next stub scan */
   }
+  const deletePeriod = async (id: string) => {
+    if (periods.length <= 1) return;
+    const p = periods.find((x) => x.id === id);
+    if (!p) return;
+    setDeletedPeriod({ period: p, wasCurrent: id === current.id });
+    await db.periods.delete(id);
+    if (id === current.id) {
+      const remaining = periods.filter((x) => x.id !== id);
+      await setCurrentPeriodId(remaining[0].id);
+    }
+  };
+  const undoDelete = () => {
+    const d = deletedPeriod;
+    setDeletedPeriod(null);
+    if (!d) return;
+    void db.periods.add(d.period);
+    if (d.wasCurrent) void setCurrentPeriodId(d.period.id);
+  };
+
   // key by period id: switching periods remounts the workspace with fresh drafts
   return (
-    <PeriodWorkspace
-      key={current.id}
-      record={current}
-      periods={periods}
-      identity={identity}
-      apiKey={apiKeyRow?.value ?? ""}
-      feedUrl={feedUrlRow?.value ?? ""}
-      appearance={appearance}
-      answers={answers}
-      ytdAnchors={ytdAnchors}
-      lastBackupAt={lastBackupRow ? Number(lastBackupRow.value) || null : null}
-      paydayDelayDays={paydayDelayRow ? Number(paydayDelayRow.value) || FAIRVIEW_RT_PRESET.facility.paydayDelayDays : FAIRVIEW_RT_PRESET.facility.paydayDelayDays}
-      initialTab={postOnboardTab}
-    />
+    <>
+      <PeriodWorkspace
+        key={current.id}
+        record={current}
+        periods={periods}
+        identity={identity}
+        apiKey={apiKeyRow?.value ?? ""}
+        feedUrl={feedUrlRow?.value ?? ""}
+        appearance={appearance}
+        answers={answers}
+        ytdAnchors={ytdAnchors}
+        lastBackupAt={lastBackupRow ? Number(lastBackupRow.value) || null : null}
+        paydayDelayDays={parsePaydayDelay(paydayDelayRow?.value)}
+        tab={tab}
+        setTab={setTab}
+        onDeletePeriod={(id) => void deletePeriod(id)}
+      />
+      {deletedPeriod && (
+        <UndoToast
+          message={`Deleted ${periodLabel(deletedPeriod.period.startDate, deletedPeriod.period.endDate)}.`}
+          onUndo={undoDelete}
+          onDismiss={() => setDeletedPeriod(null)}
+        />
+      )}
+    </>
   );
+}
+
+/** Stored days → number; 0 is a real answer (payday ON period end), only junk falls back. */
+function parsePaydayDelay(raw: string | undefined): number {
+  if (raw === undefined) return FAIRVIEW_RT_PRESET.facility.paydayDelayDays;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : FAIRVIEW_RT_PRESET.facility.paydayDelayDays;
 }
 
 function PeriodWorkspace({
@@ -166,7 +214,9 @@ function PeriodWorkspace({
   ytdAnchors,
   lastBackupAt,
   paydayDelayDays,
-  initialTab = "home",
+  tab,
+  setTab,
+  onDeletePeriod,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -178,9 +228,10 @@ function PeriodWorkspace({
   ytdAnchors: Record<string, YtdAnchor>;
   lastBackupAt: number | null;
   paydayDelayDays: number;
-  initialTab?: "home" | "shifts";
+  tab: string;
+  setTab: (tab: string) => void;
+  onDeletePeriod: (id: string) => void;
 }) {
-  const [tab, setTab] = useState<string>(initialTab);
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
@@ -188,13 +239,21 @@ function PeriodWorkspace({
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
-  const tabIndex = useRef(initialTab === "shifts" ? 1 : 0);
+  const tabIndex = useRef(tab === "shifts" ? 1 : tab === "me" ? 2 : 0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
+  // The mount render is NOT an edit — writing it back would stamp a fresh
+  // updatedAt on every period merely viewed, and backup merge trusts
+  // updatedAt to mean "this copy really is newer".
   const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers });
   snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers };
   const dirty = useRef(false);
+  const mounted = useRef(false);
   useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
     dirty.current = true;
     const t = setTimeout(() => {
       dirty.current = false;
@@ -353,13 +412,17 @@ function PeriodWorkspace({
   const stampBackup = () => void db.settings.put({ key: "lastBackupAt", value: String(Date.now()) });
   const backupName = () => `rt-pay-backup-${new Date().toISOString().slice(0, 10)}.json`;
 
+  // Revoke AFTER the download has had time to start — a synchronous revoke
+  // can cancel the fetch on iOS Safari.
+  const revokeLater = (url: string) => setTimeout(() => URL.revokeObjectURL(url), 30_000);
+
   const exportBackup = async () => {
     const url = URL.createObjectURL(new Blob([await backupJson()], { type: "application/json" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = backupName();
     a.click();
-    URL.revokeObjectURL(url);
+    revokeLater(url);
     stampBackup();
   };
 
@@ -386,7 +449,7 @@ function PeriodWorkspace({
     a.href = url;
     a.download = "rt-pay-paydays.ics";
     a.click();
-    URL.revokeObjectURL(url);
+    revokeLater(url);
   };
 
   // Nudge once real data exists and the last backup is old news.
@@ -494,15 +557,7 @@ function PeriodWorkspace({
               const p = periods.find((x) => x.id === id);
               if (p) void db.periods.update(id, { archived: !p.archived, updatedAt: Date.now() });
             }}
-            onDelete={async (id) => {
-              if (periods.length <= 1) return;
-              await db.periods.delete(id);
-              if (id === record.id) {
-                const remaining = periods.filter((p) => p.id !== id);
-                await setCurrentPeriodId(remaining[0].id);
-              }
-            }}
-            onRestorePeriod={(period) => void db.periods.add(period)}
+            onDelete={onDeletePeriod}
             onAddOther={() => void db.otherIncome.add(newOtherIncome())}
             onUpdateOther={(id, patch) => void db.otherIncome.update(id, { ...patch, updatedAt: Date.now() })}
             onDeleteOther={(id) => void db.otherIncome.delete(id)}
@@ -515,6 +570,7 @@ function PeriodWorkspace({
             onDownloadPaydays={downloadPaydays}
             paydayDelay={String(paydayDelayDays)}
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
+            onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
           />
         )}
       </main>
