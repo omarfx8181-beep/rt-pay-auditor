@@ -113,6 +113,65 @@ export interface YtdRollup {
 const TAX_KEYS = ["fed", "mn", "ss", "medicare", "mnFam", "mnMed"] as const;
 const DEDUCTION_KEYS = [...TAX_KEYS, "pretax", "aftertax"] as const;
 
+/**
+ * One period's money, resolved by the house rule everywhere shares:
+ * stub actuals outrank engine estimates, per line. Buckets are null on a
+ * totals-only period (bare gross/net — the split is unknowable) and on
+ * an empty one (nothing to split).
+ */
+export interface PeriodMoney {
+  grossCents: Cents;
+  netCents: Cents;
+  /** True when the stub's real net was entered — the numbers are stub-true. */
+  stubTrue: boolean;
+  buckets: { taxesCents: Cents; pretaxCents: Cents; aftertaxCents: Cents; imputedCents: Cents } | null;
+  units548: number;
+  otHours: number;
+  dtHours: number;
+  workedHours: number;
+  leaveHours: number;
+}
+
+export function periodMoney(p: PayPeriod): PeriodMoney {
+  const cfg = draftToConfig(p.cfgDraft);
+  const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
+  const net = computeNet(period.grossCents, cfg);
+  const actualGross = parseDollars(p.actual?.gross);
+  const actualNet = parseDollars(p.actual?.net);
+  const hasLineDetail =
+    p.shifts.length > 0 ||
+    (p.leave?.length ?? 0) > 0 ||
+    DEDUCTION_KEYS.some((k) => (p.actual?.[k] ?? "").trim() !== "");
+  let buckets: PeriodMoney["buckets"] = null;
+  if (hasLineDetail) {
+    const engineTax: Record<(typeof TAX_KEYS)[number], Cents> = {
+      fed: net.fedCents,
+      mn: net.mnCents,
+      ss: net.ssCents,
+      medicare: net.medicareCents,
+      mnFam: net.mnFamCents,
+      mnMed: net.mnMedCents,
+    };
+    buckets = {
+      taxesCents: TAX_KEYS.reduce((acc, k) => acc + (parseDollars(p.actual?.[k]) ?? engineTax[k]), 0),
+      pretaxCents: parseDollars(p.actual?.pretax) ?? net.pretaxCents,
+      aftertaxCents: parseDollars(p.actual?.aftertax) ?? net.afterTaxCents,
+      imputedCents: net.imputedCents,
+    };
+  }
+  return {
+    grossCents: actualGross ?? period.grossCents,
+    netCents: actualNet ?? net.netCents,
+    stubTrue: actualNet !== null,
+    buckets,
+    units548: period.units548,
+    otHours: period.otHours,
+    dtHours: period.dtHours,
+    workedHours: period.workedHours,
+    leaveHours: period.leaveHours,
+  };
+}
+
 const parseDollars = (raw: string | undefined): Cents | null => {
   const trimmed = (raw ?? "").trim();
   if (trimmed === "") return null;
@@ -151,39 +210,23 @@ export function rollupYtd(periods: PayPeriod[], year: string, otherIncome: Other
   };
   for (const p of periods) {
     if (p.endDate.slice(0, 4) !== year) continue;
-    const cfg = draftToConfig(p.cfgDraft);
-    const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
-    const net = computeNet(period.grossCents, cfg);
-    const actualGross = parseDollars(p.actual?.gross);
-    const actualNet = parseDollars(p.actual?.net);
+    const m = periodMoney(p);
     rollup.periodCount += 1;
-    if (actualNet !== null) rollup.stubCount += 1;
-    rollup.grossCents += actualGross ?? period.grossCents;
-    rollup.netCents += actualNet ?? net.netCents;
-    rollup.units548 += period.units548;
-    rollup.otHours += period.otHours;
-    rollup.dtHours += period.dtHours;
-    rollup.workedHours += period.workedHours;
-    rollup.leaveHours += period.leaveHours;
-    const hasLineDetail =
-      p.shifts.length > 0 ||
-      (p.leave?.length ?? 0) > 0 ||
-      DEDUCTION_KEYS.some((k) => (p.actual?.[k] ?? "").trim() !== "");
-    if (hasLineDetail) {
-      const engineTax: Record<(typeof TAX_KEYS)[number], Cents> = {
-        fed: net.fedCents,
-        mn: net.mnCents,
-        ss: net.ssCents,
-        medicare: net.medicareCents,
-        mnFam: net.mnFamCents,
-        mnMed: net.mnMedCents,
-      };
+    if (m.stubTrue) rollup.stubCount += 1;
+    rollup.grossCents += m.grossCents;
+    rollup.netCents += m.netCents;
+    rollup.units548 += m.units548;
+    rollup.otHours += m.otHours;
+    rollup.dtHours += m.dtHours;
+    rollup.workedHours += m.workedHours;
+    rollup.leaveHours += m.leaveHours;
+    if (m.buckets) {
       rollup.bucketPeriodCount += 1;
-      for (const k of TAX_KEYS) rollup.taxesCents += parseDollars(p.actual?.[k]) ?? engineTax[k];
-      rollup.pretaxCents += parseDollars(p.actual?.pretax) ?? net.pretaxCents;
-      rollup.aftertaxCents += parseDollars(p.actual?.aftertax) ?? net.afterTaxCents;
-      rollup.imputedCents += net.imputedCents;
-    } else if (actualGross !== null || actualNet !== null) {
+      rollup.taxesCents += m.buckets.taxesCents;
+      rollup.pretaxCents += m.buckets.pretaxCents;
+      rollup.aftertaxCents += m.buckets.aftertaxCents;
+      rollup.imputedCents += m.buckets.imputedCents;
+    } else if (parseDollars(p.actual?.gross) !== null || m.stubTrue) {
       rollup.bucketSkippedCount += 1;
     }
   }

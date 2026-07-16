@@ -13,8 +13,43 @@ import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft
 import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
 import type { FutureBatch } from "../lib/scanRouting.ts";
-import { Card, Sheet, StatTile, UndoToast } from "../ui/kit.tsx";
+import { Card, Eyebrow, Sheet, StatTile, UndoToast } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
+
+/**
+ * The overtime meter — straight hours marching toward the per-period
+ * line (80 at Fairview). Past it, every further straight hour pays the
+ * overtime rate, which is exactly when picking up one more shift is
+ * most worth it.
+ */
+function OvertimeMeter({ period, cfg }: { period: PeriodResult; cfg: EngineConfig }) {
+  const straight = period.regHours + period.otHours;
+  const limit = cfg.otPeriodHours;
+  if (limit <= 0 || straight <= 0) return null;
+  const pct = Math.min(100, (straight / limit) * 100);
+  const over = period.otHours > 0;
+  return (
+    <Card>
+      <div className="flex items-baseline justify-between gap-3">
+        <Eyebrow>Overtime meter</Eyebrow>
+        <span className="text-caption tabular-nums text-ink-dim">
+          {fmtNum(straight)} of {fmtNum(limit)} hrs
+        </span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-soft" role="presentation">
+        <div
+          className={`h-full rounded-full transition-all ${over ? "bg-amber" : "bg-accent"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="mt-1.5 text-footnote text-ink-dim">
+        {over
+          ? `You're past ${fmtNum(limit)} — ${fmtNum(period.otHours)} overtime hrs so far, and every extra straight hour now pays the overtime rate.`
+          : `${fmtNum(limit - straight)} more straight hours before overtime kicks in. Double-time hours don't count toward it.`}
+      </p>
+    </Card>
+  );
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -452,6 +487,8 @@ export default function Shifts({
           ))}
         </div>
       </Card>
+
+      <OvertimeMeter period={period} cfg={cfg} />
 
       <div className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-4">
         <StatTile label="Regular" value={fmtNum(period.regHours) + " h"} />

@@ -6,6 +6,7 @@
  */
 import { callClaude, filesToContentBlocks } from "./scan.ts";
 import { addDays, PERIOD_DAYS, type PayPeriod } from "./periods.ts";
+import { parseLineItems, stubLinesToActual, type StubLineItem } from "./stubFill.ts";
 
 export interface ScannedStub {
   endDate: string;
@@ -13,21 +14,36 @@ export interface ScannedStub {
   startDate: string;
   gross: string;
   net: string;
+  /**
+   * The stub's own line sections, when readable — these let an old
+   * period import fully itemized (its deductions split into buckets)
+   * instead of as bare totals. Null when the model returned totals only.
+   */
+  lines: {
+    earnings: StubLineItem[];
+    taxes: StubLineItem[];
+    pretax: StubLineItem[];
+    aftertax: StubLineItem[];
+  } | null;
 }
 
 export const stubInstruction =
   "You are reading payroll documents for one employee: pay stub(s) (one biweekly period each) and/or a YEAR-TO-DATE " +
   "pay summary screen (pay types with YTD hours/wages plus YTD deduction sections — not a single-period stub). " +
   "For EVERY stub found across all pages and images, extract: the pay period end date, the pay period start date if shown, " +
-  "the CURRENT-period total gross pay, and the CURRENT-period net pay (take-home). Never use YTD columns for stubs. " +
+  "the CURRENT-period total gross pay, the CURRENT-period net pay (take-home), and — when the stub's line detail is " +
+  "readable — its CURRENT-period lines by section: earnings (every pay line incl. imputed income and paid leave), " +
+  "taxes (withholding lines), pretax deductions, aftertax deductions, each as {label: the stub's exact printed line " +
+  "name, amount}. Keep every line its own item; never merge lines; never use YTD columns for stubs. " +
   "If a YTD summary is present, also extract its TOTAL rows: total YTD earnings/wages (gross), total YTD employee " +
   "taxes withheld, total YTD pretax deductions, total YTD after-tax deductions, any YTD imputed income (e.g. imputed " +
   "basic term life, part of earnings), and the as-of date printed on or near the screen. Ignore employer/company-side " +
   "sections entirely. Never fabricate stubs from a YTD summary. " +
-  'Respond with ONLY valid JSON, no markdown, no commentary, exactly this schema: {"stubs":[{"endDate":"YYYY-MM-DD","startDate":"YYYY-MM-DD or empty string","gross":"1234.56","net":"789.01"}],' +
+  'Respond with ONLY valid JSON, no markdown, no commentary, exactly this schema: {"stubs":[{"endDate":"YYYY-MM-DD","startDate":"YYYY-MM-DD or empty string","gross":"1234.56","net":"789.01",' +
+  '"lines":{"earnings":[{"label":"Regular Straight Time","amount":4202.40}],"taxes":[],"pretax":[],"aftertax":[]}}],' +
   '"ytdSummary":{"asOfDate":"YYYY-MM-DD or empty string","gross":103320.11,"taxes":20225.79,"pretax":12516.42,"aftertax":1168.51,"imputed":24.13}} ' +
-  'Use "ytdSummary":null when no YTD summary is present, and null for any of its amounts not shown. ' +
-  "Amounts are plain numbers without $ or commas. De-duplicate identical stubs.";
+  'Use "lines":null when a stub\'s line detail is not readable, and "ytdSummary":null when no YTD summary is present ' +
+  "(null for any of its amounts not shown). Amounts are plain numbers without $ or commas. De-duplicate identical stubs.";
 
 const parseJson = (text: string): unknown => {
   const clean = text.replace(/```json|```/g, "").trim();
@@ -36,6 +52,18 @@ const parseJson = (text: string): unknown => {
   } catch {
     throw new Error("The response wasn't valid JSON — try clearer stub images or one PDF at a time.");
   }
+};
+
+const asLines = (v: unknown): ScannedStub["lines"] => {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const lines = {
+    earnings: parseLineItems(o.earnings),
+    taxes: parseLineItems(o.taxes),
+    pretax: parseLineItems(o.pretax),
+    aftertax: parseLineItems(o.aftertax),
+  };
+  return lines.earnings.length + lines.taxes.length + lines.pretax.length + lines.aftertax.length > 0 ? lines : null;
 };
 
 export function parseStubResponse(text: string): ScannedStub[] {
@@ -50,7 +78,34 @@ export function parseStubResponse(text: string): ScannedStub[] {
       startDate: typeof s.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s.startDate) ? s.startDate : "",
       gross: typeof s.gross === "string" || typeof s.gross === "number" ? String(s.gross) : "",
       net: typeof s.net === "string" || typeof s.net === "number" ? String(s.net) : "",
+      lines: asLines(s.lines),
     }));
+}
+
+/**
+ * A scanned stub → the period's `actual` map. With line detail, the
+ * stubFill mapper does the label→key matching and split-row summing and
+ * the period imports fully itemized; without it, bare gross/net (exactly
+ * the old behavior). The stub's own totals always win over summed lines.
+ */
+export function scannedStubActual(stub: ScannedStub): Record<string, string> {
+  const totals: Record<string, string> = {};
+  if (stub.gross.trim() !== "") totals.gross = stub.gross.trim();
+  if (stub.net.trim() !== "") totals.net = stub.net.trim();
+  if (stub.lines === null) return totals;
+  const mapped = stubLinesToActual({
+    periodStart: stub.startDate,
+    periodEnd: stub.endDate,
+    earnings: stub.lines.earnings,
+    taxes: stub.lines.taxes,
+    pretax: stub.lines.pretax,
+    aftertax: stub.lines.aftertax,
+    gross: null,
+    net: null,
+    ytdGross: null,
+    ytdNet: null,
+  });
+  return { ...mapped.actual, ...totals };
 }
 
 export interface StubImportPlan {
@@ -126,6 +181,8 @@ export interface StubScanResult {
 export async function scanStubFiles(files: File[], apiKey: string): Promise<StubScanResult> {
   const blocks = await filesToContentBlocks(files);
   if (blocks.length === 0) throw new Error("No readable files — upload stub PDFs or screenshots.");
-  const text = await callClaude(blocks, stubInstruction, apiKey, 4000);
+  // Line detail is ~10× the tokens of bare totals; 8k covers a batch of
+  // six-ish stubs comfortably. Bigger piles just go in as more batches.
+  const text = await callClaude(blocks, stubInstruction, apiKey, 8000);
   return { stubs: parseStubResponse(text), summary: parseYtdSummary(text) };
 }

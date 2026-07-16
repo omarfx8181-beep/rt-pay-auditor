@@ -44,7 +44,8 @@ export const stubFillInstruction =
   "ytdGross/ytdNet are the ONLY year-to-date values to read: the YTD column's TOTAL gross and TOTAL net, null if not shown. " +
   "Amounts are plain positive numbers without $ or commas. Use null for gross/net only if truly not shown.";
 
-const asItems = (v: unknown): StubLineItem[] =>
+/** Loose model output → clean line items; junk entries drop out. Shared with the bulk stub scan. */
+export const parseLineItems = (v: unknown): StubLineItem[] =>
   Array.isArray(v)
     ? v
         .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
@@ -54,6 +55,7 @@ const asItems = (v: unknown): StubLineItem[] =>
         }))
         .filter((x) => x.label !== "" && Number.isFinite(x.amount))
     : [];
+const asItems = parseLineItems;
 
 const asDate = (v: unknown): string => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
 

@@ -7,7 +7,7 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -30,8 +30,8 @@ import {
 import { computeNet, computePeriod, type BonusTier } from "../lib/engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, num, todayIso, uid, type CfgDraft } from "../lib/draft.ts";
 import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
-import { periodLabel, prevPeriodRange, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
-import { planStubImports, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
+import { periodLabel, prevPeriodRange, rollupYtd, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
+import { planStubImports, scannedStubActual, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
@@ -129,7 +129,7 @@ function StubScanPanel({
   apiKey: string;
   periods: PayPeriod[];
   paydayDelayDays: number;
-  onLogPastStub: (endDate: string, gross: string, net: string, startDate?: string) => void;
+  onLogPastStub: (endDate: string, gross: string, net: string, startDate?: string, actual?: Record<string, string>) => void;
   onYtdAnchor: (anchor: YtdAnchor) => void;
 }) {
   const [state, setState] = useState<
@@ -216,7 +216,10 @@ function StubScanPanel({
           <div className="divide-y divide-surface-line/60 text-xs tabular-nums">
             {state.toAdd.map((s) => (
               <div key={s.endDate} className="flex items-baseline justify-between gap-3 py-1.5">
-                <span>ends {dayLabel(s.endDate)}</span>
+                <span>
+                  ends {dayLabel(s.endDate)}
+                  {s.lines !== null && <span className="ml-1.5 text-pos">itemized ✓</span>}
+                </span>
                 <span>
                   ${s.gross} · <span className="text-pos">${s.net}</span>
                 </span>
@@ -233,7 +236,7 @@ function StubScanPanel({
             {(state.toAdd.length > 0 || state.anchor) && (
               <button
                 onClick={() => {
-                  for (const s of state.toAdd) onLogPastStub(s.endDate, s.gross, s.net, stubStartDate(s));
+                  for (const s of state.toAdd) onLogPastStub(s.endDate, s.gross, s.net, stubStartDate(s), scannedStubActual(s));
                   if (state.anchor) onYtdAnchor(state.anchor);
                   setState({ status: "idle" });
                 }}
@@ -396,8 +399,8 @@ export default function Me({
   onSaveAnswers,
   periods,
   currentId,
-  ytd,
-  ytdAnchor,
+  year,
+  ytdAnchors,
   otherIncome,
   onSelect,
   onCreateNext,
@@ -418,6 +421,7 @@ export default function Me({
   paydayDelay,
   onSetPaydayDelay,
   onReplayTour,
+  onDownloadYearCsv,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -434,12 +438,13 @@ export default function Me({
   onSaveAnswers: (answers: Record<string, QuestionAnswer>) => void;
   periods: PayPeriod[];
   currentId: string;
-  ytd: YtdRollup;
-  ytdAnchor: YtdAnchor | null;
+  /** The open period's year — the Year card's default view. */
+  year: string;
+  ytdAnchors: Record<string, YtdAnchor>;
   otherIncome: OtherIncomeDraft[];
   onSelect: (id: string) => void;
   onCreateNext: () => void;
-  onLogPastStub: (endDate: string, gross: string, net: string, startDate?: string) => void;
+  onLogPastStub: (endDate: string, gross: string, net: string, startDate?: string, actual?: Record<string, string>) => void;
   onSetDates: (id: string, startDate: string) => void;
   onToggleArchived: (id: string) => void;
   onDelete: (id: string) => void;
@@ -456,8 +461,25 @@ export default function Me({
   paydayDelay: string;
   onSetPaydayDelay: (v: string) => void;
   onReplayTour: () => void;
+  onDownloadYearCsv: (year: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
+  // The Year card can look at ANY year with data, not just the open
+  // period's — same rollup, same anchors, chip-switched below.
+  const [yearView, setYearView] = useState(year);
+  const years = useMemo(
+    () =>
+      [...new Set([
+        ...periods.map((p) => p.endDate.slice(0, 4)),
+        ...otherIncome.map((o) => o.date.slice(0, 4)),
+        ...Object.keys(ytdAnchors),
+      ])]
+        .sort()
+        .reverse(),
+    [periods, otherIncome, ytdAnchors],
+  );
+  const ytd = useMemo(() => rollupYtd(periods, yearView, otherIncome), [periods, yearView, otherIncome]);
+  const ytdAnchor = ytdAnchors[yearView] ?? null;
   const [key, setKey] = useState(apiKey);
   const [showKey, setShowKey] = useState(false);
   const [feed, setFeed] = useState(feedUrl);
@@ -504,6 +526,9 @@ export default function Me({
       <HowToCard onReplayTour={onReplayTour} />
 
       {/* ---- pay rules, in human rows ---- */}
+      <div className="pt-3">
+        <Eyebrow className="mb-2">Your pay & the rules behind it</Eyebrow>
+      </div>
       <Card title="Your pay rules">
         <RuleRow label="Weekend pay" hint="Extra per hour on Saturday and Sunday — applies itself." value={cfgDraft.weekendDiff} onChange={set("weekendDiff")} suffix="$/hr" />
         <RuleRow label="Evening pay" hint="Extra per hour on evening shifts." value={cfgDraft.eveningDiff} onChange={set("eveningDiff")} suffix="$/hr" />
@@ -555,6 +580,77 @@ export default function Me({
         </div>
       </Card>
 
+      {unanswered.length > 0 && (
+        <CalloutCard tone="amber">
+          <div className="mb-2 flex items-center gap-1.5 text-headline text-amber">
+            <AlertTriangle size={15} /> Open questions — confirm with payroll, then edit above
+          </div>
+          <div className="space-y-3">
+            {unanswered.map((q) => (
+              <div key={q.id} className="text-sm">
+                <div>{q.text}</div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <input
+                    value={drafts[q.id] ?? ""}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
+                    placeholder="payroll's answer…"
+                    className="input min-w-48 flex-1 px-2.5 py-1.5 text-xs sm:max-w-md"
+                  />
+                  <button
+                    onClick={() => {
+                      const answer = (drafts[q.id] ?? "").trim();
+                      if (answer === "") return;
+                      onSaveAnswers({ ...answers, [q.id]: { answer, answeredAt: Date.now() } });
+                    }}
+                    className="btn btn-ghost pressable text-xs"
+                  >
+                    <CheckCircle2 size={13} /> Mark answered
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CalloutCard>
+      )}
+
+      {answered.length > 0 && (
+        <Card title="Answered questions">
+          <div className="space-y-3">
+            {answered.map((q) => {
+              const a = answers[q.id];
+              return (
+                <div key={q.id} className="text-sm">
+                  <div className="text-ink-dim">{q.text}</div>
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-sm text-pos">✓ {a.answer}</span>
+                    <span className="text-caption text-ink-dim">
+                      {new Date(a.answeredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const next = { ...answers };
+                        delete next[q.id];
+                        onSaveAnswers(next);
+                        setDrafts((d) => ({ ...d, [q.id]: a.answer }));
+                      }}
+                      className="pressable flex items-center gap-1 text-caption text-ink-dim hover:text-ink"
+                    >
+                      <RotateCcw size={11} /> Reopen
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-footnote text-ink-dim">
+            Answers live here as history — remember to update the matching rate or tier above.
+          </p>
+        </Card>
+      )}
+
+      <div className="pt-3">
+        <Eyebrow className="mb-2">Set up once — scans, look & feel, tax numbers</Eyebrow>
+      </div>
       {/* ---- scan credentials (schedule + stub scans share these) ---- */}
       <div id="scan-credentials">
       <Card title="Scans — your credentials, your device">
@@ -677,79 +773,25 @@ export default function Me({
         </div>
       </Disclosure>
 
-      {unanswered.length > 0 && (
-        <CalloutCard tone="amber">
-          <div className="mb-2 flex items-center gap-1.5 text-headline text-amber">
-            <AlertTriangle size={15} /> Open questions — confirm with payroll, then edit above
-          </div>
-          <div className="space-y-3">
-            {unanswered.map((q) => (
-              <div key={q.id} className="text-sm">
-                <div>{q.text}</div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                  <input
-                    value={drafts[q.id] ?? ""}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
-                    placeholder="payroll's answer…"
-                    className="input min-w-48 flex-1 px-2.5 py-1.5 text-xs sm:max-w-md"
-                  />
-                  <button
-                    onClick={() => {
-                      const answer = (drafts[q.id] ?? "").trim();
-                      if (answer === "") return;
-                      onSaveAnswers({ ...answers, [q.id]: { answer, answeredAt: Date.now() } });
-                    }}
-                    className="btn btn-ghost pressable text-xs"
-                  >
-                    <CheckCircle2 size={13} /> Mark answered
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CalloutCard>
-      )}
-
-      {answered.length > 0 && (
-        <Card title="Answered questions">
-          <div className="space-y-3">
-            {answered.map((q) => {
-              const a = answers[q.id];
-              return (
-                <div key={q.id} className="text-sm">
-                  <div className="text-ink-dim">{q.text}</div>
-                  <div className="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="text-sm text-pos">✓ {a.answer}</span>
-                    <span className="text-caption text-ink-dim">
-                      {new Date(a.answeredAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </span>
-                    <button
-                      onClick={() => {
-                        const next = { ...answers };
-                        delete next[q.id];
-                        onSaveAnswers(next);
-                        setDrafts((d) => ({ ...d, [q.id]: a.answer }));
-                      }}
-                      className="pressable flex items-center gap-1 text-caption text-ink-dim hover:text-ink"
-                    >
-                      <RotateCcw size={11} /> Reopen
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-footnote text-ink-dim">
-            Answers live here as history — remember to update the matching rate or tier above.
-          </p>
-        </Card>
-      )}
 
       {/* ---- your periods & data (the old Periods tab) ---- */}
       <div className="pt-3">
         <Eyebrow className="mb-2">Your periods & data</Eyebrow>
         <div className="space-y-3">
-          <Card title={`Year total — ${ytd.year}`}>
+          <Card title={`Year total — ${yearView}`}>
+            {years.length > 1 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {years.map((y) => (
+                  <button
+                    key={y}
+                    onClick={() => setYearView(y)}
+                    className={`btn px-3 py-1.5 text-xs ${y === yearView ? "btn-primary" : "btn-ghost"} pressable`}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
               <div>
                 <Eyebrow>Total made</Eyebrow>
@@ -802,6 +844,12 @@ export default function Me({
                   </p>
                 );
               })()}
+            <button onClick={() => onDownloadYearCsv(yearView)} className="btn btn-ghost pressable mt-3 text-xs">
+              <Download size={13} /> Download {yearView} as a spreadsheet
+            </button>
+            <p className="mt-1.5 text-caption text-ink-dim">
+              Every period with gross, take-home, and the deduction split — for taxes or a loan file.
+            </p>
           </Card>
 
           <Disclosure

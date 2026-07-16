@@ -18,6 +18,7 @@ import {
   type YtdAnchor,
 } from "./lib/periods.ts";
 import type { FutureBatch } from "./lib/scanRouting.ts";
+import { buildYearCsv, yearCsvName } from "./lib/csv.ts";
 import { scanRowsToDrafts } from "./lib/scan.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
@@ -312,9 +313,11 @@ function PeriodWorkspace({
     await setCurrentPeriodId(fresh.id);
   };
 
-  // Historical stub: a period with just the real gross/net; rules snapshot
-  // from the earliest period (closest in time to the old stub).
-  const logPastStub = async (endDate: string, gross: string, net: string, startDate?: string) => {
+  // Historical stub: a period with the real gross/net — and, when a scan
+  // read the stub's lines, the full itemized actual map, so the year's
+  // deduction buckets stay stub-true. Rules snapshot from the earliest
+  // period (closest in time to the old stub).
+  const logPastStub = async (endDate: string, gross: string, net: string, startDate?: string, actual?: Record<string, string>) => {
     const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
     const now = Date.now();
     await db.periods.add({
@@ -323,7 +326,7 @@ function PeriodWorkspace({
       endDate,
       shifts: [],
       leave: [],
-      actual: { gross: gross.trim(), net: net.trim() },
+      actual: actual ?? { gross: gross.trim(), net: net.trim() },
       cfgDraft: { ...earliest.cfgDraft, eveningHours: "0" },
       tiers: earliest.tiers,
       archived: false,
@@ -442,6 +445,16 @@ function PeriodWorkspace({
     }
   };
 
+  // Tax-time export: the selected year as one spreadsheet.
+  const downloadYearCsv = (y: string) => {
+    const url = URL.createObjectURL(new Blob([buildYearCsv(periods, y, otherIncome)], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = yearCsvName(y);
+    a.click();
+    revokeLater(url);
+  };
+
   const downloadPaydays = () => {
     const ics = buildPaydayCalendar(upcomingPaydays(record.endDate, paydayDelayDays, 13));
     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
@@ -544,12 +557,12 @@ function PeriodWorkspace({
             onSaveAnswers={(next) => void db.settings.put({ key: "questionAnswers", value: JSON.stringify(next) })}
             periods={periods}
             currentId={record.id}
-            ytd={ytd}
-            ytdAnchor={ytdAnchors[year] ?? null}
+            year={year}
+            ytdAnchors={ytdAnchors}
             otherIncome={otherIncome}
             onSelect={(id) => void setCurrentPeriodId(id)}
             onCreateNext={() => void createNext()}
-            onLogPastStub={(endDate, gross, net, startDate) => void logPastStub(endDate, gross, net, startDate)}
+            onLogPastStub={(endDate, gross, net, startDate, actual) => void logPastStub(endDate, gross, net, startDate, actual)}
             onSetDates={(id, startDate) =>
               void db.periods.update(id, { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1), updatedAt: Date.now() })
             }
@@ -571,6 +584,7 @@ function PeriodWorkspace({
             paydayDelay={String(paydayDelayDays)}
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
             onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
+            onDownloadYearCsv={downloadYearCsv}
           />
         )}
       </main>
