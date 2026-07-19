@@ -175,6 +175,8 @@ export default function Home({
   backupStale,
   onGoToShifts,
   onGoToMe,
+  initialView,
+  onViewConsumed,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -203,8 +205,15 @@ export default function Home({
   backupStale: boolean;
   onGoToShifts: () => void;
   onGoToMe: () => void;
+  /** One-shot deep link from a period card ("Stub details") — consumed on mount. */
+  initialView: "check" | "breakdown" | null;
+  onViewConsumed: () => void;
 }) {
-  const [view, setView] = useState<"main" | "check" | "breakdown">("main");
+  const [view, setView] = useState<"main" | "check" | "breakdown">(initialView ?? "main");
+  useEffect(() => {
+    if (initialView) onViewConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showGross, setShowGross] = useState(false);
   const heroCents = useCountUp(showGross ? period.grossCents : net.netCents);
   const empty = shifts.length === 0 && period.leaveHours === 0;
@@ -233,6 +242,7 @@ export default function Home({
         <h2 className="text-title-2">{view === "check" ? "Check my paycheck" : "The breakdown"}</h2>
         {view === "check" ? (
           <Audit
+            recordOnly={shifts.length === 0 && period.leaveHours === 0}
             rows={auditRows}
             actual={actual}
             setActual={setActual}

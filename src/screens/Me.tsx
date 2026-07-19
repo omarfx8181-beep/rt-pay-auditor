@@ -27,10 +27,10 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { computeNet, computePeriod, type BonusTier } from "../lib/engine.ts";
-import { draftToConfig, draftToLeave, draftToShift, num, todayIso, uid, type CfgDraft } from "../lib/draft.ts";
+import { type BonusTier } from "../lib/engine.ts";
+import { num, todayIso, uid, type CfgDraft } from "../lib/draft.ts";
 import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
-import { periodLabel, prevPeriodRange, rollupYtd, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
+import { periodLabel, periodMoney, prevPeriodRange, rollupYtd, ytdThroughDate, type OtherIncomeDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { planStubImports, scannedStubActual, scanStubFiles, stubStartDate, type ScannedStub } from "../lib/stubScan.ts";
 import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
@@ -423,6 +423,7 @@ export default function Me({
   onReplayTour,
   onStartTour,
   onDownloadYearCsv,
+  onOpenDetails,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -464,6 +465,7 @@ export default function Me({
   onReplayTour: () => void;
   onStartTour: () => void;
   onDownloadYearCsv: (year: string) => void;
+  onOpenDetails: (id: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   // The Year card can look at ANY year with data, not just the open
@@ -1032,11 +1034,8 @@ export default function Me({
           </div>
 
           {periods.map((p) => {
-            const cfg = draftToConfig(p.cfgDraft);
-            const result = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
-            const net = computeNet(result.grossCents, cfg);
+            const m = periodMoney(p);
             const active = p.id === currentId;
-            const hasStub = (p.actual?.net ?? "") !== "";
             return (
               <section key={p.id} className={`card p-4 ${active ? "border-accent" : ""} ${p.archived ? "opacity-70" : ""}`}>
                 <button onClick={() => onSelect(p.id)} className="block w-full text-left">
@@ -1046,21 +1045,19 @@ export default function Me({
                     {p.archived && !active && <span className="eyebrow shrink-0">Archived</span>}
                   </div>
                   <div className="mt-1 text-xs tabular-nums text-ink-dim">
-                    {hasStub ? (
-                      <>
-                        take-home{" "}
-                        <span className="text-pos">
-                          {fmtCents(Math.round(num(p.actual.net.replace(/[$,]/g, "")) * 100))}
-                        </span>{" "}
-                        · stub ✓
-                      </>
-                    ) : (
-                      <>take-home {fmtCents(net.netCents)} · expected</>
-                    )}
+                    made {fmtCents(m.grossCents)} · taken out {fmtCents(m.grossCents - m.netCents)} · take-home{" "}
+                    <span className="text-pos">{fmtCents(m.netCents)}</span> ·{" "}
+                    {m.stubTrue ? "stub ✓" : "expected"}
                   </div>
                 </button>
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-surface-line/60 pt-3">
+                  <button
+                    onClick={() => onOpenDetails(p.id)}
+                    className="pressable flex min-h-11 items-center gap-1 text-caption font-semibold text-accent"
+                  >
+                    <ReceiptText size={13} /> Stub details
+                  </button>
                   <label className="flex items-center gap-2 text-caption text-ink-dim">
                     Starts
                     <input

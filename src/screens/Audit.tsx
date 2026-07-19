@@ -127,6 +127,7 @@ function VerdictBanner({
 }
 
 export default function Audit({
+  recordOnly = false,
   rows,
   actual,
   setActual,
@@ -144,6 +145,12 @@ export default function Audit({
   onCreateAndFill,
   onYtdAnchor,
 }: {
+  /**
+   * True when this period has no shifts or leave logged — there's
+   * nothing to audit against, so the screen records the stub instead
+   * of judging it (no verdict, no HR email, no misleading deltas).
+   */
+  recordOnly?: boolean;
   rows: AuditRow[];
   actual: Record<string, string>;
   setActual: (updater: (a: Record<string, string>) => Record<string, string>) => void;
@@ -195,12 +202,21 @@ export default function Audit({
 
   return (
     <div className="space-y-3">
-      <VerdictBanner
-        verdict={verdict}
-        emailHref={emailHref}
-        identityMissing={identity.name.trim() === "" || identity.employeeId.trim() === ""}
-        onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-      />
+      {recordOnly ? (
+        <Card>
+          <p className="text-subhead">
+            Just recording this one — no shifts are logged for this period, so there's nothing to audit against.
+            Every line you enter still counts in the year totals and "Where the money went."
+          </p>
+        </Card>
+      ) : (
+        <VerdictBanner
+          verdict={verdict}
+          emailHref={emailHref}
+          identityMissing={identity.name.trim() === "" || identity.employeeId.trim() === ""}
+          onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        />
+      )}
 
       <StubFillPanel
         apiKey={apiKey}
@@ -215,8 +231,9 @@ export default function Audit({
       />
 
       <p className="text-subhead text-ink-dim">
-        Or type each line from your stub. Anything more than a nickel off gets flagged — in dollars, and in bonus
-        units where that's what was shorted.
+        {recordOnly
+          ? "Or type the lines straight off the stub — they feed the year totals line by line."
+          : "Or type each line from your stub. Anything more than a nickel off gets flagged — in dollars, and in bonus units where that's what was shorted."}
       </p>
 
       <Card>
@@ -239,23 +256,25 @@ export default function Audit({
               />
               <div
                 className={`w-20 text-right text-xs tabular-nums sm:w-24 ${
-                  delta === null ? "text-ink-dim/60" : delta.ok ? "text-pos" : "text-neg"
+                  delta === null ? "text-ink-dim/60" : recordOnly || delta.ok ? "text-pos" : "text-neg"
                 }`}
               >
                 {delta === null
                   ? "—"
-                  : delta.ok
-                    ? "✓ matches"
-                    : (delta.deltaCents > 0 ? "+" : "−") +
-                      fmtCents(Math.abs(delta.deltaCents)).slice(1) +
-                      (delta.deltaUnits !== null ? ` (${fmtUnits(Math.abs(delta.deltaUnits))}u)` : "")}
+                  : recordOnly
+                    ? "✓ saved"
+                    : delta.ok
+                      ? "✓ matches"
+                      : (delta.deltaCents > 0 ? "+" : "−") +
+                        fmtCents(Math.abs(delta.deltaCents)).slice(1) +
+                        (delta.deltaUnits !== null ? ` (${fmtUnits(Math.abs(delta.deltaUnits))}u)` : "")}
               </div>
             </div>
           ))}
         </div>
       </Card>
 
-      {verdict.kind !== "intro" && (
+      {!recordOnly && verdict.kind !== "intro" && (
         <button
           onClick={() => setProofOpen(true)}
           className="pressable flex min-h-11 items-center gap-1.5 py-1 text-subhead font-medium text-accent"
@@ -277,7 +296,7 @@ export default function Audit({
         />
       )}
 
-      {discrepancies.length > 0 && (
+      {!recordOnly && discrepancies.length > 0 && (
         <div ref={emailRef}>
           <HrEmailPanel
             discrepancies={discrepancies}

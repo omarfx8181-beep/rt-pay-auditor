@@ -84,6 +84,19 @@ export default function App() {
     void db.settings.put({ key: "tourDone", value: "1" });
   };
 
+  // "Stub details" on any period card jumps straight into that period's
+  // check screen. The intent lives up here because opening another
+  // period remounts the workspace; Home consumes it once on mount.
+  const [homeIntent, setHomeIntent] = useState<{ view: "check" | "breakdown"; periodId: string } | null>(null);
+  const openPeriodDetails = (id: string) => {
+    // The intent names its period: the workspace may mount once more for
+    // the OLD current period before the switch lands, and that interim
+    // mount must not consume it.
+    setHomeIntent({ view: "check", periodId: id });
+    setTab("home");
+    void setCurrentPeriodId(id);
+  };
+
   // Reflect the chosen appearance on <html>; "system" removes the override.
   const appearance = (appearanceRow?.value as AppearanceMode) || "system";
   useEffect(() => {
@@ -199,6 +212,9 @@ export default function App() {
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
         onStartTour={() => setTourStep(0)}
+        onOpenPeriodDetails={openPeriodDetails}
+        homeIntent={homeIntent}
+        onHomeIntentConsumed={() => setHomeIntent(null)}
       />
       {deletedPeriod && (
         <UndoToast
@@ -234,6 +250,9 @@ function PeriodWorkspace({
   setTab,
   onDeletePeriod,
   onStartTour,
+  onOpenPeriodDetails,
+  homeIntent,
+  onHomeIntentConsumed,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -249,6 +268,9 @@ function PeriodWorkspace({
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
   onStartTour: () => void;
+  onOpenPeriodDetails: (id: string) => void;
+  homeIntent: { view: "check" | "breakdown"; periodId: string } | null;
+  onHomeIntentConsumed: () => void;
 }) {
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
@@ -539,6 +561,8 @@ function PeriodWorkspace({
             backupStale={backupStale}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 2)}
+            initialView={homeIntent?.periodId === record.id ? homeIntent.view : null}
+            onViewConsumed={onHomeIntentConsumed}
           />
         )}
         {tab === "shifts" && (
@@ -602,6 +626,7 @@ function PeriodWorkspace({
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
             onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
             onStartTour={onStartTour}
+            onOpenDetails={onOpenPeriodDetails}
             onDownloadYearCsv={downloadYearCsv}
           />
         )}
