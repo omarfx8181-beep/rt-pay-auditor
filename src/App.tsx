@@ -616,6 +616,7 @@ function PeriodWorkspace({
             periodStart={record.startDate}
             periodEnd={record.endDate}
             onFileFuture={(batches) => void fileFutureShifts(batches)}
+            onSetEveningHours={(hours) => setCfgDraft((d) => ({ ...d, eveningHours: hours }))}
           />
         )}
         {tab === "goals" && (

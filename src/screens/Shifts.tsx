@@ -15,6 +15,7 @@ import { periodLabel } from "../lib/periods.ts";
 import type { FutureBatch } from "../lib/scanRouting.ts";
 import { Card, Eyebrow, Sheet, StatTile, UndoToast } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
+import TimecardPanel from "./TimecardPanel.tsx";
 
 /**
  * The overtime meter — straight hours marching toward the per-period
@@ -317,6 +318,7 @@ export default function Shifts({
   periodStart,
   periodEnd,
   onFileFuture,
+  onSetEveningHours,
 }: {
   shifts: ShiftDraft[];
   setShifts: (updater: (arr: ShiftDraft[]) => ShiftDraft[]) => void;
@@ -330,6 +332,7 @@ export default function Shifts({
   periodStart: string;
   periodEnd: string;
   onFileFuture: (batches: FutureBatch[]) => void;
+  onSetEveningHours: (hours: string) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
@@ -373,6 +376,17 @@ export default function Shifts({
         onFileFuture={onFileFuture}
       />
       </div>
+
+      <TimecardPanel
+        apiKey={apiKey}
+        shifts={shifts}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+        onApply={(next, eveningHours) => {
+          setShifts(() => next);
+          if (eveningHours !== null) onSetEveningHours(String(Math.round(eveningHours * 100) / 100));
+        }}
+      />
 
       {replaced && (
         <UndoToast
