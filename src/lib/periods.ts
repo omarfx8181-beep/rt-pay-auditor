@@ -208,7 +208,7 @@ export function periodMoney(p: PayPeriod): PeriodMoney {
   };
 }
 
-const parseDollars = (raw: string | undefined): Cents | null => {
+export const parseDollars = (raw: string | undefined): Cents | null => {
   const trimmed = (raw ?? "").trim();
   if (trimmed === "") return null;
   const n = parseFloat(trimmed.replace(/[$,]/g, ""));

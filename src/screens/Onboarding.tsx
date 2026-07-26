@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Camera, Check, ChevronLeft, Plus } from "lucide-react";
 import { num } from "../lib/draft.ts";
-import { FAIRVIEW_RT_PRESET } from "../lib/presets.ts";
+import { PRESETS } from "../lib/presets.ts";
 
 const STEPS = 4;
 
@@ -29,16 +29,19 @@ export default function Onboarding({
   baseRate: initialBaseRate,
   onStep,
   onSaveBaseRate,
+  onPickPreset,
   onDone,
 }: {
   initialStep: number;
   baseRate: string;
   onStep: (step: number) => void;
   onSaveBaseRate: (rate: string) => void;
+  onPickPreset: (presetIndex: number) => void;
   onDone: (goTo: "home" | "shifts") => void;
 }) {
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), STEPS - 1));
   const [rate, setRate] = useState(initialBaseRate);
+  const [presetIdx, setPresetIdx] = useState(0);
 
   const go = (s: number) => {
     setStep(s);
@@ -92,23 +95,41 @@ export default function Onboarding({
         {step === 1 && (
           <div>
             <h1 className="text-title-2">Where do you work?</h1>
-            <div className="mt-4 rounded-2xl border border-accent bg-accent/10 p-5 shadow-card">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-headline">{FAIRVIEW_RT_PRESET.facility.name}</div>
-                  <div className="mt-0.5 text-subhead text-ink-dim">{FAIRVIEW_RT_PRESET.role.name}</div>
-                </div>
-                <span className="grid size-7 place-items-center rounded-full bg-accent text-on-accent">
-                  <Check size={16} strokeWidth={2.5} />
-                </span>
-              </div>
+            <div className="mt-4 space-y-2.5">
+              {PRESETS.map((preset, i) => (
+                <button
+                  key={preset.facility.name + preset.role.name}
+                  onClick={() => setPresetIdx(i)}
+                  className={`w-full rounded-2xl border p-5 text-left shadow-card ${
+                    i === presetIdx ? "border-accent bg-accent/10" : "border-surface-line bg-surface-card"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-headline">{preset.facility.name}</div>
+                      <div className="mt-0.5 text-subhead text-ink-dim">{preset.role.name}</div>
+                    </div>
+                    {i === presetIdx && (
+                      <span className="grid size-7 place-items-center rounded-full bg-accent text-on-accent">
+                        <Check size={16} strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))}
             </div>
             <p className="mt-4 text-footnote text-ink-dim">
-              This loads {FAIRVIEW_RT_PRESET.facility.name}'s weekend, evening, overtime, and bonus rules for you.
+              This loads {PRESETS[presetIdx].facility.name}'s weekend, evening, overtime, and bonus rules for you.
               More hospitals and roles are coming — they're presets, not code.
             </p>
             <p className="mt-2 text-footnote text-ink-dim">This stays on your device.</p>
-            <button onClick={() => go(2)} className="btn btn-primary pressable mt-8 w-full">
+            <button
+              onClick={() => {
+                onPickPreset(presetIdx);
+                go(2);
+              }}
+              className="btn btn-primary pressable mt-8 w-full"
+            >
               Continue
             </button>
           </div>

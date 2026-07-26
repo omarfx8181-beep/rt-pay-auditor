@@ -36,6 +36,9 @@ import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
 import HowToCard from "./HowTo.tsx";
+import { PtoCard, W2Card } from "./BankAndW2.tsx";
+import type { PtoConfig } from "../lib/pto.ts";
+import { EMPTY_W2, type W2Typed } from "../lib/w2.ts";
 
 const OPEN_QUESTIONS: Array<{ id: string; text: string }> = [
   { id: "transport", text: "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?" },
@@ -426,6 +429,11 @@ export default function Me({
   onStartTour,
   onDownloadYearCsv,
   onOpenDetails,
+  pto,
+  onSavePto,
+  w2Typed,
+  onSaveW2,
+  baseRateCents,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -470,6 +478,11 @@ export default function Me({
   onStartTour: () => void;
   onDownloadYearCsv: (year: string) => void;
   onOpenDetails: (id: string) => void;
+  pto: PtoConfig;
+  onSavePto: (next: PtoConfig) => void;
+  w2Typed: Record<string, W2Typed>;
+  onSaveW2: (year: string, next: W2Typed) => void;
+  baseRateCents: number;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   // The Year card can look at ANY year with data, not just the open
@@ -872,6 +885,10 @@ export default function Me({
             </p>
           </Card>
           </div>
+
+          <PtoCard periods={periods} pto={pto} onSavePto={onSavePto} baseRateCents={baseRateCents} />
+
+          <W2Card periods={periods} year={yearView} typed={w2Typed[yearView] ?? EMPTY_W2} onSaveTyped={(next) => onSaveW2(yearView, next)} />
 
           <Disclosure
             title="Add your year — scan old stubs"

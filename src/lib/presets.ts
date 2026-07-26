@@ -116,3 +116,10 @@ export const FAIRVIEW_RT_PRESET: PayRulesPreset = {
     { id: "t8", label: "16-hr extra — old tier ($750)", units: 15 },
   ],
 };
+
+/**
+ * Every facility+role preset the app ships. One today; when a coworker's
+ * hospital or role lands here, onboarding's card becomes a picker by
+ * itself — nothing else changes.
+ */
+export const PRESETS = [FAIRVIEW_RT_PRESET];

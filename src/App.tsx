@@ -28,13 +28,15 @@ import { TabBar, UndoToast, type Tab } from "./ui/kit.tsx";
 import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
-import { FAIRVIEW_RT_PRESET } from "./lib/presets.ts";
+import { FAIRVIEW_RT_PRESET, PRESETS } from "./lib/presets.ts";
 import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
 import Onboarding from "./screens/Onboarding.tsx";
 import Tour from "./screens/Tour.tsx";
 import Goals from "./screens/Goals.tsx";
 import { parseGoals, type GoalsSetting } from "./lib/goals.ts";
+import { parsePto, type PtoConfig } from "./lib/pto.ts";
+import { parseW2Setting, type W2Typed } from "./lib/w2.ts";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
@@ -66,6 +68,8 @@ export default function App() {
   const paydayDelayRow = useLiveQuery(async () => (await db.settings.get("paydayDelayDays")) ?? null, []);
   const closeEnoughRow = useLiveQuery(async () => (await db.settings.get("closeEnough")) ?? null, []);
   const goalsRow = useLiveQuery(async () => (await db.settings.get("goals")) ?? null, []);
+  const ptoRow = useLiveQuery(async () => (await db.settings.get("pto")) ?? null, []);
+  const w2Row = useLiveQuery(async () => (await db.settings.get("w2")) ?? null, []);
   // The active tab lives HERE, above the per-period workspace: switching
   // periods remounts the workspace (key=id) and must not yank the user
   // back to Home. Onboarding's "Scan my schedule" lands on Shifts.
@@ -124,7 +128,9 @@ export default function App() {
     lastBackupRow === undefined ||
     paydayDelayRow === undefined ||
     closeEnoughRow === undefined ||
-    goalsRow === undefined
+    goalsRow === undefined ||
+    ptoRow === undefined ||
+    w2Row === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -157,6 +163,12 @@ export default function App() {
             updatedAt: Date.now(),
           })
         }
+        onPickPreset={(i) => {
+          const preset = PRESETS[i];
+          if (preset && preset !== PRESETS[0]) {
+            void db.periods.update(current.id, { cfgDraft: preset.cfgDraft, tiers: preset.tiers, updatedAt: Date.now() });
+          }
+        }}
         onDone={(goTo) => {
           setTab(goTo);
           void db.settings.put({ key: "onboarding", value: "done" });
@@ -219,6 +231,8 @@ export default function App() {
         paydayDelayDays={parsePaydayDelay(paydayDelayRow?.value)}
         closeEnoughCents={parseCloseEnough(closeEnoughRow?.value)}
         goals={parseGoals(goalsRow?.value)}
+        pto={parsePto(ptoRow?.value)}
+        w2Typed={parseW2Setting(w2Row?.value)}
         tab={tab}
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
@@ -270,6 +284,8 @@ function PeriodWorkspace({
   paydayDelayDays,
   closeEnoughCents,
   goals,
+  pto,
+  w2Typed,
   tab,
   setTab,
   onDeletePeriod,
@@ -290,6 +306,8 @@ function PeriodWorkspace({
   paydayDelayDays: number;
   closeEnoughCents: number;
   goals: GoalsSetting;
+  pto: PtoConfig;
+  w2Typed: Record<string, W2Typed>;
   tab: string;
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
@@ -680,6 +698,11 @@ function PeriodWorkspace({
             onStartTour={onStartTour}
             onOpenDetails={onOpenPeriodDetails}
             onDownloadYearCsv={downloadYearCsv}
+            pto={pto}
+            onSavePto={(next) => void db.settings.put({ key: "pto", value: JSON.stringify(next) })}
+            w2Typed={w2Typed}
+            onSaveW2={(yr, next) => void db.settings.put({ key: "w2", value: JSON.stringify({ ...w2Typed, [yr]: next }) })}
+            baseRateCents={cfg.baseRateCents}
           />
         )}
       </main>
