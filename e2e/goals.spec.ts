@@ -27,6 +27,14 @@ test("year goal: meter, engine-priced plan, persistence, and bar deep-links", as
   await page.locator('button[aria-label*="Sun, 7/5"]').click();
   await expect(page.locator('h2:has-text("Check my paycheck")')).toBeVisible();
 
+  // the strategizer: pickup menu, priced values, honest top-out
+  await tabButton(page, "Goals").click();
+  await expect(page.locator("text=Strategize the pickups")).toBeVisible();
+  await expect(page.locator("text=a twelve ≈")).toBeVisible();
+  await page.locator('label:has-text("Days open, per check") input').fill("2");
+  await expect(page.locator("text=Your open days top out at")).toBeVisible(); // $150k gap dwarfs 2 pickups
+  await expect(page.locator("text=the year lands around")).toBeVisible();
+
   // the goal survives a reload
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);

@@ -7,7 +7,7 @@
  * (computeWhatIf on the current period), so "one more shift" is worth
  * exactly what the what-if card says — same rules, same rounding.
  */
-import { computeWhatIf, type Cents, type EngineConfig, type Shift } from "./engine.ts";
+import { computeWhatIf, type BonusTier, type Cents, type EngineConfig, type Shift } from "./engine.ts";
 import { yearGridEnds, type PayPeriod } from "./periods.ts";
 
 export type GoalKind = "gross" | "takehome";
@@ -16,7 +16,14 @@ export interface YearGoal {
   /** Dollars as typed. */
   target: string;
   kind: GoalKind;
+  /** Pickup lengths available to this person (hours) — the strategizer's menu. */
+  lengths?: number[];
+  /** Max pickups per check as typed; blank = whatever it takes. */
+  maxPickups?: string;
 }
+
+/** The lengths a hospital pickup comes in. */
+export const PICKUP_LENGTHS = [8, 12, 16] as const;
 
 /** settings key "goals" → JSON Record<year, YearGoal>. */
 export type GoalsSetting = Record<string, YearGoal>;
@@ -127,6 +134,119 @@ export function buildGoalPlan(args: {
     otHoursPerCheck: perOtHour > 0 ? round1(extraPerCheckCents / perOtHour) : 0,
     unitsPerCheck: perUnit > 0 ? round1(extraPerCheckCents / perUnit) : 0,
     extraShiftsTotal: perShift > 0 && checksLeft > 0 ? round1((extraPerCheckCents * checksLeft) / perShift) : 0,
+  };
+}
+
+/* ---------------- the pickup strategizer ---------------- */
+
+/**
+ * The extra-shift bonus units a pickup of this length earns, from THIS
+ * week's tiers — a 12-hr extra is 10 units ($500), the current 16-hr
+ * tier is 8. Superseded tiers (label says "old") never count; no
+ * matching tier (an 8, usually) → no units.
+ */
+export function tierUnitsForLength(tiers: BonusTier[], hours: number): number {
+  const hit = tiers.find((t) => !/old/i.test(t.label) && new RegExp(`\\b${hours}\\b`).test(t.label) && /extra/i.test(t.label));
+  return hit ? hit.units : 0;
+}
+
+export interface PickupValue {
+  hours: number;
+  units: number;
+  grossCents: Cents;
+  netCents: Cents;
+}
+
+/**
+ * What a real pickup PAYS, length by length — engine what-if math on
+ * the current period (OT reality included) plus the tier bonus the
+ * length actually carries.
+ */
+export function pickupValues(shifts: Shift[], cfg: EngineConfig, tiers: BonusTier[], lengths: number[]): PickupValue[] {
+  return [...lengths]
+    .sort((a, b) => a - b)
+    .map((hours) => {
+      const units = tierUnitsForLength(tiers, hours);
+      const wi = computeWhatIf(shifts, cfg, { hours, units548: units, weekend: false, chargeHours: 0 });
+      return { hours, units, grossCents: wi.dGrossCents, netCents: wi.dNetCents };
+    });
+}
+
+export interface PickupRecipe {
+  /** e.g. [{hours: 16, count: 1}, {hours: 8, count: 1}] per check. */
+  parts: Array<{ hours: number; count: number }>;
+  pickupsPerCheck: number;
+  addsPerCheckCents: Cents;
+  /** True when the recipe covers the per-check gap. */
+  covers: boolean;
+  /** The most your stated availability can add per check. */
+  maxAddablePerCheckCents: Cents;
+}
+
+const MAX_PICKUPS_HARD = 6;
+
+/**
+ * The concrete combo: fewest pickups per check that cover the gap
+ * (ties → least overshoot). Small space, searched exactly. When even
+ * the max doesn't cover, the recipe is the best the availability can
+ * do and `covers` is false — the UI owes the person the honest landing
+ * spot, not a fantasy.
+ */
+export function buildPickupPlan(
+  extraPerCheckCents: Cents,
+  values: PickupValue[],
+  kind: GoalKind,
+  maxPickupsPerCheck: number,
+): PickupRecipe | null {
+  if (values.length === 0) return null;
+  const cap = maxPickupsPerCheck > 0 ? Math.min(maxPickupsPerCheck, MAX_PICKUPS_HARD) : MAX_PICKUPS_HARD;
+  const worth = (v: PickupValue) => (kind === "gross" ? v.grossCents : v.netCents);
+  if (extraPerCheckCents <= 0) {
+    return { parts: [], pickupsPerCheck: 0, addsPerCheckCents: 0, covers: true, maxAddablePerCheckCents: cap * Math.max(...values.map(worth)) };
+  }
+
+  let best: { counts: number[]; total: Cents; n: number } | null = null;
+  let maxAddable = 0;
+  const counts = new Array<number>(values.length).fill(0);
+  const walk = (idx: number, used: number, total: Cents) => {
+    if (total > maxAddable && used <= cap) maxAddable = total;
+    if (total >= extraPerCheckCents) {
+      if (
+        best === null ||
+        used < best.n ||
+        (used === best.n && total < best.total)
+      ) {
+        best = { counts: [...counts], total, n: used };
+      }
+      return; // adding more only overshoots further
+    }
+    if (idx >= values.length || used >= cap) return;
+    for (let c = 0; used + c <= cap; c++) {
+      counts[idx] = c;
+      walk(idx + 1, used + c, total + c * worth(values[idx]));
+    }
+    counts[idx] = 0;
+  };
+  walk(0, 0, 0);
+
+  if (best === null) {
+    // availability can't cover — best effort = the max-value fill
+    const sorted = [...values].sort((a, b) => worth(b) - worth(a));
+    const parts = sorted[0] ? [{ hours: sorted[0].hours, count: cap }] : [];
+    const adds = sorted[0] ? cap * worth(sorted[0]) : 0;
+    return { parts, pickupsPerCheck: cap, addsPerCheckCents: adds, covers: false, maxAddablePerCheckCents: adds };
+  }
+  const chosen = best as { counts: number[]; total: Cents; n: number };
+  const parts = chosen.counts
+    .map((count, i) => ({ hours: values[i].hours, count }))
+    .filter((p) => p.count > 0)
+    .sort((a, b) => b.hours - a.hours);
+  return {
+    parts,
+    pickupsPerCheck: chosen.n,
+    addsPerCheckCents: chosen.total,
+    covers: true,
+    maxAddablePerCheckCents: Math.max(maxAddable, chosen.total),
   };
 }
 

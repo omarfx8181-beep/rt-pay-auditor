@@ -644,6 +644,7 @@ function PeriodWorkspace({
             year={year}
             shifts={shifts}
             cfg={cfg}
+            tiers={tiers}
             goals={goals}
             onSaveGoals={(next) => void db.settings.put({ key: "goals", value: JSON.stringify(next) })}
             onOpenPeriodDetails={onOpenPeriodDetails}

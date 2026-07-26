@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { DEFAULT_CFG, DEFAULT_TIERS } from "./engine.ts";
 import { ACTUAL_SEED, DEFAULT_CFG_DRAFT, DEMO_SHIFTS, draftToShift } from "./draft.ts";
 import { yearGridEnds, type PayPeriod } from "./periods.ts";
-import { buildGoalPlan, goalLevers, parseGoals } from "./goals.ts";
+import { buildGoalPlan, buildPickupPlan, goalLevers, parseGoals, pickupValues, tierUnitsForLength } from "./goals.ts";
 
 const demoPeriod = (over: Partial<PayPeriod> = {}): PayPeriod => ({
   id: "p1",
@@ -110,5 +110,51 @@ describe("buildGoalPlan", () => {
     expect(parseGoals("not json")).toEqual({});
     expect(parseGoals(null)).toEqual({});
     expect(parseGoals(JSON.stringify({ "2026": { target: "150000", kind: "gross" } }))["2026"].target).toBe("150000");
+  });
+});
+
+describe("the pickup strategizer", () => {
+  test("tier units by length: 12 → 10u, 16 → the CURRENT 8u (never the old tier), 8 → none", () => {
+    expect(tierUnitsForLength(DEFAULT_TIERS, 12)).toBe(10);
+    expect(tierUnitsForLength(DEFAULT_TIERS, 16)).toBe(8);
+    expect(tierUnitsForLength(DEFAULT_TIERS, 8)).toBe(0);
+  });
+
+  test("a pickup's worth = OT hours + its tier bonus (the real extra-shift math)", () => {
+    const values = pickupValues(SHIFTS, DEFAULT_CFG, DEFAULT_TIERS, [8, 12, 16]);
+    // demo period is past 80h, so pickup hours ride the blended OT rate
+    expect(values.find((v) => v.hours === 12)!.grossCents).toBe(12 * 8574 + 10 * 5000); // $1,528.88
+    // a 16 is 12 OT hours + 4 DOUBLE-TIME hours (past the 12h/day line) + its tier
+    expect(values.find((v) => v.hours === 16)!.grossCents).toBe(12 * 8574 + 4 * 10506 + 8 * 5000); // $1,849.12
+    expect(values.find((v) => v.hours === 8)!.grossCents).toBe(8 * 8574); // no tier for an 8
+  });
+
+  test("recipe: fewest pickups that cover, least overshoot on ties", () => {
+    const values = pickupValues(SHIFTS, DEFAULT_CFG, DEFAULT_TIERS, [8, 12, 16]);
+    // gap $2,000/check → no single pickup covers ($1,849.12 max);
+    // among pairs, 12+8 ($2,214.80) covers with the least overshoot
+    const plan = buildPickupPlan(200000, values, "gross", 0)!;
+    expect(plan.covers).toBe(true);
+    expect(plan.pickupsPerCheck).toBe(2);
+    expect(plan.parts).toEqual([
+      { hours: 12, count: 1 },
+      { hours: 8, count: 1 },
+    ]);
+    expect(plan.addsPerCheckCents).toBe(12 * 8574 + 10 * 5000 + 8 * 8574);
+  });
+
+  test("availability that can't reach → covers false, best effort reported honestly", () => {
+    const values = pickupValues(SHIFTS, DEFAULT_CFG, DEFAULT_TIERS, [8]);
+    const plan = buildPickupPlan(500000, values, "gross", 2)!; // $5k gap, two 8s max
+    expect(plan.covers).toBe(false);
+    expect(plan.parts).toEqual([{ hours: 8, count: 2 }]);
+    expect(plan.maxAddablePerCheckCents).toBe(2 * 8 * 8574);
+  });
+
+  test("no gap → empty recipe, already covered", () => {
+    const values = pickupValues(SHIFTS, DEFAULT_CFG, DEFAULT_TIERS, [12]);
+    const plan = buildPickupPlan(0, values, "gross", 3)!;
+    expect(plan.covers).toBe(true);
+    expect(plan.parts).toEqual([]);
   });
 });

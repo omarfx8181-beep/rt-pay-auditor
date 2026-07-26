@@ -8,9 +8,9 @@
  */
 import { useMemo, useState } from "react";
 import { Target } from "lucide-react";
-import type { EngineConfig, Shift } from "../lib/engine.ts";
+import type { BonusTier, EngineConfig, Shift } from "../lib/engine.ts";
 import { periodMoney, rollupYtd, yearGridEnds, type OtherIncomeDraft, type PayPeriod } from "../lib/periods.ts";
-import { buildGoalPlan, goalLevers, type GoalKind, type GoalsSetting } from "../lib/goals.ts";
+import { buildGoalPlan, buildPickupPlan, goalLevers, PICKUP_LENGTHS, pickupValues, type GoalKind, type GoalsSetting, type YearGoal } from "../lib/goals.ts";
 import { num, todayIso } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Eyebrow, Hero, StatTile } from "../ui/kit.tsx";
@@ -42,6 +42,7 @@ export default function Goals({
   year,
   shifts,
   cfg,
+  tiers,
   goals,
   onSaveGoals,
   onOpenPeriodDetails,
@@ -53,6 +54,8 @@ export default function Goals({
   /** Current period's shifts — the levers price against today's reality. */
   shifts: Shift[];
   cfg: EngineConfig;
+  /** This week's bonus tiers — a pickup's worth includes its tier units. */
+  tiers: BonusTier[];
   goals: GoalsSetting;
   onSaveGoals: (next: GoalsSetting) => void;
   onOpenPeriodDetails: (id: string) => void;
@@ -65,7 +68,17 @@ export default function Goals({
   );
   const goal = goals[yearView];
   const [draft, setDraft] = useState(goal?.target ?? "");
+  const [maxDraft, setMaxDraft] = useState(goal?.maxPickups ?? "");
   const kind: GoalKind = goal?.kind ?? "gross";
+  const lengths = goal?.lengths ?? [...PICKUP_LENGTHS];
+
+  const persist = (patch: Partial<YearGoal>) => {
+    const merged: YearGoal = { target: draft.trim(), kind, lengths, maxPickups: maxDraft.trim(), ...patch };
+    const next = { ...goals };
+    if (merged.target === "" || num(merged.target.replace(/[$,]/g, "")) <= 0) delete next[yearView];
+    else next[yearView] = merged;
+    onSaveGoals(next);
+  };
 
   const ytd = useMemo(() => rollupYtd(periods, yearView, otherIncome), [periods, yearView, otherIncome]);
   const madeCents = kind === "gross" ? ytd.totalGrossCents : ytd.totalNetCents;
@@ -84,12 +97,6 @@ export default function Goals({
     [goal, kind, madeCents, periods, yearView, levers],
   );
 
-  const save = (target: string, k: GoalKind) => {
-    const next = { ...goals };
-    if (target.trim() === "" || num(target.replace(/[$,]/g, "")) <= 0) delete next[yearView];
-    else next[yearView] = { target: target.trim(), kind: k };
-    onSaveGoals(next);
-  };
 
   // Every grid check of the year → a bar (tap = that period's stub detail).
   const bars = useMemo(() => {
@@ -103,6 +110,14 @@ export default function Goals({
   const maxBar = Math.max(1, ...bars.map((b) => b.cents));
 
   const kindWord = kind === "gross" ? "before taxes" : "take-home";
+  const values = useMemo(() => pickupValues(shifts, cfg, tiers, lengths), [shifts, cfg, tiers, lengths]);
+  const pickup =
+    plan && !plan.done && plan.extraPerCheckCents > 0
+      ? buildPickupPlan(plan.extraPerCheckCents, values, kind, Math.max(0, Math.floor(num(maxDraft))))
+      : null;
+  const hoursWord = (h: number) => (h === 16 ? "sixteen" : h === 12 ? "twelve" : h === 8 ? "eight" : `${h}-hr`);
+  const landingCents =
+    plan && pickup ? plan.madeCents + (plan.avgPerCheckCents + pickup.maxAddablePerCheckCents) * plan.checksLeft : 0;
   const oneEvery = plan && plan.extraShiftsTotal > 0 ? Math.max(1, Math.round(plan.checksLeft / plan.extraShiftsTotal)) : 0;
 
   return (
@@ -120,6 +135,7 @@ export default function Goals({
               onClick={() => {
                 setYearView(y);
                 setDraft(goals[y]?.target ?? "");
+                setMaxDraft(goals[y]?.maxPickups ?? "");
               }}
               className={`btn px-3 py-1.5 text-xs ${y === yearView ? "btn-primary" : "btn-ghost"} pressable`}
             >
@@ -181,7 +197,7 @@ export default function Goals({
                 value={draft}
                 onChange={(e) => {
                   setDraft(e.target.value);
-                  save(e.target.value, kind);
+                  persist({ target: e.target.value.trim() });
                 }}
                 inputMode="decimal"
                 placeholder="120,000"
@@ -193,7 +209,7 @@ export default function Goals({
             {(["gross", "takehome"] as const).map((k) => (
               <button
                 key={k}
-                onClick={() => save(draft, k)}
+                onClick={() => persist({ kind: k })}
                 className={`btn px-3 py-2 text-xs ${kind === k ? "btn-primary" : "btn-ghost"} pressable`}
               >
                 {k === "gross" ? "Before taxes" : "Take-home"}
@@ -261,6 +277,93 @@ export default function Goals({
               {plan.checksElapsed - ytd.periodCount} of this year's checks aren't logged yet, so the average reads low
               and the plan overshoots — scan those old stubs (Me → Add your year) and this gets honest.
             </p>
+          )}
+        </Card>
+      )}
+
+      {plan && !plan.done && plan.extraPerCheckCents > 0 && (
+        <Card title="Strategize the pickups — what do you have open?">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <span className="label">Shifts you can pick up</span>
+              <div className="mt-1 flex gap-1.5">
+                {PICKUP_LENGTHS.map((h) => {
+                  const on = lengths.includes(h);
+                  return (
+                    <button
+                      key={h}
+                      onClick={() => {
+                        const next = on ? lengths.filter((x) => x !== h) : [...lengths, h];
+                        if (next.length > 0) persist({ lengths: next });
+                      }}
+                      className={`btn px-3 py-2 text-xs ${on ? "btn-primary" : "btn-ghost"} pressable`}
+                    >
+                      {h === 16 ? "16s (double)" : `${h}s`}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <label className="flex flex-col">
+              <span className="label">Days open, per check</span>
+              <input
+                value={maxDraft}
+                onChange={(e) => {
+                  setMaxDraft(e.target.value);
+                  persist({ maxPickups: e.target.value.trim() });
+                }}
+                inputMode="numeric"
+                placeholder="no limit"
+                className="input w-24 px-2.5 py-2 text-right text-[16px] tabular-nums"
+              />
+            </label>
+          </div>
+
+          <p className="mt-3 text-footnote tabular-nums text-ink-dim">
+            What one pays right now:{" "}
+            {values
+              .map(
+                (v) =>
+                  `a ${hoursWord(v.hours)} ≈ ${fmtCents(kind === "gross" ? v.grossCents : v.netCents)}${
+                    v.units > 0 ? ` (incl. its ${fmtUnits(v.units)} bonus units)` : ""
+                  }`,
+              )
+              .join(" · ")}
+            . Doubles pay double time past 12 hours — already counted.
+          </p>
+
+          {pickup && (
+            <div className="mt-3 border-t border-surface-line/60 pt-3">
+              {pickup.covers ? (
+                <>
+                  <p className="text-subhead">
+                    Per check:{" "}
+                    <span className="font-semibold">
+                      {pickup.parts.map((p) => `${p.count} × ${hoursWord(p.hours)}`).join(" + ")}
+                    </span>{" "}
+                    — adds ≈<span className="font-semibold tabular-nums">{fmtCents(pickup.addsPerCheckCents)}</span>{" "}
+                    against the {fmtCents(plan.extraPerCheckCents)} gap ✓
+                  </p>
+                  <p className="mt-1 text-footnote text-ink-dim">
+                    That's {pickup.pickupsPerCheck * plan.checksLeft} pickup
+                    {pickup.pickupsPerCheck * plan.checksLeft === 1 ? "" : "s"} across the rest of the year (
+                    {pickup.pickupsPerCheck}/check · {plan.checksLeft} checks left).
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-subhead text-amber">
+                    Your open days top out at ≈{fmtCents(pickup.maxAddablePerCheckCents)} per check — the goal needs{" "}
+                    {fmtCents(plan.extraPerCheckCents)} extra.
+                  </p>
+                  <p className="mt-1 text-footnote text-ink-dim">
+                    At that availability the year lands around{" "}
+                    <span className="font-semibold tabular-nums">{fmtCents(landingCents)}</span> {kindWord}. Open up
+                    more days, add lengths above, or set the target there and call it honest.
+                  </p>
+                </>
+              )}
+            </div>
           )}
         </Card>
       )}
