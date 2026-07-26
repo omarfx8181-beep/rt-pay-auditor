@@ -1063,6 +1063,7 @@ export default function Me({
                     made {fmtCents(m.grossCents)} · taken out {fmtCents(m.grossCents - m.netCents)} · take-home{" "}
                     <span className="text-pos">{fmtCents(m.netCents)}</span> ·{" "}
                     {m.stubTrue ? "stub ✓" : "expected"}
+                    {m.correctionGrossCents > 0 && <span className="text-pos"> · corrected ✓</span>}
                   </div>
                 </button>
 

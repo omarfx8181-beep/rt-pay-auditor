@@ -5,15 +5,15 @@
  * question. The line-by-line table sits below in plain language.
  */
 import { useRef, useState } from "react";
-import { CircleAlert, FileDown, Mail } from "lucide-react";
+import { BadgeCheck, CircleAlert, FileDown, Mail, Plus, Trash2 } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
-import { num } from "../lib/draft.ts";
-import { fmtCents, fmtUnits } from "../lib/format.ts";
+import { num, todayIso, uid } from "../lib/draft.ts";
+import { dayLabel, fmtCents, fmtUnits } from "../lib/format.ts";
 import { CalloutCard, Card } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
 import { lineCloseEnough, type LineDelta, type Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
-import type { PayPeriod, YtdAnchor } from "../lib/periods.ts";
+import { type CorrectionDraft, type PayPeriod, type YtdAnchor } from "../lib/periods.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
 import ProofPacket from "./ProofPacket.tsx";
@@ -76,6 +76,22 @@ function VerdictBanner({
     );
   }
 
+  if (verdict.kind === "corrected") {
+    return (
+      <CalloutCard tone="pos">
+        <div className="flex items-center gap-2 text-title-2 text-pos">
+          <BadgeCheck size={24} /> Made whole — corrected ✓
+        </div>
+        <p className="mt-2 text-body">
+          This check came in short <span className="font-semibold tabular-nums">{fmtCents(verdict.owedCents)}</span>,
+          and payroll's correction check paid{" "}
+          <span className="font-semibold tabular-nums">{fmtCents(verdict.correctionCents)}</span> back. Case closed —
+          the money counts in your year totals.
+        </p>
+      </CalloutCard>
+    );
+  }
+
   if (verdict.kind === "red") {
     const [worst, ...rest] = verdict.shortfalls;
     const clean = rest.length === 0 && verdict.earningsOvers.length === 0;
@@ -91,6 +107,14 @@ function VerdictBanner({
             <> Paid over on {verdict.earningsOvers.map((d) => d.label.toLowerCase()).join(", ")} — worth a rate check.</>
           )}
           {clean && <> Everything else matched.</>}
+          {verdict.correctionCents > 0 && (
+            <>
+              {" "}
+              A correction paid {fmtCents(verdict.correctionCents)} so far — still{" "}
+              <span className="font-semibold tabular-nums">{fmtCents(verdict.owedCents - verdict.correctionCents)}</span>{" "}
+              short.
+            </>
+          )}
         </p>
         {emailHref ? (
           <a href={emailHref} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
@@ -126,9 +150,115 @@ function VerdictBanner({
   );
 }
 
+/**
+ * Off-cycle correction checks — payroll fixing a mistake mid-week.
+ * Logged against THIS period: three fields, listed with a remove, and
+ * the verdict flips to "made whole" once they cover the shortfall.
+ */
+function CorrectionsPanel({
+  corrections,
+  setCorrections,
+  verdict,
+}: {
+  corrections: CorrectionDraft[];
+  setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
+  verdict: Verdict;
+}) {
+  const [open, setOpen] = useState(false);
+  const [payDate, setPayDate] = useState(todayIso());
+  const [gross, setGross] = useState("");
+  const [net, setNet] = useState("");
+  const [note, setNote] = useState("");
+  const showInvite = verdict.kind === "red" || verdict.kind === "corrected" || corrections.length > 0;
+  if (!showInvite) return null;
+  return (
+    <Card>
+      <div className="mb-1 flex items-center gap-1.5">
+        <BadgeCheck size={13} className="text-pos" />
+        <span className="eyebrow">Correction checks — off-cycle fixes from payroll</span>
+      </div>
+      {corrections.length > 0 && (
+        <div className="mb-2 divide-y divide-surface-line/60 text-xs tabular-nums">
+          {corrections.map((c) => (
+            <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+              <span className="w-20 shrink-0">{dayLabel(c.payDate)}</span>
+              <span className="min-w-0 flex-1 truncate text-ink-dim">{c.note || "correction"}</span>
+              <span>
+                ${c.gross} · <span className="text-pos">${c.net} to you</span>
+              </span>
+              <button
+                onClick={() => setCorrections((arr) => arr.filter((x) => x.id !== c.id))}
+                className="pressable p-2 text-ink-dim hover:text-neg"
+                aria-label="Remove correction"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {open ? (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col">
+              <span className="label">Paid on</span>
+              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="input w-auto px-2 py-1.5 text-xs" />
+            </label>
+            <label className="flex flex-col">
+              <span className="label">Gross $</span>
+              <input value={gross} onChange={(e) => setGross(e.target.value)} inputMode="decimal" className="input w-24 px-2 py-1.5 text-right text-[16px] tabular-nums" />
+            </label>
+            <label className="flex flex-col">
+              <span className="label">To your account $</span>
+              <input value={net} onChange={(e) => setNet(e.target.value)} inputMode="decimal" className="input w-24 px-2 py-1.5 text-right text-[16px] tabular-nums" />
+            </label>
+          </div>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="what it fixed — e.g. 548 bonus shortfall"
+            className="input px-2.5 py-1.5 text-[16px]"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                if (num(gross) <= 0 && num(net) <= 0) return;
+                setCorrections((arr) => [
+                  ...arr,
+                  { id: uid(), payDate, gross: gross.trim(), net: net.trim(), note: note.trim(), updatedAt: Date.now() },
+                ]);
+                setOpen(false);
+                setGross("");
+                setNet("");
+                setNote("");
+              }}
+              className="btn btn-primary pressable text-xs"
+            >
+              Log the correction
+            </button>
+            <button onClick={() => setOpen(false)} className="pressable px-2 text-xs text-ink-dim">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setOpen(true)} className="btn btn-ghost pressable text-xs">
+          <Plus size={13} /> Payroll sent a correction check? Log it
+        </button>
+      )}
+      <p className="mt-2 text-footnote text-ink-dim">
+        Any day counts — correction checks land mid-week, off the normal paydays. Gross and take-home are on the
+        correction stub; once the gross covers what you were shorted, this check reads "made whole."
+      </p>
+    </Card>
+  );
+}
+
 export default function Audit({
   recordOnly = false,
   closeEnoughCents = 5,
+  corrections,
+  setCorrections,
   rows,
   actual,
   setActual,
@@ -154,6 +284,8 @@ export default function Audit({
   recordOnly?: boolean;
   /** "Call it even" forgiveness (Me → Advanced) — overs/drift only; unders keep the nickel. */
   closeEnoughCents?: number;
+  corrections: CorrectionDraft[];
+  setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
   rows: AuditRow[];
   actual: Record<string, string>;
   setActual: (updater: (a: Record<string, string>) => Record<string, string>) => void;
@@ -221,6 +353,8 @@ export default function Audit({
           onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
         />
       )}
+
+      <CorrectionsPanel corrections={corrections} setCorrections={setCorrections} verdict={verdict} />
 
       <StubFillPanel
         apiKey={apiKey}
@@ -301,7 +435,7 @@ export default function Audit({
         />
       )}
 
-      {!recordOnly && discrepancies.length > 0 && (
+      {!recordOnly && verdict.kind !== "corrected" && discrepancies.length > 0 && (
         <div ref={emailRef}>
           <HrEmailPanel
             discrepancies={discrepancies}

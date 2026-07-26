@@ -62,6 +62,15 @@ export type Verdict =
       earningsOvers: LineDelta[];
       /** True when stub tax lines are off too (they follow the short gross). */
       taxesFollow: boolean;
+      /** Correction gross logged so far — under the shortfall, or the red would be "corrected". */
+      correctionCents: Cents;
+    }
+  | {
+      /** Was short, but payroll's off-cycle correction check(s) covered it. */
+      kind: "corrected";
+      owedCents: Cents;
+      correctionCents: Cents;
+      shortfalls: LineDelta[];
     }
   | { kind: "amber"; question: string; focus: LineDelta | null };
 
@@ -70,6 +79,8 @@ export function computeVerdict(
   actual: Record<string, string>,
   unit548Cents: Cents,
   closeEnoughCents: number = AUDIT_TOLERANCE_CENTS,
+  /** Gross from logged off-cycle correction checks for this period. */
+  correctionGrossCents: Cents = 0,
 ): Verdict {
   const entered: LineDelta[] = [];
   for (const row of rows) {
@@ -104,12 +115,19 @@ export function computeVerdict(
   const earningsOvers = earningsOffs.filter((e) => e.deltaCents > 0);
 
   if (shortfalls.length > 0) {
+    const owedCents = shortfalls.reduce((acc, s) => acc - s.deltaCents, 0);
+    // Payroll fixed it with an off-cycle check: the correction's gross
+    // covers the shorted gross (within the nickel) → made whole.
+    if (correctionGrossCents >= owedCents - AUDIT_TOLERANCE_CENTS && correctionGrossCents > 0) {
+      return { kind: "corrected", owedCents, correctionCents: correctionGrossCents, shortfalls };
+    }
     return {
       kind: "red",
-      owedCents: shortfalls.reduce((acc, s) => acc - s.deltaCents, 0),
+      owedCents,
       shortfalls,
       earningsOvers,
       taxesFollow: offs.some((e) => e.kind === "deduction"),
+      correctionCents: correctionGrossCents,
     };
   }
 

@@ -6,6 +6,23 @@
 import { computeNet, computePeriod, type BonusTier, type Cents } from "./engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./draft.ts";
 
+/**
+ * An off-cycle correction check — payroll fixing a mistake with a
+ * mid-week stub on an off week. It BELONGS to the period it corrects:
+ * its money counts there (and in every rollup), and when its gross
+ * covers the period's shortfall the verdict reads "made whole".
+ */
+export interface CorrectionDraft {
+  id: string;
+  /** YYYY-MM-DD the correction check was paid — any day, off the grid. */
+  payDate: string;
+  /** Dollars as typed. */
+  gross: string;
+  net: string;
+  note: string;
+  updatedAt: number;
+}
+
 export interface PayPeriod {
   id: string;
   /** YYYY-MM-DD, inclusive. Biweekly: end = start + 13 days. */
@@ -15,6 +32,8 @@ export interface PayPeriod {
   shifts: ShiftDraft[];
   /** Paid leave (Kronos Time Off codes); absent on pre-leave records. */
   leave?: LeaveDraft[];
+  /** Off-cycle correction checks for this period; absent on older records. */
+  corrections?: CorrectionDraft[];
   actual: Record<string, string>;
   /**
    * Each period snapshots its own rules: rates and bonus tiers move week
@@ -125,11 +144,25 @@ export interface PeriodMoney {
   /** True when the stub's real net was entered — the numbers are stub-true. */
   stubTrue: boolean;
   buckets: { taxesCents: Cents; pretaxCents: Cents; aftertaxCents: Cents; imputedCents: Cents } | null;
+  /** Off-cycle correction money, already INCLUDED in gross/net above. */
+  correctionGrossCents: Cents;
+  correctionNetCents: Cents;
   units548: number;
   otHours: number;
   dtHours: number;
   workedHours: number;
   leaveHours: number;
+}
+
+/** Total gross/net across a period's correction checks, in cents. */
+export function correctionTotals(p: PayPeriod): { grossCents: Cents; netCents: Cents } {
+  let grossCents = 0;
+  let netCents = 0;
+  for (const c of p.corrections ?? []) {
+    grossCents += parseDollars(c.gross) ?? 0;
+    netCents += parseDollars(c.net) ?? 0;
+  }
+  return { grossCents, netCents };
 }
 
 export function periodMoney(p: PayPeriod): PeriodMoney {
@@ -159,11 +192,14 @@ export function periodMoney(p: PayPeriod): PeriodMoney {
       imputedCents: net.imputedCents,
     };
   }
+  const corrections = correctionTotals(p);
   return {
-    grossCents: actualGross ?? period.grossCents,
-    netCents: actualNet ?? net.netCents,
+    grossCents: (actualGross ?? period.grossCents) + corrections.grossCents,
+    netCents: (actualNet ?? net.netCents) + corrections.netCents,
     stubTrue: actualNet !== null,
     buckets,
+    correctionGrossCents: corrections.grossCents,
+    correctionNetCents: corrections.netCents,
     units548: period.units548,
     otHours: period.otHours,
     dtHours: period.dtHours,
@@ -288,15 +324,12 @@ export function ytdThroughDate(periods: PayPeriod[], asOfEnd: string): YtdThroug
   const out: YtdThroughDate = { grossCents: 0, netCents: 0, periodCount: 0, stubCount: 0 };
   for (const p of periods) {
     if (p.endDate.slice(0, 4) !== year || p.endDate > asOfEnd) continue;
-    const cfg = draftToConfig(p.cfgDraft);
-    const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
-    const net = computeNet(period.grossCents, cfg);
-    const actualGross = parseDollars(p.actual?.gross);
-    const actualNet = parseDollars(p.actual?.net);
+    // periodMoney includes correction checks — payroll's YTD does too.
+    const m = periodMoney(p);
     out.periodCount += 1;
-    if (actualNet !== null) out.stubCount += 1;
-    out.grossCents += actualGross ?? period.grossCents;
-    out.netCents += actualNet ?? net.netCents;
+    if (m.stubTrue) out.stubCount += 1;
+    out.grossCents += m.grossCents;
+    out.netCents += m.netCents;
   }
   return out;
 }

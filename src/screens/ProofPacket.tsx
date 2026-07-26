@@ -22,6 +22,8 @@ function verdictSentence(v: Verdict): string {
     return `UNDERPAID ${fmtCents(v.owedCents)} — ${v.shortfalls
       .map((s) => `${s.techLabel} short ${fmtCents(Math.abs(s.deltaCents))}${s.deltaUnits !== null ? ` (${fmtUnits(Math.abs(s.deltaUnits))} units)` : ""}`)
       .join("; ")}.`;
+  if (v.kind === "corrected")
+    return `CORRECTED — was short ${fmtCents(v.owedCents)}; payroll's off-cycle correction paid ${fmtCents(v.correctionCents)}. Made whole.`;
   if (v.kind === "amber") return `NEEDS A LOOK — ${v.question}`;
   return "Check in progress — not all stub lines entered yet.";
 }

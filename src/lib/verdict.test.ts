@@ -128,3 +128,30 @@ describe("call-it-even forgiveness — one-directional (Omar: 'nothing is comple
     expect(lineCloseEnough("earnings", -5, 0)).toBe(true); // the nickel floor stays
   });
 });
+
+describe("corrections — the June story ends 'made whole'", () => {
+  const SHORT = { ...ACTUAL_SEED, bonus548: "950.00", gross: "8615.22", net: "5531.99", fed: "1090.00" };
+
+  test("correction covering the shortfall flips red to corrected", () => {
+    const v = computeVerdict(rows, SHORT, U, 5, 25000);
+    expect(v.kind).toBe("corrected");
+    if (v.kind === "corrected") {
+      expect(v.owedCents).toBe(25000);
+      expect(v.correctionCents).toBe(25000);
+      expect(v.shortfalls[0].key).toBe("bonus548");
+    }
+  });
+
+  test("partial correction stays red and reports what's still missing", () => {
+    const v = computeVerdict(rows, SHORT, U, 5, 10000);
+    expect(v.kind).toBe("red");
+    if (v.kind === "red") {
+      expect(v.owedCents).toBe(25000);
+      expect(v.correctionCents).toBe(10000);
+    }
+  });
+
+  test("a correction on a green period changes nothing about the verdict", () => {
+    expect(computeVerdict(rows, ACTUAL_SEED, U, 5, 25000).kind).toBe("green");
+  });
+});

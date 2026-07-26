@@ -4,6 +4,9 @@ import { DEFAULT_TIERS } from "./engine.ts";
 import { ACTUAL_SEED, DEFAULT_CFG_DRAFT, DEMO_SHIFTS } from "./draft.ts";
 import {
   addDays,
+  correctionTotals,
+  periodMoney,
+  ytdThroughDate,
   buildBackup,
   mergeBackup,
   nextPeriodRange,
@@ -164,5 +167,29 @@ describe("backup merge", () => {
     const b = mergeBackup([mine], [theirsNewer]);
     expect(b.updated).toBe(1);
     expect(b.merged.find((p) => p.id === "p1")?.updatedAt).toBe(200);
+  });
+});
+
+describe("off-cycle correction checks — money counts in the period they fix", () => {
+  const CORR = [{ id: "c1", payDate: "2026-07-15", gross: "250.00", net: "180.50", note: "548 shortfall", updatedAt: 1 }];
+
+  test("periodMoney folds corrections into gross and net", () => {
+    const m = periodMoney(demoPeriod({ corrections: CORR }));
+    expect(m.correctionGrossCents).toBe(25000);
+    expect(m.correctionNetCents).toBe(18050);
+    expect(m.grossCents).toBe(886522 + 25000);
+    expect(m.netCents).toBe(578199 + 18050);
+    expect(m.stubTrue).toBe(true);
+  });
+
+  test("rollupYtd and ytdThroughDate include correction money", () => {
+    const withCorr = [demoPeriod({ corrections: CORR })];
+    expect(rollupYtd(withCorr, "2026").grossCents).toBe(886522 + 25000);
+    expect(ytdThroughDate(withCorr, "2026-07-05").netCents).toBe(578199 + 18050);
+  });
+
+  test("no corrections → identical to before (zero totals)", () => {
+    expect(correctionTotals(demoPeriod())).toEqual({ grossCents: 0, netCents: 0 });
+    expect(periodMoney(demoPeriod()).grossCents).toBe(886522);
   });
 });

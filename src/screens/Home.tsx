@@ -12,7 +12,7 @@ import type { CfgDraft } from "../lib/draft.ts";
 import type { AuditRow } from "../lib/audit.ts";
 import type { Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
-import { periodLabel, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
+import { periodLabel, type CorrectionDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { daysUntil, paydayFor } from "../lib/payday.ts";
 import { todayIso } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
@@ -61,6 +61,13 @@ function StatusPill({ verdict }: { verdict: Verdict }) {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-hero-neg/20 px-2.5 py-1 text-caption tabular-nums text-hero-neg">
         <CircleAlert size={12} strokeWidth={2.5} /> You're owed {fmtCents(verdict.owedCents)}
+      </span>
+    );
+  }
+  if (verdict.kind === "corrected") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-hero-pos/15 px-2.5 py-1 text-caption text-hero-pos">
+        <Check size={12} strokeWidth={2.5} /> Corrected — made whole
       </span>
     );
   }
@@ -173,6 +180,8 @@ export default function Home({
   year,
   paydayDelayDays,
   closeEnoughCents,
+  corrections,
+  setCorrections,
   backupStale,
   onGoToShifts,
   onGoToMe,
@@ -204,6 +213,8 @@ export default function Home({
   year: string;
   paydayDelayDays: number;
   closeEnoughCents: number;
+  corrections: CorrectionDraft[];
+  setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
   backupStale: boolean;
   onGoToShifts: () => void;
   onGoToMe: () => void;
@@ -246,6 +257,8 @@ export default function Home({
           <Audit
             recordOnly={shifts.length === 0 && period.leaveHours === 0}
             closeEnoughCents={closeEnoughCents}
+            corrections={corrections}
+            setCorrections={setCorrections}
             rows={auditRows}
             actual={actual}
             setActual={setActual}

@@ -13,7 +13,9 @@ import {
   parseBackup,
   periodLabel,
   rollupYtd,
+  correctionTotals,
   PERIOD_DAYS,
+  type CorrectionDraft,
   type PayPeriod,
   type YtdAnchor,
 } from "./lib/periods.ts";
@@ -292,6 +294,7 @@ function PeriodWorkspace({
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
   const [leaveDrafts, setLeaveDrafts] = useState<LeaveDraft[]>(record.leave ?? []);
+  const [corrections, setCorrections] = useState<CorrectionDraft[]>(record.corrections ?? []);
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
@@ -301,8 +304,8 @@ function PeriodWorkspace({
   // The mount render is NOT an edit — writing it back would stamp a fresh
   // updatedAt on every period merely viewed, and backup merge trusts
   // updatedAt to mean "this copy really is newer".
-  const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers });
-  snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, actual, cfgDraft, tiers };
+  const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, corrections, actual, cfgDraft, tiers });
+  snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, corrections, actual, cfgDraft, tiers };
   const dirty = useRef(false);
   const mounted = useRef(false);
   useEffect(() => {
@@ -316,7 +319,7 @@ function PeriodWorkspace({
       void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
     }, 400);
     return () => clearTimeout(t);
-  }, [shiftDrafts, leaveDrafts, actual, cfgDraft, tiers, record.id]);
+  }, [shiftDrafts, leaveDrafts, corrections, actual, cfgDraft, tiers, record.id]);
   useEffect(
     () => () => {
       if (dirty.current) void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
@@ -335,9 +338,13 @@ function PeriodWorkspace({
   const year = record.endDate.slice(0, 4);
   const ytd = useMemo(() => rollupYtd(periods, year, otherIncome), [periods, year, otherIncome]);
 
+  const correctionGrossCents = useMemo(
+    () => correctionTotals({ ...record, corrections }).grossCents,
+    [record, corrections],
+  );
   const verdict = useMemo(
-    () => computeVerdict(auditRows, actual, cfg.unit548Cents, closeEnoughCents),
-    [auditRows, actual, cfg.unit548Cents, closeEnoughCents],
+    () => computeVerdict(auditRows, actual, cfg.unit548Cents, closeEnoughCents, correctionGrossCents),
+    [auditRows, actual, cfg.unit548Cents, closeEnoughCents, correctionGrossCents],
   );
 
   const selectTab = (id: string, index: number) => {
@@ -578,6 +585,8 @@ function PeriodWorkspace({
             year={year}
             paydayDelayDays={paydayDelayDays}
             closeEnoughCents={closeEnoughCents}
+            corrections={corrections}
+            setCorrections={setCorrections}
             backupStale={backupStale}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 2)}

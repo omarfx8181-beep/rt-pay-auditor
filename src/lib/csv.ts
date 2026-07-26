@@ -49,7 +49,7 @@ export function buildYearCsv(periods: PayPeriod[], year: string, otherIncome: Ot
         periodLabel(p.startDate, p.endDate),
         p.startDate,
         p.endDate,
-        m.stubTrue ? "stub" : "estimate",
+        m.stubTrue ? (m.correctionGrossCents > 0 ? "stub + correction" : "stub") : "estimate",
         money(m.grossCents),
         money(m.netCents),
         moneyOr(m.buckets?.taxesCents),
