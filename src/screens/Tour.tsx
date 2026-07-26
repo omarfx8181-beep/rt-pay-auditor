@@ -48,6 +48,12 @@ export const TOUR_STEPS: TourStep[] = [
     body: "Straight hours marching toward the overtime line. Past it, every extra hour pays the overtime rate — prime time to pick up a shift.",
   },
   {
+    tab: "goals",
+    target: "tour-goal",
+    title: "Your year goal",
+    body: "Pick the number the year should add up to — the meter fills as checks land, and the plan prices the overtime, bonus units, or extra shifts that get you there.",
+  },
+  {
     tab: "me",
     target: "scan-credentials",
     title: "One-time setup",

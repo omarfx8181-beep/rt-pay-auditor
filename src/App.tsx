@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarClock, CircleUserRound, House } from "lucide-react";
+import { CalendarClock, CircleUserRound, House, Target } from "lucide-react";
 import { computeNet, computePeriod, type BonusTier } from "./lib/engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
@@ -33,10 +33,13 @@ import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
 import Onboarding from "./screens/Onboarding.tsx";
 import Tour from "./screens/Tour.tsx";
+import Goals from "./screens/Goals.tsx";
+import { parseGoals, type GoalsSetting } from "./lib/goals.ts";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
   { id: "shifts", label: "Shifts", Icon: CalendarClock },
+  { id: "goals", label: "Goals", Icon: Target },
   { id: "me", label: "Me", Icon: CircleUserRound },
 ];
 
@@ -62,6 +65,7 @@ export default function App() {
   const lastBackupRow = useLiveQuery(async () => (await db.settings.get("lastBackupAt")) ?? null, []);
   const paydayDelayRow = useLiveQuery(async () => (await db.settings.get("paydayDelayDays")) ?? null, []);
   const closeEnoughRow = useLiveQuery(async () => (await db.settings.get("closeEnough")) ?? null, []);
+  const goalsRow = useLiveQuery(async () => (await db.settings.get("goals")) ?? null, []);
   // The active tab lives HERE, above the per-period workspace: switching
   // periods remounts the workspace (key=id) and must not yank the user
   // back to Home. Onboarding's "Scan my schedule" lands on Shifts.
@@ -119,7 +123,8 @@ export default function App() {
     anchorsRow === undefined ||
     lastBackupRow === undefined ||
     paydayDelayRow === undefined ||
-    closeEnoughRow === undefined
+    closeEnoughRow === undefined ||
+    goalsRow === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -213,6 +218,7 @@ export default function App() {
         lastBackupAt={lastBackupRow ? Number(lastBackupRow.value) || null : null}
         paydayDelayDays={parsePaydayDelay(paydayDelayRow?.value)}
         closeEnoughCents={parseCloseEnough(closeEnoughRow?.value)}
+        goals={parseGoals(goalsRow?.value)}
         tab={tab}
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
@@ -263,6 +269,7 @@ function PeriodWorkspace({
   lastBackupAt,
   paydayDelayDays,
   closeEnoughCents,
+  goals,
   tab,
   setTab,
   onDeletePeriod,
@@ -282,6 +289,7 @@ function PeriodWorkspace({
   lastBackupAt: number | null;
   paydayDelayDays: number;
   closeEnoughCents: number;
+  goals: GoalsSetting;
   tab: string;
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
@@ -298,7 +306,7 @@ function PeriodWorkspace({
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
-  const tabIndex = useRef(tab === "shifts" ? 1 : tab === "me" ? 2 : 0);
+  const tabIndex = useRef(tab === "shifts" ? 1 : tab === "goals" ? 2 : tab === "me" ? 3 : 0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
   // The mount render is NOT an edit — writing it back would stamp a fresh
@@ -589,7 +597,7 @@ function PeriodWorkspace({
             setCorrections={setCorrections}
             backupStale={backupStale}
             onGoToShifts={() => selectTab("shifts", 1)}
-            onGoToMe={() => selectTab("me", 2)}
+            onGoToMe={() => selectTab("me", 3)}
             initialView={homeIntent?.periodId === record.id ? homeIntent.view : null}
             onViewConsumed={onHomeIntentConsumed}
           />
@@ -608,6 +616,18 @@ function PeriodWorkspace({
             periodStart={record.startDate}
             periodEnd={record.endDate}
             onFileFuture={(batches) => void fileFutureShifts(batches)}
+          />
+        )}
+        {tab === "goals" && (
+          <Goals
+            periods={periods}
+            otherIncome={otherIncome}
+            year={year}
+            shifts={shifts}
+            cfg={cfg}
+            goals={goals}
+            onSaveGoals={(next) => void db.settings.put({ key: "goals", value: JSON.stringify(next) })}
+            onOpenPeriodDetails={onOpenPeriodDetails}
           />
         )}
         {tab === "me" && (

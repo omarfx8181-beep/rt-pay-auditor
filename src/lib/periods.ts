@@ -334,6 +334,20 @@ export function ytdThroughDate(periods: PayPeriod[], asOfEnd: string): YtdThroug
   return out;
 }
 
+/**
+ * Every biweekly period END falling in `year`, on the grid the known
+ * periods define (extended both directions). 26 most years, 27 some —
+ * derived, never assumed. Empty input → empty (no grid to stand on).
+ */
+export function yearGridEnds(periods: PayPeriod[], year: string): string[] {
+  if (periods.length === 0) return [];
+  const ends = new Set(periods.map((p) => p.endDate));
+  const sorted = [...ends].sort();
+  for (let i = 1, cursor = sorted[sorted.length - 1]; i <= 40; i++) ends.add((cursor = addDays(cursor, PERIOD_DAYS)));
+  for (let i = 1, cursor = sorted[0]; i <= 40; i++) ends.add((cursor = addDays(cursor, -PERIOD_DAYS)));
+  return [...ends].filter((e) => e.slice(0, 4) === year).sort();
+}
+
 /* ---------------- backup export / import ---------------- */
 
 export interface BackupFile {

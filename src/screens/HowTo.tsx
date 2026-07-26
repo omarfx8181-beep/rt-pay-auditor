@@ -97,6 +97,10 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
             The Year card's bottom line cross-checks the app against your newest stub: green = they agree, amber =
             something's missing or doubled — scan that stub and it turns green.
           </p>
+          <p>
+            And set a year goal in the <strong>Goals</strong> tab — the meter fills as checks land, and the plan
+            prices the overtime, bonus units, or extra shifts that close the gap.
+          </p>
         </Step>
 
         <Step n={7} title="Keep it safe">
