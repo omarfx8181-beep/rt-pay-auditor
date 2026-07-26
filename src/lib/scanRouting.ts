@@ -16,15 +16,52 @@ export type StubRoute =
   | { kind: "existing"; period: PayPeriod }
   | { kind: "create"; startDate: string; endDate: string };
 
+/** Scanned dates read a day or two off all the time — snap within this. */
+const SNAP_DAYS = 2;
+
+const dayDiff = (a: string, b: string): number =>
+  Math.round((new Date(a + "T12:00:00").getTime() - new Date(b + "T12:00:00").getTime()) / 86400000);
+
 /**
- * Where does a scanned stub belong? The period containing its end date;
- * otherwise a new window derived from the stub's own dates. No parsed
- * end date → the open period (nothing to route by).
+ * A parsed end near a biweekly-grid end (known period ends extended both
+ * directions) snaps to it — a stub whose end reads 7/6 or 7/7 is the
+ * 7/5 period misread, not a new overlapping window. Null when nothing
+ * on the grid is close.
+ */
+export function snapEndToGrid(parsedEnd: string, periods: PayPeriod[]): string | null {
+  if (periods.length === 0) return null;
+  const ends = new Set(periods.map((p) => p.endDate));
+  const latest = [...ends].sort().pop()!;
+  const earliest = [...ends].sort()[0];
+  for (let i = 1, cursor = latest; i <= 27; i++) ends.add((cursor = addDays(cursor, PERIOD_DAYS)));
+  for (let i = 1, cursor = earliest; i <= 27; i++) ends.add((cursor = addDays(cursor, -PERIOD_DAYS)));
+  let best: string | null = null;
+  for (const end of ends) {
+    const d = Math.abs(dayDiff(parsedEnd, end));
+    if (d <= SNAP_DAYS && (best === null || d < Math.abs(dayDiff(parsedEnd, best)))) best = end;
+  }
+  return best;
+}
+
+/**
+ * Where does a scanned stub belong? First a period whose END sits within
+ * a couple days of the parsed end (stub ends live on period ends — an
+ * end reading one day past would otherwise land in the NEXT period's
+ * first day, or spawn an overlapping window). Then plain containment;
+ * then a new window, its dates snapped to the biweekly grid when the
+ * read is near it. No parsed end → the open period.
  */
 export function matchStubPeriod(periods: PayPeriod[], currentId: string, parsedStart: string, parsedEnd: string): StubRoute {
   if (parsedEnd === "") return { kind: "current" };
+  const route = (p: PayPeriod): StubRoute => (p.id === currentId ? { kind: "current" } : { kind: "existing", period: p });
+  const nearEnd = periods.find((p) => Math.abs(dayDiff(parsedEnd, p.endDate)) <= SNAP_DAYS);
+  if (nearEnd) return route(nearEnd);
   const hit = periods.find((p) => parsedEnd >= p.startDate && parsedEnd <= p.endDate);
-  if (hit) return hit.id === currentId ? { kind: "current" } : { kind: "existing", period: hit };
+  if (hit) return route(hit);
+  const snapped = snapEndToGrid(parsedEnd, periods);
+  if (snapped !== null) {
+    return { kind: "create", startDate: addDays(snapped, -(PERIOD_DAYS - 1)), endDate: snapped };
+  }
   return {
     kind: "create",
     startDate: parsedStart !== "" ? parsedStart : addDays(parsedEnd, -(PERIOD_DAYS - 1)),

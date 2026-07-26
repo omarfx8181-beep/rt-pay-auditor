@@ -17,9 +17,23 @@
  * Pure function over audit rows; no engine math is touched here — deltas
  * come from engine.auditLine (SPEC §3.7 tolerance).
  */
-import { auditLine, dollarsToCents, type Cents } from "./engine.ts";
+import { auditLine, AUDIT_TOLERANCE_CENTS, dollarsToCents, type Cents } from "./engine.ts";
 import { num } from "./draft.ts";
 import type { AuditRow } from "./audit.ts";
+
+/**
+ * Forgiveness is ONE-DIRECTIONAL. Stubs and estimates never agree to the
+ * penny (tax rounding, punch rounding), so drift and amounts paid OVER
+ * forgive up to the user's "call it even" setting. But money PAID SHORT
+ * keeps SPEC §3.7's hard nickel — no setting may eat a real shortfall or
+ * clear a check that came in under.
+ */
+export function lineCloseEnough(kind: AuditRow["kind"], deltaCents: Cents, closeEnoughCents: number): boolean {
+  const drift = Math.max(AUDIT_TOLERANCE_CENTS, closeEnoughCents);
+  if (kind === "deduction") return Math.abs(deltaCents) <= drift; // withholding noise, either way
+  // earnings and totals: over = fine up to the setting; under = the nickel, always
+  return deltaCents >= 0 ? deltaCents <= drift : -deltaCents <= AUDIT_TOLERANCE_CENTS;
+}
 
 export interface LineDelta {
   key: string;
@@ -51,13 +65,19 @@ export type Verdict =
     }
   | { kind: "amber"; question: string; focus: LineDelta | null };
 
-export function computeVerdict(rows: AuditRow[], actual: Record<string, string>, unit548Cents: Cents): Verdict {
+export function computeVerdict(
+  rows: AuditRow[],
+  actual: Record<string, string>,
+  unit548Cents: Cents,
+  closeEnoughCents: number = AUDIT_TOLERANCE_CENTS,
+): Verdict {
   const entered: LineDelta[] = [];
   for (const row of rows) {
     const raw = actual[row.key] ?? "";
     if (raw === "") continue;
     const paidCents = dollarsToCents(num(raw));
     const d = auditLine(row.expectedCents, paidCents, { isUnits: row.isUnits, unit548Cents });
+    const ok = lineCloseEnough(row.kind, d.deltaCents, closeEnoughCents);
     entered.push({
       key: row.key,
       label: row.label,
@@ -65,8 +85,8 @@ export function computeVerdict(rows: AuditRow[], actual: Record<string, string>,
       kind: row.kind,
       expectedCents: row.expectedCents,
       paidCents,
-      deltaCents: d.ok ? 0 : d.deltaCents,
-      deltaUnits: d.ok ? null : d.deltaUnits,
+      deltaCents: ok ? 0 : d.deltaCents,
+      deltaUnits: ok ? null : d.deltaUnits,
     });
   }
   if (entered.length === 0) return { kind: "intro" };

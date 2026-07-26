@@ -8,7 +8,7 @@ import { describe, expect, test } from "vitest";
 import { computeNet, computePeriod, DEFAULT_CFG } from "./engine.ts";
 import { ACTUAL_SEED, DEMO_SHIFTS, draftToShift } from "./draft.ts";
 import { buildAuditRows } from "./audit.ts";
-import { computeVerdict } from "./verdict.ts";
+import { computeVerdict, lineCloseEnough } from "./verdict.ts";
 
 const period = computePeriod(DEMO_SHIFTS.map(draftToShift), DEFAULT_CFG);
 const net = computeNet(period.grossCents, DEFAULT_CFG);
@@ -90,5 +90,41 @@ describe("verdict — green / red / amber over the real period", () => {
     const actual = { ...ACTUAL_SEED }; // seed's gross/net are ±2¢ from engine-exact
     const v = computeVerdict(rows, actual, U);
     expect(v.kind).toBe("green");
+  });
+});
+
+describe("call-it-even forgiveness — one-directional (Omar: 'nothing is completely accurate, but never clear an under')", () => {
+  test("tax drift within the setting turns green instead of amber", () => {
+    const actual = { ...ACTUAL_SEED, fed: "1121.44" }; // +$0.80 withheld
+    expect(computeVerdict(rows, actual, U).kind).toBe("amber"); // default nickel: flagged
+    expect(computeVerdict(rows, actual, U, 100).kind).toBe("green"); // $1 forgiveness: even
+  });
+
+  test("earnings paid a little OVER is fine; paid UNDER keeps the nickel no matter the setting", () => {
+    const over = { ...ACTUAL_SEED, weekend: "62.20" }; // +$0.80
+    expect(computeVerdict(rows, over, U, 100).kind).toBe("green");
+    const under = { ...ACTUAL_SEED, weekend: "60.90" }; // −$0.50
+    const v = computeVerdict(rows, under, U, 10_000); // even $100 forgiveness
+    expect(v.kind).toBe("red");
+    if (v.kind === "red") expect(v.owedCents).toBe(50);
+  });
+
+  test("take-home UNDER never clears green, even inside the forgiveness window", () => {
+    const actual = { ...ACTUAL_SEED, net: "5781.50" }; // −$0.49 net
+    const v = computeVerdict(rows, actual, U, 200);
+    expect(v.kind).not.toBe("green"); // amber totals question — under is never 'cleared'
+  });
+
+  test("take-home a little OVER clears green (over is fine)", () => {
+    const actual = { ...ACTUAL_SEED, net: "5782.50" }; // +$0.51 net
+    expect(computeVerdict(rows, actual, U, 100).kind).toBe("green");
+  });
+
+  test("the judge itself: deductions symmetric, earnings asymmetric", () => {
+    expect(lineCloseEnough("deduction", -80, 100)).toBe(true); // took less — noise
+    expect(lineCloseEnough("deduction", 80, 100)).toBe(true); // took more — noise
+    expect(lineCloseEnough("earnings", 80, 100)).toBe(true); // paid over — fine
+    expect(lineCloseEnough("earnings", -6, 100)).toBe(false); // paid short 6¢ — flagged, always
+    expect(lineCloseEnough("earnings", -5, 0)).toBe(true); // the nickel floor stays
   });
 });

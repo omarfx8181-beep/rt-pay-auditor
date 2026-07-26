@@ -59,6 +59,7 @@ export default function App() {
   const anchorsRow = useLiveQuery(async () => (await db.settings.get("ytdAnchors")) ?? null, []);
   const lastBackupRow = useLiveQuery(async () => (await db.settings.get("lastBackupAt")) ?? null, []);
   const paydayDelayRow = useLiveQuery(async () => (await db.settings.get("paydayDelayDays")) ?? null, []);
+  const closeEnoughRow = useLiveQuery(async () => (await db.settings.get("closeEnough")) ?? null, []);
   // The active tab lives HERE, above the per-period workspace: switching
   // periods remounts the workspace (key=id) and must not yank the user
   // back to Home. Onboarding's "Scan my schedule" lands on Shifts.
@@ -115,7 +116,8 @@ export default function App() {
     onboardingRow === undefined ||
     anchorsRow === undefined ||
     lastBackupRow === undefined ||
-    paydayDelayRow === undefined
+    paydayDelayRow === undefined ||
+    closeEnoughRow === undefined
   ) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -208,6 +210,7 @@ export default function App() {
         ytdAnchors={ytdAnchors}
         lastBackupAt={lastBackupRow ? Number(lastBackupRow.value) || null : null}
         paydayDelayDays={parsePaydayDelay(paydayDelayRow?.value)}
+        closeEnoughCents={parseCloseEnough(closeEnoughRow?.value)}
         tab={tab}
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
@@ -228,6 +231,17 @@ export default function App() {
   );
 }
 
+/**
+ * "Call it even" forgiveness, stored as a dollars string. Default $1.00 —
+ * stubs and estimates never agree to the penny. The nickel under-guard
+ * lives in the verdict lib regardless of this value.
+ */
+function parseCloseEnough(raw: string | undefined): number {
+  if (raw === undefined) return 100;
+  const n = Number.parseFloat(raw.replace(/[$,]/g, ""));
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 100;
+}
+
 /** Stored days → number; 0 is a real answer (payday ON period end), only junk falls back. */
 function parsePaydayDelay(raw: string | undefined): number {
   if (raw === undefined) return FAIRVIEW_RT_PRESET.facility.paydayDelayDays;
@@ -246,6 +260,7 @@ function PeriodWorkspace({
   ytdAnchors,
   lastBackupAt,
   paydayDelayDays,
+  closeEnoughCents,
   tab,
   setTab,
   onDeletePeriod,
@@ -264,6 +279,7 @@ function PeriodWorkspace({
   ytdAnchors: Record<string, YtdAnchor>;
   lastBackupAt: number | null;
   paydayDelayDays: number;
+  closeEnoughCents: number;
   tab: string;
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
@@ -319,7 +335,10 @@ function PeriodWorkspace({
   const year = record.endDate.slice(0, 4);
   const ytd = useMemo(() => rollupYtd(periods, year, otherIncome), [periods, year, otherIncome]);
 
-  const verdict = useMemo(() => computeVerdict(auditRows, actual, cfg.unit548Cents), [auditRows, actual, cfg.unit548Cents]);
+  const verdict = useMemo(
+    () => computeVerdict(auditRows, actual, cfg.unit548Cents, closeEnoughCents),
+    [auditRows, actual, cfg.unit548Cents, closeEnoughCents],
+  );
 
   const selectTab = (id: string, index: number) => {
     const dx = index > tabIndex.current ? 28 : index < tabIndex.current ? -28 : 0;
@@ -558,6 +577,7 @@ function PeriodWorkspace({
             ytd={ytd}
             year={year}
             paydayDelayDays={paydayDelayDays}
+            closeEnoughCents={closeEnoughCents}
             backupStale={backupStale}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 2)}
@@ -624,6 +644,8 @@ function PeriodWorkspace({
             onDownloadPaydays={downloadPaydays}
             paydayDelay={String(paydayDelayDays)}
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
+            closeEnough={(closeEnoughCents / 100).toFixed(2)}
+            onSetCloseEnough={(v) => void db.settings.put({ key: "closeEnough", value: v })}
             onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
             onStartTour={onStartTour}
             onOpenDetails={onOpenPeriodDetails}

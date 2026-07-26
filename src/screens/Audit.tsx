@@ -11,7 +11,7 @@ import { num } from "../lib/draft.ts";
 import { fmtCents, fmtUnits } from "../lib/format.ts";
 import { CalloutCard, Card } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
-import type { LineDelta, Verdict } from "../lib/verdict.ts";
+import { lineCloseEnough, type LineDelta, type Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import type { PayPeriod, YtdAnchor } from "../lib/periods.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
@@ -128,6 +128,7 @@ function VerdictBanner({
 
 export default function Audit({
   recordOnly = false,
+  closeEnoughCents = 5,
   rows,
   actual,
   setActual,
@@ -151,6 +152,8 @@ export default function Audit({
    * of judging it (no verdict, no HR email, no misleading deltas).
    */
   recordOnly?: boolean;
+  /** "Call it even" forgiveness (Me → Advanced) — overs/drift only; unders keep the nickel. */
+  closeEnoughCents?: number;
   rows: AuditRow[];
   actual: Record<string, string>;
   setActual: (updater: (a: Record<string, string>) => Record<string, string>) => void;
@@ -173,13 +176,14 @@ export default function Audit({
 
   const judged = rows.map((row) => {
     const raw = actual[row.key] ?? "";
-    const delta =
+    const d =
       raw === ""
         ? null
         : auditLine(row.expectedCents, dollarsToCents(num(raw)), {
             isUnits: row.isUnits,
             unit548Cents: cfg.unit548Cents,
           });
+    const delta = d === null ? null : { ...d, ok: lineCloseEnough(row.kind, d.deltaCents, closeEnoughCents) };
     return { row, raw, delta };
   });
   // The HR email is about pay, not withholding: earnings lines only.
@@ -233,7 +237,7 @@ export default function Audit({
       <p className="text-subhead text-ink-dim">
         {recordOnly
           ? "Or type the lines straight off the stub — they feed the year totals line by line."
-          : "Or type each line from your stub. Anything more than a nickel off gets flagged — in dollars, and in bonus units where that's what was shorted."}
+          : `Or type each line from your stub. Paid short by more than a nickel always flags — in dollars, and in bonus units where that's what was shorted; drift and overs are forgiven up to ${fmtCents(closeEnoughCents)} (Me → Advanced).`}
       </p>
 
       <Card>
@@ -287,6 +291,7 @@ export default function Audit({
           rows={rows}
           actual={actual}
           verdict={verdict}
+          closeEnoughCents={closeEnoughCents}
           cfg={cfg}
           shifts={shifts}
           periodStart={periodStart}

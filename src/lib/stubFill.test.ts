@@ -152,3 +152,30 @@ describe("parseStubLinesResponse", () => {
     ).toThrow(/No pay lines/);
   });
 });
+
+describe("tax label aliases stubs actually print", () => {
+  test("FIT/SIT/FICA/FICA Med land on fed/mn/ss/medicare", () => {
+    const r = stubLinesToActual({
+      periodStart: "",
+      periodEnd: "",
+      earnings: [{ label: "Regular", amount: 100 }],
+      taxes: [
+        { label: "FIT", amount: 10 },
+        { label: "SIT", amount: 5 },
+        { label: "FICA", amount: 6.2 },
+        { label: "FICA Med", amount: 1.45 },
+      ],
+      pretax: [],
+      aftertax: [],
+      gross: null,
+      net: null,
+      ytdGross: null,
+      ytdNet: null,
+    });
+    expect(r.actual.fed).toBe("10.00");
+    expect(r.actual.mn).toBe("5.00");
+    expect(r.actual.ss).toBe("6.20");
+    expect(r.actual.medicare).toBe("1.45");
+    expect(r.unmatched).toHaveLength(0);
+  });
+});

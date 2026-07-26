@@ -11,7 +11,7 @@ import { Printer, X } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num } from "../lib/draft.ts";
 import type { AuditRow } from "../lib/audit.ts";
-import type { Verdict } from "../lib/verdict.ts";
+import { lineCloseEnough, type Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
 import { periodLabel } from "../lib/periods.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
@@ -30,6 +30,7 @@ export default function ProofPacket({
   rows,
   actual,
   verdict,
+  closeEnoughCents = 5,
   cfg,
   shifts,
   periodStart,
@@ -40,6 +41,7 @@ export default function ProofPacket({
   rows: AuditRow[];
   actual: Record<string, string>;
   verdict: Verdict;
+  closeEnoughCents?: number;
   cfg: EngineConfig;
   shifts: Shift[];
   periodStart: string;
@@ -52,7 +54,8 @@ export default function ProofPacket({
       const raw = actual[row.key] ?? "";
       if (raw === "") return null;
       const paidCents = dollarsToCents(num(raw));
-      const d = auditLine(row.expectedCents, paidCents, { isUnits: row.isUnits, unit548Cents: cfg.unit548Cents });
+      const base = auditLine(row.expectedCents, paidCents, { isUnits: row.isUnits, unit548Cents: cfg.unit548Cents });
+      const d = { ...base, ok: lineCloseEnough(row.kind, base.deltaCents, closeEnoughCents) };
       return { row, paidCents, d };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);

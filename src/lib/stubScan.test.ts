@@ -109,3 +109,20 @@ describe("itemized stubs (line detail per old stub)", () => {
     expect(scannedStubActual(bare)).toEqual({ gross: "3000", net: "2000" });
   });
 });
+
+describe("scanned ends that read a day or two off snap to the grid", () => {
+  test("end misread past the period end is a duplicate of that period, not a new window", () => {
+    const stubs = parseStubResponse(JSON.stringify({ stubs: [{ endDate: "2026-07-07", gross: "8865.22", net: "5781.99" }] }));
+    const plan = planStubImports(existing, stubs);
+    expect(plan.toAdd).toHaveLength(0);
+    expect(plan.duplicates).toHaveLength(1);
+  });
+
+  test("a near-grid end for an unseen period imports grid-aligned (no overlap ever)", () => {
+    const stubs = parseStubResponse(JSON.stringify({ stubs: [{ endDate: "2026-06-08", startDate: "2026-05-27", gross: "7000", net: "4600" }] }));
+    const plan = planStubImports(existing, stubs);
+    expect(plan.toAdd).toHaveLength(1);
+    expect(plan.toAdd[0].endDate).toBe("2026-06-07"); // snapped back onto the biweekly grid
+    expect(stubStartDate(plan.toAdd[0])).toBe("2026-05-25"); // start re-derived, misread start discarded
+  });
+});

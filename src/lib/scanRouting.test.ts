@@ -4,7 +4,7 @@
  * fully pinned here before any UI relies on them.
  */
 import { describe, expect, test } from "vitest";
-import { anchorEndFor, groupRowsByPeriod, matchStubPeriod, summaryToAnchor } from "./scanRouting.ts";
+import { anchorEndFor, groupRowsByPeriod, matchStubPeriod, snapEndToGrid, summaryToAnchor } from "./scanRouting.ts";
 import { ytdThroughDate, type PayPeriod } from "./periods.ts";
 import { DEMO_SHIFTS, DEFAULT_CFG_DRAFT, ACTUAL_SEED } from "./draft.ts";
 import { DEFAULT_TIERS } from "./engine.ts";
@@ -167,5 +167,31 @@ describe("YTD summary → year anchor (the Kronos 'Year to Date' screen)", () =>
 
   test("no readable as-of date → the latest known period end", () => {
     expect(anchorEndFor("", PERIODS, 5)).toBe("2026-07-19");
+  });
+});
+
+describe("off-by-a-little scanned dates snap to the biweekly grid", () => {
+  test("end read one day past a period end routes to THAT period, not the next one's first day", () => {
+    const r = matchStubPeriod(PERIODS, "july", "", "2026-07-06"); // misread of 7/5
+    expect(r.kind).toBe("existing");
+    if (r.kind === "existing") expect(r.period.id).toBe("june");
+    const r2 = matchStubPeriod(PERIODS, "july", "", "2026-07-07"); // two off
+    if (r2.kind === "existing") expect(r2.period.id).toBe("june");
+  });
+
+  test("a new period created from a near-grid end snaps onto the grid", () => {
+    const r = matchStubPeriod(PERIODS, "july", "", "2026-06-08"); // grid end is 6/7 (june starts 6/22... prior end 6/21)
+    expect(r.kind).toBe("create");
+    if (r.kind === "create") {
+      expect(r.endDate).toBe("2026-06-07"); // snapped to the backward-extended grid
+      expect(r.startDate).toBe("2026-05-25");
+    }
+  });
+
+  test("ends far from the grid stay untouched", () => {
+    expect(snapEndToGrid("2026-06-14", PERIODS)).toBeNull(); // mid-window, 7 days off both ends
+    const r = matchStubPeriod(PERIODS, "july", "2026-06-01", "2026-06-14");
+    expect(r.kind).toBe("create");
+    if (r.kind === "create") expect(r.endDate).toBe("2026-06-14");
   });
 });

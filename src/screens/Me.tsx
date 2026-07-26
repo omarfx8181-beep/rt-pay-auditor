@@ -420,6 +420,8 @@ export default function Me({
   onDownloadPaydays,
   paydayDelay,
   onSetPaydayDelay,
+  closeEnough,
+  onSetCloseEnough,
   onReplayTour,
   onStartTour,
   onDownloadYearCsv,
@@ -462,6 +464,8 @@ export default function Me({
   onDownloadPaydays: () => void;
   paydayDelay: string;
   onSetPaydayDelay: (v: string) => void;
+  closeEnough: string;
+  onSetCloseEnough: (v: string) => void;
   onReplayTour: () => void;
   onStartTour: () => void;
   onDownloadYearCsv: (year: string) => void;
@@ -488,6 +492,7 @@ export default function Me({
   const [showKey, setShowKey] = useState(false);
   const [feed, setFeed] = useState(feedUrl);
   const [payDelay, setPayDelay] = useState(paydayDelay);
+  const [closeEnoughDraft, setCloseEnoughDraft] = useState(closeEnough);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const unanswered = OPEN_QUESTIONS.filter((q) => !answers[q.id]);
   const answered = OPEN_QUESTIONS.filter((q) => answers[q.id]);
@@ -767,6 +772,16 @@ export default function Me({
                 onSetPaydayDelay(v.trim());
               }}
               suffix="days"
+            />
+            <RuleRow
+              label="Call it even within"
+              hint="Stubs never match estimates to the penny. Drift and amounts paid OVER up to this are fine — being paid SHORT more than a nickel always flags, no matter what."
+              value={closeEnoughDraft}
+              onChange={(v) => {
+                setCloseEnoughDraft(v);
+                onSetCloseEnough(v.trim());
+              }}
+              suffix="$"
             />
           </div>
           <p className="text-footnote leading-relaxed text-ink-dim">

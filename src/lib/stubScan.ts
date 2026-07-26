@@ -7,6 +7,7 @@
 import { callClaude, filesToContentBlocks } from "./scan.ts";
 import { addDays, PERIOD_DAYS, type PayPeriod } from "./periods.ts";
 import { parseLineItems, stubLinesToActual, type StubLineItem } from "./stubFill.ts";
+import { snapEndToGrid } from "./scanRouting.ts";
 
 export interface ScannedStub {
   endDate: string;
@@ -113,11 +114,18 @@ export interface StubImportPlan {
   duplicates: ScannedStub[];
 }
 
-/** A stub whose end date falls inside an existing period is already logged. */
+/**
+ * A stub whose end date falls inside an existing period is already
+ * logged. Ends that read a day or two off the biweekly grid snap to it
+ * first (start clears so placement re-derives end − 13) — a misread
+ * 7/6 is the 7/5 stub, never a new overlapping period.
+ */
 export function planStubImports(existing: PayPeriod[], scanned: ScannedStub[]): StubImportPlan {
   const plan: StubImportPlan = { toAdd: [], duplicates: [] };
   const seenEnds = new Set<string>();
-  for (const stub of [...scanned].sort((a, b) => (a.endDate < b.endDate ? -1 : 1))) {
+  for (const raw of [...scanned].sort((a, b) => (a.endDate < b.endDate ? -1 : 1))) {
+    const snapped = snapEndToGrid(raw.endDate, existing);
+    const stub = snapped !== null && snapped !== raw.endDate ? { ...raw, endDate: snapped, startDate: "" } : raw;
     const insideExisting = existing.some((p) => stub.endDate >= p.startDate && stub.endDate <= p.endDate);
     if (insideExisting || seenEnds.has(stub.endDate)) plan.duplicates.push(stub);
     else {

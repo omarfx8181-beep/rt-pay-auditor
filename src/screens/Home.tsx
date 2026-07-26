@@ -172,6 +172,7 @@ export default function Home({
   ytd,
   year,
   paydayDelayDays,
+  closeEnoughCents,
   backupStale,
   onGoToShifts,
   onGoToMe,
@@ -202,6 +203,7 @@ export default function Home({
   ytd: YtdRollup;
   year: string;
   paydayDelayDays: number;
+  closeEnoughCents: number;
   backupStale: boolean;
   onGoToShifts: () => void;
   onGoToMe: () => void;
@@ -243,6 +245,7 @@ export default function Home({
         {view === "check" ? (
           <Audit
             recordOnly={shifts.length === 0 && period.leaveHours === 0}
+            closeEnoughCents={closeEnoughCents}
             rows={auditRows}
             actual={actual}
             setActual={setActual}

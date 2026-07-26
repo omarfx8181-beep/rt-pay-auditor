@@ -68,8 +68,8 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
         <Step n={4} title="When the check lands">
           <p>
             Home → <strong>Check my paycheck</strong> → <strong>Scan the stub</strong>. Every line fills itself and
-            the verdict appears. No key? Type the lines from the stub into the same screen — anything more than a
-            nickel off gets flagged.
+            the verdict appears. No key? Type the lines from the stub into the same screen. Paid short more than a
+            nickel always flags; small drift and overs are forgiven up to your "call it even" amount (Me → Advanced).
           </p>
           <p>
             <span className="text-pos">Green</span> — paid in full, done. <span className="text-neg">Red</span> — the

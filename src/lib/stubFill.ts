@@ -116,11 +116,12 @@ const EARNINGS_RULES: Array<[string, RegExp]> = [
 const TAX_RULES: Array<[string, RegExp]> = [
   ["mnFam", /family/i],
   ["mnMed", /medical/i],
-  // OASDI/"Fed MED" style labels must land here, not on federal income tax.
-  ["ss", /social security|oasdi|\bss\b/i],
-  ["medicare", /medicare|fed\s*med\b/i],
-  ["fed", /federal|\bfed\b/i],
-  ["mn", /minnesota|\bmn\b|state/i],
+  // OASDI/FICA/"Fed MED" style labels must land here, not on federal
+  // income tax; bare "FICA" is Social Security, "FICA Med" is Medicare.
+  ["ss", /social security|oasdi|\bss\b|fica\s*(ss|oasdi)\b|\bfica\b(?!\s*med)/i],
+  ["medicare", /medicare|fed\s*med\b|fica\s*med\b/i],
+  ["fed", /federal|\bfed\b|\bfit\b/i],
+  ["mn", /minnesota|\bmn\b|state|\bsit\b/i],
 ];
 
 /** Imputed income is on the stub but is not an enterable check line. */
