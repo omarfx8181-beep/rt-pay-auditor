@@ -497,7 +497,7 @@ export default function Me({
   const [yearView, setYearView] = useState(year);
   const [wrappedOpen, setWrappedOpen] = useState(false);
   const wrapped = useMemo(
-    () => (wrappedOpen ? buildWrapped(periods, otherIncome, yearView, closeEnoughCents) : null),
+    () => (wrappedOpen ? buildWrapped(periods, otherIncome, yearView, closeEnoughCents, todayIso()) : null),
     [wrappedOpen, periods, otherIncome, yearView, closeEnoughCents],
   );
   useEffect(() => {

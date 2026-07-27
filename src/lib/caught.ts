@@ -41,10 +41,13 @@ export interface CaughtSummary {
 /**
  * Walk every auditable period (has shifts or leave AND a finished
  * verdict). Record-only periods are history, not audits — they never
- * count for or against.
+ * count for or against. Periods still running (end date not passed)
+ * stay off the scoreboard: mid-entry deltas aren't catches yet.
  */
-export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number): CaughtSummary {
-  const sorted = [...periods].sort((a, b) => (a.endDate < b.endDate ? 1 : -1)); // newest first
+export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number, todayIso?: string): CaughtSummary {
+  const sorted = [...periods]
+    .filter((p) => todayIso === undefined || p.endDate < todayIso)
+    .sort((a, b) => (a.endDate < b.endDate ? 1 : -1)); // newest first
   let caughtCents = 0;
   let recoveredCents = 0;
   let openCents = 0;

@@ -29,6 +29,7 @@ export function buildWrapped(
   otherIncome: OtherIncomeDraft[],
   year: string,
   closeEnoughCents: number,
+  todayIso?: string,
 ): WrappedStats | null {
   const inYear = periods.filter((p) => p.endDate.slice(0, 4) === year);
   const withData = inYear.filter(
@@ -69,6 +70,6 @@ export function buildWrapped(
     biggestCheck,
     mostOt,
     avgCheckNetCents: withData.length > 0 ? Math.round(ytd.netCents / withData.length) : 0,
-    caught: caughtSummary(inYear, closeEnoughCents),
+    caught: caughtSummary(inYear, closeEnoughCents, todayIso),
   };
 }

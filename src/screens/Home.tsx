@@ -104,7 +104,7 @@ function LiveTicker({
 
 /** The scoreboard — what the watchdog has caught, and the streak. */
 function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; closeEnoughCents: number }) {
-  const s = useMemo(() => caughtSummary(periods, closeEnoughCents), [periods, closeEnoughCents]);
+  const s = useMemo(() => caughtSummary(periods, closeEnoughCents, todayIso()), [periods, closeEnoughCents]);
   if (s.caughtCents === 0 && s.cleanStreak < 2) return null;
   return (
     <Card>
@@ -116,8 +116,8 @@ function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; close
         <>
           <div className="mt-1 text-title-2 tabular-nums text-pos">{fmtCents(s.caughtCents)} caught</div>
           <p className="mt-0.5 text-footnote tabular-nums text-ink-dim">
-            {s.firstCaughtEnd ? `since ${dayLabel(s.firstCaughtEnd)} · ` : ""}
-            {fmtCents(s.recoveredCents)} recovered
+            {s.firstCaughtEnd ? `since ${dayLabel(s.firstCaughtEnd)}` : ""}
+            {s.recoveredCents > 0 && ` · ${fmtCents(s.recoveredCents)} recovered`}
             {s.openCents > 0 && <span className="text-neg"> · {fmtCents(s.openCents)} still open</span>}
           </p>
         </>

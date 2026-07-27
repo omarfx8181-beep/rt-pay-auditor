@@ -65,6 +65,20 @@ describe("caughtSummary", () => {
     expect(s.caughtCents).toBe(0);
   });
 
+  test("a period still running stays off the scoreboard — mid-entry deltas aren't catches", () => {
+    const s = caughtSummary(
+      [
+        period("2026-07-05"), // finished, green
+        period("2026-08-02", { actual: SHORTED }), // looks red, but the period hasn't ended
+      ],
+      100,
+      "2026-07-27",
+    );
+    expect(s.caughtCents).toBe(0);
+    expect(s.checkedCount).toBe(1);
+    expect(s.cleanStreak).toBe(1);
+  });
+
   test("an amber (needs-a-look) check pauses the streak without counting as caught", () => {
     const s = caughtSummary(
       [
