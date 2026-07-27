@@ -46,12 +46,13 @@ describe("findLiveShift", () => {
     expect(findLiveShift([s], new Date(2026, 6, 27, 3, 0))?.shift.id).toBe("n");
   });
 
-  test("manual 'I'm on now' start clocks the shift's own hours", () => {
+  test("manual 'I'm on now' start clocks its own stored window", () => {
     const s = draft("m", "2026-07-27", "", "8");
     const startMs = new Date(2026, 6, 27, 7, 0).getTime();
-    const live = findLiveShift([s], new Date(2026, 6, 27, 14, 59), { shiftId: "m", startMs });
+    const onNow = { shiftId: "m", startMs, endMs: startMs + 8 * 3600_000 };
+    const live = findLiveShift([s], new Date(2026, 6, 27, 14, 59), onNow);
     expect(live?.endMs).toBe(startMs + 8 * 3600_000);
-    expect(findLiveShift([s], new Date(2026, 6, 27, 15, 1), { shiftId: "m", startMs })).toBeNull();
+    expect(findLiveShift([s], new Date(2026, 6, 27, 15, 1), onNow)).toBeNull();
   });
 
   test("todayShiftWithoutTimes finds the 'I'm on now' candidate", () => {

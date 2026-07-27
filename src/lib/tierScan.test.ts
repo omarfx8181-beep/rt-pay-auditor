@@ -24,6 +24,13 @@ describe("parseTierResponse", () => {
 });
 
 describe("diffTiers", () => {
+  test("annotation parens are ignored: a posting's bare '16-hr extra shift' still matches '(current)' and flags the drop", () => {
+    const d = diffTiers(DEFAULT_TIERS, [{ id: "s1", label: "16-hr extra shift", units: 4 }]);
+    expect(d.changes).toEqual([{ label: "16-hr extra shift", fromUnits: 8, toUnits: 4 }]);
+    expect(d.drops).toHaveLength(1);
+    expect(d.added).toEqual([]); // never duplicated as "new"
+  });
+
   test("matches labels loosely (dollar amounts and parens ignored) and flags drops", () => {
     const next = [
       { id: "scan-t1", label: "12-hr extra shift", units: 10 }, // matches "12-hr extra shift ($500)" — unchanged
@@ -47,5 +54,27 @@ describe("diffTiers", () => {
     expect(d.changes).toEqual([]);
     expect(d.added).toEqual([]);
     expect(d.removed).toEqual([]);
+  });
+
+  test("hour lengths inside parens stay distinct — no phantom drops, no masked adds", () => {
+    const current = [
+      { id: "a", label: "Extra shift (8 hr)", units: 5 },
+      { id: "b", label: "Extra shift (12 hr)", units: 10 },
+    ];
+    // identical posting → silence
+    const same = diffTiers(current, [
+      { id: "s1", label: "Extra shift (8 hr)", units: 5 },
+      { id: "s2", label: "Extra shift (12 hr)", units: 10 },
+    ]);
+    expect(same.changes).toEqual([]);
+    expect(same.drops).toEqual([]);
+    // a genuinely new 16-hr tier is reported as added, not swallowed
+    const withNew = diffTiers(current, [
+      { id: "s1", label: "Extra shift (8 hr)", units: 5 },
+      { id: "s2", label: "Extra shift (12 hr)", units: 10 },
+      { id: "s3", label: "Extra shift (16 hr)", units: 12 },
+    ]);
+    expect(withNew.changes).toEqual([]);
+    expect(withNew.added.map((t) => t.label)).toEqual(["Extra shift (16 hr)"]);
   });
 });

@@ -884,9 +884,11 @@ export default function Me({
                 );
               })()}
             <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={() => setWrappedOpen(true)} className="btn btn-primary pressable text-xs">
-                ▶ The highlight reel
-              </button>
+              {ytd.periodCount > 0 && (
+                <button onClick={() => setWrappedOpen(true)} className="btn btn-primary pressable text-xs">
+                  ▶ The highlight reel
+                </button>
+              )}
               <button onClick={() => onDownloadYearCsv(yearView)} className="btn btn-ghost pressable text-xs">
                 <Download size={13} /> Download {yearView} as a spreadsheet
               </button>
@@ -1063,8 +1065,9 @@ export default function Me({
             name={`${FAIRVIEW_RT_PRESET.facility.name} — ${FAIRVIEW_RT_PRESET.role.shortName}`}
             cfgDraft={cfgDraft}
             tiers={tiers}
-            onApplyShared={(sharedCfg, sharedTiers) => {
-              setCfgDraft(() => sharedCfg);
+            onApplyShared={(rules, sharedTiers) => {
+              // MERGE — facility rules land, personal fields stay the receiver's own.
+              setCfgDraft((d) => ({ ...d, ...rules }));
               setTiers(() => sharedTiers);
             }}
           />

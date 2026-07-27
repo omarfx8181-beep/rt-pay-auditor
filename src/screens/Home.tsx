@@ -53,13 +53,11 @@ function LiveTicker({
   const candidate = live ? null : todayShiftWithoutTimes(record.shifts, now);
   const worths = useMemo(() => shiftWorths(shifts, cfg), [shifts, cfg]);
 
-  // A manual start goes stale once its window (plus an hour) has passed.
+  // A manual start goes stale by TIME only (window + an hour) — never
+  // because some other period happens to be on screen.
   useEffect(() => {
-    if (!onNow) return;
-    const s = record.shifts.find((x) => x.id === onNow.shiftId);
-    const hours = s ? Math.max(1, num(s.hours)) : 0;
-    if (!s || nowMs > onNow.startMs + (hours + 1) * 3600_000) onSetOnNow(null);
-  }, [onNow, nowMs, record.shifts, onSetOnNow]);
+    if (onNow && nowMs > onNow.endMs + 3600_000) onSetOnNow(null);
+  }, [onNow, nowMs, onSetOnNow]);
 
   if (live) {
     const w = worths.get(live.shift.id);
@@ -83,7 +81,10 @@ function LiveTicker({
           in your pocket so far · {fmtCents(w.netCents)} by {endLabel}
         </div>
         <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-soft">
-          <div className="h-full rounded-full bg-pos transition-all" style={{ width: `${frac * 100}%` }} />
+          <div
+            className="h-full rounded-full bg-pos transition-all motion-reduce:transition-none"
+            style={{ width: `${frac * 100}%` }}
+          />
         </div>
       </Card>
     );
@@ -92,7 +93,10 @@ function LiveTicker({
   if (candidate) {
     return (
       <button
-        onClick={() => onSetOnNow({ shiftId: candidate.id, startMs: Date.now() })}
+        onClick={() => {
+          const startMs = Date.now();
+          onSetOnNow({ shiftId: candidate.id, startMs, endMs: startMs + Math.max(1, num(candidate.hours)) * 3600_000 });
+        }}
         className="pressable mx-auto flex min-h-11 items-center gap-1.5 px-3 py-1 text-footnote font-medium text-accent"
       >
         <Play size={13} /> On shift now? Watch it add up
@@ -134,6 +138,9 @@ function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; close
 /** "Why is this check different?" — engine drivers, plain rows. */
 function WhyDifferent({ record, periods }: { record: PayPeriod; periods: PayPeriod[] }) {
   const d = useMemo(() => checkDiff(record, periods), [record, periods]);
+  // Mid-entry a period is half a check — comparisons only mislead. Same
+  // finished-only rule as the scoreboard.
+  if (record.endDate >= todayIso()) return null;
   if (!d || (Math.abs(d.netDeltaCents) < 100 && d.drivers.length === 0)) return null;
   const up = d.netDeltaCents >= 0;
   return (
@@ -141,30 +148,36 @@ function WhyDifferent({ record, periods }: { record: PayPeriod; periods: PayPeri
       title="Why is this check different?"
       hint={`${up ? "+" : "−"}${fmtCents(Math.abs(d.netDeltaCents))} take-home vs last check.`}
     >
-      <div className="space-y-1.5 text-sm">
-        {d.shiftsDelta !== 0 && (
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-ink-dim">Shifts</span>
-            <span className="font-medium tabular-nums">{d.shiftsDelta > 0 ? "+" : ""}{d.shiftsDelta}</span>
-          </div>
-        )}
-        {d.drivers.slice(0, 5).map((dr) => (
-          <div key={dr.key} className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0 truncate text-ink-dim">
-              {dr.label}
-              {dr.qtyDelta !== 0 && (
-                <span className="tabular-nums">
-                  {" "}({dr.qtyDelta > 0 ? "+" : "−"}
-                  {dr.isUnits ? fmtUnits(Math.abs(dr.qtyDelta)) + "u" : fmtNum(Math.abs(dr.qtyDelta)) + "h"})
-                </span>
-              )}
-            </span>
-            <span className={`font-medium tabular-nums ${dr.deltaCents >= 0 ? "text-pos" : "text-neg"}`}>
-              {dr.deltaCents >= 0 ? "+" : "−"}{fmtCents(Math.abs(dr.deltaCents))}
-            </span>
-          </div>
-        ))}
-      </div>
+      {d.prevBare ? (
+        <p className="text-footnote text-ink-dim">
+          Last check was logged from its stub only — totals compare, lines can't.
+        </p>
+      ) : (
+        <div className="space-y-1.5 text-sm">
+          {d.shiftsDelta !== 0 && (
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-ink-dim">Shifts</span>
+              <span className="font-medium tabular-nums">{d.shiftsDelta > 0 ? "+" : ""}{d.shiftsDelta}</span>
+            </div>
+          )}
+          {d.drivers.slice(0, 5).map((dr) => (
+            <div key={dr.key} className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 truncate text-ink-dim">
+                {dr.label}
+                {dr.qtyDelta !== 0 && (
+                  <span className="tabular-nums">
+                    {" "}({dr.qtyDelta > 0 ? "+" : "−"}
+                    {dr.isUnits ? fmtUnits(Math.abs(dr.qtyDelta)) + " units" : fmtNum(Math.abs(dr.qtyDelta)) + " hrs"})
+                  </span>
+                )}
+              </span>
+              <span className={`font-medium tabular-nums ${dr.deltaCents >= 0 ? "text-pos" : "text-neg"}`}>
+                {dr.deltaCents >= 0 ? "+" : "−"}{fmtCents(Math.abs(dr.deltaCents))}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       <p className="mt-2 text-footnote text-ink-dim">vs {periodLabel(d.prevStart, d.prevEnd)}</p>
     </Disclosure>
   );

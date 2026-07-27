@@ -34,10 +34,16 @@ export interface LiveShift {
   endMs: number;
 }
 
-/** The persisted one-tap start (settings key "onNow"). */
+/**
+ * The persisted one-tap start (settings key "onNow"). Carries its own
+ * end so staleness is judged by TIME alone — never by whether the
+ * shift happens to be in whichever period is on screen (v0 wiped a
+ * live ticker just for glancing at last period).
+ */
 export interface OnNow {
   shiftId: string;
   startMs: number;
+  endMs: number;
 }
 
 /**
@@ -55,7 +61,7 @@ export function findLiveShift(shifts: ShiftDraft[], now: Date, manualStart?: OnN
     if (num(s.hours) <= 0) continue;
     let window = noteWindow(s);
     if (!window && manualStart && manualStart.shiftId === s.id) {
-      window = { startMs: manualStart.startMs, endMs: manualStart.startMs + num(s.hours) * 3600_000 };
+      window = { startMs: manualStart.startMs, endMs: manualStart.endMs };
     }
     if (window && window.startMs <= nowMs && nowMs < window.endMs) return { shift: s, startMs: window.startMs, endMs: window.endMs };
   }

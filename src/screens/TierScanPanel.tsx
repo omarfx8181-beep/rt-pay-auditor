@@ -84,7 +84,7 @@ export default function TierScanPanel({
               Use these tiers
             </button>
           )}
-          <button onClick={() => setState({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
+          <button onClick={() => setState({ status: "idle" })} className="btn btn-ghost pressable text-xs">
             {unchanged ? "Done" : "Discard"}
           </button>
         </div>
@@ -123,9 +123,9 @@ export default function TierScanPanel({
             </button>
           )}
           {state.status === "error" && (
-            <p className="mt-2 text-footnote text-neg">
-              {state.msg}{" "}
-              <button onClick={() => setState({ status: "idle" })} className="text-ink-dim underline">
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-footnote text-neg">
+              {state.msg}
+              <button onClick={() => setState({ status: "idle" })} className="pressable min-h-11 px-2 text-ink-dim underline">
                 dismiss
               </button>
             </p>

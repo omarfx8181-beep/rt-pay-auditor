@@ -23,10 +23,10 @@ test("shift cards carry price tags; the what-if chips price a pickup in one tap"
 
   await tabButton(page, "Home").click();
   await page.locator('button:has-text("What if I pick up a shift?")').click();
-  await page.locator('button:has-text("12h pickup · 10u")').click();
+  await page.locator('button:has-text("12h pickup · 10 units")').click();
   await expect(page.locator('label:has(span:text-is("Hours")) input')).toHaveValue("12");
   await expect(page.locator('label:has(span:text-is("Bonus units")) input')).toHaveValue("10");
-  await page.locator('button:has-text("16h double · 8u")').click();
+  await page.locator('button:has-text("16h double · 8 units")').click();
   await expect(page.locator('label:has(span:text-is("Bonus units")) input')).toHaveValue("8");
 });
 
@@ -89,16 +89,23 @@ test("QR share renders; a coworker's QR imports their rules; the reel plays", as
   await page.locator('button:has-text("Hand it to a coworker")').click();
   await expect(page.locator('img[alt*="Pay rules QR"]')).toBeVisible();
 
-  // a "coworker's" QR with a different base rate
-  const shared = encodeRules("Other Hospital — RT", { ...DEFAULT_CFG_DRAFT, baseRate: "60.00" }, DEFAULT_TIERS);
+  // a "coworker's" QR: different weekend rate, different base rate —
+  // only the FACILITY rule may transfer, never the personal rate
+  const shared = encodeRules(
+    "Other Hospital — RT",
+    { ...DEFAULT_CFG_DRAFT, weekendDiff: "4.50", baseRate: "60.00" },
+    DEFAULT_TIERS,
+  );
   const png = await QRCode.toBuffer(shared, { errorCorrectionLevel: "M", margin: 2, width: 960 });
   await page
     .locator('label:has-text("Import their QR photo") input')
     .setInputFiles({ name: "qr.png", mimeType: "image/png", buffer: png });
   await expect(page.locator("text=Scanned: Other Hospital — RT")).toBeVisible();
+  await expect(page.locator("text=Your base rate and tax setup stay yours.")).toBeVisible();
   await page.locator('button:has-text("Use these rules")').click();
-  // the base-rate row is the first input on Me (top card)
-  await expect(page.locator("main input").first()).toHaveValue("60.00");
+  // input 0 = base rate (kept), input 1 = weekend pay (imported)
+  await expect(page.locator("main input").first()).toHaveValue("52.53");
+  await expect(page.locator("main input").nth(1)).toHaveValue("4.50");
 
   // the highlight reel opens and advances
   await page.locator('button:has-text("The highlight reel")').click();

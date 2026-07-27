@@ -232,7 +232,7 @@ export function WhatIfBody({
               className={`btn px-3 py-1.5 text-xs ${active ? "btn-primary" : "btn-ghost"} pressable`}
             >
               {h === 16 ? "16h double" : `${h}h pickup`}
-              {units > 0 ? ` · ${fmtUnits(units)}u` : ""}
+              {units > 0 ? ` · ${fmtUnits(units)} units` : ""}
             </button>
           );
         })}

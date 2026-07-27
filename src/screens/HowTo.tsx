@@ -121,8 +121,9 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
           <p>
             Everything lives on this phone only — so back it up: <strong>Backup</strong> (below) →{" "}
             <strong>Back up now</strong> → Save to Files → iCloud Drive. New phone or fresh install:{" "}
-            <strong>Import</strong> the same file and everything merges back. <strong>Paydays on your calendar</strong>{" "}
-            hands iOS the reminders, since the app never phones home.
+            <strong>Import</strong> the same file and everything merges back.{" "}
+            <strong>Add paydays to your calendar</strong> (inside Backup) hands iOS the reminders, since the app never
+            phones home.
           </p>
           <p>
             A coworker wants this? <strong>Hand it to a coworker</strong> (below) turns your pay rules into a QR their

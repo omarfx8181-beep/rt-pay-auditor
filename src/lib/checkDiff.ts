@@ -8,6 +8,7 @@
  */
 import { computePeriod, type Cents } from "./engine.ts";
 import { draftToConfig, draftToLeave, draftToShift } from "./draft.ts";
+import { plainLabel } from "./labels.ts";
 import { periodMoney, type PayPeriod } from "./periods.ts";
 
 export interface DiffDriver {
@@ -32,6 +33,11 @@ export interface CheckDiff {
   drivers: DiffDriver[];
   /** +2 = two more shifts this period. */
   shiftsDelta: number;
+  /**
+   * The previous check was logged from its stub only (no shifts) — a
+   * money headline exists but there are no lines to diff against.
+   */
+  prevBare: boolean;
 }
 
 const lineMap = (p: PayPeriod) => {
@@ -40,7 +46,8 @@ const lineMap = (p: PayPeriod) => {
   const map = new Map<string, { label: string; amountCents: Cents; qty: number; isUnits: boolean }>();
   for (const l of result.lines) {
     if (l.nonCash) continue; // imputed life is noise here — never cash
-    map.set(l.key, { label: l.label, amountCents: l.amountCents, qty: l.qty, isUnits: l.isUnits === true });
+    // plainLabel — this renders in a DEFAULT view; codes stay in receipts
+    map.set(l.key, { label: plainLabel(l.key, l.label), amountCents: l.amountCents, qty: l.qty, isUnits: l.isUnits === true });
   }
   return map;
 };
@@ -57,6 +64,22 @@ export function checkDiff(cur: PayPeriod, periods: PayPeriod[]): CheckDiff | nul
 
   const curMoney = periodMoney(cur);
   const prevMoney = periodMoney(prev);
+
+  // A stub-only previous period has no engine lines: diffing against
+  // all-zero would present the entire current check as "new money".
+  // Keep the honest headline, skip the fiction.
+  const prevBare = prev.shifts.length === 0 && (prev.leave ?? []).length === 0;
+  if (prevBare) {
+    return {
+      prevStart: prev.startDate,
+      prevEnd: prev.endDate,
+      grossDeltaCents: curMoney.grossCents - prevMoney.grossCents,
+      netDeltaCents: curMoney.netCents - prevMoney.netCents,
+      drivers: [],
+      shiftsDelta: 0,
+      prevBare: true,
+    };
+  }
 
   const curLines = lineMap(cur);
   const prevLines = lineMap(prev);
@@ -84,5 +107,6 @@ export function checkDiff(cur: PayPeriod, periods: PayPeriod[]): CheckDiff | nul
     netDeltaCents: curMoney.netCents - prevMoney.netCents,
     drivers,
     shiftsDelta: cur.shifts.length - prev.shifts.length,
+    prevBare: false,
   };
 }

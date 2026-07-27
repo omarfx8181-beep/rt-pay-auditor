@@ -65,6 +65,21 @@ describe("checkDiff", () => {
     expect(d.prevEnd).toBe("2026-06-07");
   });
 
+  test("a stub-only previous check compares totals, never lines", () => {
+    // bulk stub scans create exactly this shape: money, no shifts
+    const bare = period("2026-06-08", "2026-06-21", [], { actual: { gross: "8850.00", net: "5770.00" } });
+    const d = checkDiff(cur, [bare, cur])!;
+    expect(d.prevBare).toBe(true);
+    expect(d.drivers).toEqual([]); // never "the whole check is new money"
+    expect(d.shiftsDelta).toBe(0);
+    expect(d.grossDeltaCents).not.toBe(0); // the honest headline survives
+  });
+
+  test("driver labels are plain language — never payroll codes", () => {
+    const d = checkDiff(cur, [prev, cur])!;
+    for (const dr of d.drivers) expect(dr.label).not.toMatch(/548|308|320/);
+  });
+
   test("first period ever → no diff", () => {
     expect(checkDiff(cur, [cur])).toBeNull();
   });

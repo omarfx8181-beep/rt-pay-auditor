@@ -1,8 +1,9 @@
 /**
- * Beam the pay rules — hand the app to a coworker. Your rates, rules,
- * and this week's tiers become one QR; their phone scans it and starts
- * configured. Rules ONLY: never shifts, stubs, history, or the API
- * key. No server — the QR is the transport.
+ * Beam the pay rules — hand the app to a coworker. The FACILITY's
+ * rules and this week's tiers become one QR; their phone scans it and
+ * starts configured. Facility rules ONLY: never your base rate, tax
+ * setup, deductions, shifts, stubs, or the API key — the receiver's
+ * own numbers survive the import. No server — the QR is the transport.
  */
 import { useEffect, useState } from "react";
 import { Loader2, QrCode, ScanLine } from "lucide-react";
@@ -44,7 +45,8 @@ export default function ShareRulesPanel({
   name: string;
   cfgDraft: CfgDraft;
   tiers: BonusTier[];
-  onApplyShared: (cfgDraft: CfgDraft, tiers: BonusTier[]) => void;
+  /** Facility rules merge over the receiver's config — personal fields untouched. */
+  onApplyShared: (rules: Partial<CfgDraft>, tiers: BonusTier[]) => void;
 }) {
   const [qrUrl, setQrUrl] = useState("");
   const [imp, setImp] = useState<ImportState>({ status: "idle" });
@@ -86,9 +88,10 @@ export default function ShareRulesPanel({
     >
       {qrUrl !== "" && (
         <div className="flex flex-col items-center gap-2">
+          {/* Raw white is deliberate: scanners need the quiet zone bright in dark mode too. */}
           <img src={qrUrl} alt={`Pay rules QR for ${name}`} className="w-56 max-w-full rounded-xl border border-surface-line bg-white p-2" />
           <p className="text-center text-caption text-ink-dim">
-            {name} · rules and this week's tiers only — never your shifts, stubs, or key.
+            {name} · facility rules and this week's tiers only — never your rate, taxes, shifts, stubs, or key.
           </p>
         </div>
       )}
@@ -98,20 +101,21 @@ export default function ShareRulesPanel({
           <div>
             <p className="text-subhead font-semibold">Scanned: {imp.shared.name}</p>
             <p className="mt-0.5 text-footnote tabular-nums text-ink-dim">
-              Base ${imp.shared.cfgDraft.baseRate}/hr · {imp.shared.tiers.length} bonus tier
-              {imp.shared.tiers.length === 1 ? "" : "s"} — replaces your current rules for this and future periods.
+              Weekend ${imp.shared.rules.weekendDiff}/hr · evening ${imp.shared.rules.eveningDiff}/hr · $
+              {imp.shared.rules.unit548}/unit · {imp.shared.tiers.length} tier
+              {imp.shared.tiers.length === 1 ? "" : "s"}. Your base rate and tax setup stay yours.
             </p>
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => {
-                  onApplyShared(imp.shared.cfgDraft, imp.shared.tiers);
+                  onApplyShared(imp.shared.rules, imp.shared.tiers);
                   setImp({ status: "idle" });
                 }}
                 className="btn btn-primary pressable text-xs"
               >
                 Use these rules
               </button>
-              <button onClick={() => setImp({ status: "idle" })} className="pressable px-2 text-xs text-ink-dim">
+              <button onClick={() => setImp({ status: "idle" })} className="btn btn-ghost pressable text-xs">
                 Discard
               </button>
             </div>
@@ -136,9 +140,9 @@ export default function ShareRulesPanel({
               />
             </label>
             {imp.status === "error" && (
-              <p className="mt-2 text-footnote text-neg">
-                {imp.msg}{" "}
-                <button onClick={() => setImp({ status: "idle" })} className="text-ink-dim underline">
+              <p className="mt-2 flex flex-wrap items-center gap-2 text-footnote text-neg">
+                {imp.msg}
+                <button onClick={() => setImp({ status: "idle" })} className="pressable min-h-11 px-2 text-ink-dim underline">
                   dismiss
                 </button>
               </p>

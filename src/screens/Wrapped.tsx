@@ -4,7 +4,7 @@
  * own truth (stub-true first, corrections in), told as a story that
  * ends on the app's reason to exist: what it caught.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { X } from "lucide-react";
 import type { WrappedStats } from "../lib/wrapped.ts";
@@ -14,7 +14,7 @@ interface Slide {
   eyebrow: string;
   big: string;
   sub: string;
-  tone?: "pos" | "amber";
+  tone?: "pos";
 }
 
 function buildSlides(s: WrappedStats, unit548Cents: number): Slide[] {
@@ -32,10 +32,11 @@ function buildSlides(s: WrappedStats, unit548Cents: number): Slide[] {
     },
   ];
   if (s.ytd.otHours > 0) {
+    const dt = s.ytd.dtHours > 0 ? `plus ${fmtNum(s.ytd.dtHours)} double-time hrs` : "every one at the higher rate";
     slides.push({
       eyebrow: "Overtime",
       big: `${fmtNum(s.ytd.otHours)} hrs`,
-      sub: s.ytd.dtHours > 0 ? `plus ${fmtNum(s.ytd.dtHours)} double-time hrs` : "every one at the higher rate",
+      sub: s.mostOt ? `${dt} · biggest stretch ${fmtNum(s.mostOt.otHours)} hrs in one check` : dt,
     });
   }
   if (s.biggestCheck) {
@@ -67,7 +68,7 @@ function buildSlides(s: WrappedStats, unit548Cents: number): Slide[] {
       sub: `caught · ${fmtCents(s.caught.recoveredCents)} recovered${
         s.caught.openCents > 0 ? ` · ${fmtCents(s.caught.openCents)} still open` : ""
       }`,
-      tone: "amber",
+      tone: "pos",
     });
   } else if (s.caught.cleanStreak >= 2) {
     slides.push({
@@ -92,6 +93,8 @@ export default function Wrapped({
   const slides = useMemo(() => buildSlides(stats, unit548Cents), [stats, unit548Cents]);
   const [idx, setIdx] = useState(0);
   const reduce = useReducedMotion();
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const advanceRef = useRef<HTMLButtonElement>(null);
   const last = idx >= slides.length - 1;
   const slide = slides[Math.min(idx, slides.length - 1)];
 
@@ -100,16 +103,37 @@ export default function Wrapped({
     else setIdx((i) => i + 1);
   };
 
+  // Modal manners: take focus on open, Escape closes, Tab stays inside
+  // (two buttons — a light trap covers it).
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const next = document.activeElement === closeRef.current ? advanceRef.current : closeRef.current;
+        next?.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-hero-bg text-hero-fg" role="dialog" aria-label={`${stats.year} highlight reel`}>
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-hero-bg text-hero-fg"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${stats.year} highlight reel — slide ${Math.min(idx, slides.length - 1) + 1} of ${slides.length}`}
+    >
       <div className="flex items-center justify-between px-5 pt-[max(20px,env(safe-area-inset-top))]">
         <span className="eyebrow text-hero-fg/50">The highlight reel</span>
-        <button onClick={onClose} className="pressable p-2.5 text-hero-fg/70" aria-label="Close">
+        <button ref={closeRef} onClick={onClose} className="pressable grid size-11 place-items-center text-hero-fg/70" aria-label="Close">
           <X size={20} />
         </button>
       </div>
 
-      <button onClick={advance} className="flex flex-1 flex-col items-center justify-center px-8 text-center">
+      <button ref={advanceRef} onClick={advance} className="flex flex-1 flex-col items-center justify-center px-8 text-center">
         <AnimatePresence mode="wait">
           <motion.div
             key={idx}
@@ -119,17 +143,13 @@ export default function Wrapped({
             transition={{ duration: reduce ? 0 : 0.28, ease: "easeOut" }}
           >
             <div className="eyebrow text-hero-fg/50">{slide.eyebrow}</div>
-            <div
-              className={`mt-3 text-hero-num tabular-nums ${
-                slide.tone === "pos" ? "text-hero-pos" : slide.tone === "amber" ? "text-amber" : ""
-              }`}
-            >
+            <div className={`mt-3 text-hero-num tabular-nums ${slide.tone === "pos" ? "text-hero-pos" : ""}`}>
               {slide.big}
             </div>
             <div className="mt-2 text-subhead text-hero-fg/60">{slide.sub}</div>
           </motion.div>
         </AnimatePresence>
-        <div className="mt-10 text-caption text-hero-fg/40">{last ? "tap to finish" : "tap for the next one"}</div>
+        <div className="mt-10 text-caption text-hero-fg/60">{last ? "tap to finish" : "tap for the next one"}</div>
       </button>
 
       <div className="flex justify-center gap-1.5 pb-[max(24px,env(safe-area-inset-bottom))]">

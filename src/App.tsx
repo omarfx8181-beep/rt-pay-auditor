@@ -372,7 +372,7 @@ function PeriodWorkspace({
     if (!onNowRow?.value) return null;
     try {
       const v = JSON.parse(onNowRow.value) as OnNow;
-      return typeof v?.shiftId === "string" && Number.isFinite(v?.startMs) ? v : null;
+      return typeof v?.shiftId === "string" && Number.isFinite(v?.startMs) && Number.isFinite(v?.endMs) ? v : null;
     } catch {
       return null;
     }

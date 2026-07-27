@@ -42,14 +42,19 @@ export function parseTierResponse(text: string): TierScanResult {
 }
 
 /**
- * Labels match loosely: case, spacing, and printed dollar amounts
- * don't count — but over/under distinctions do ("> 4 hr" and "≤ 4 hr"
- * are different tiers).
+ * Labels match loosely. Case, spacing, dollar amounts, and pure
+ * annotations in parens — "(current)", "(confirm)", "($500)" — don't
+ * count; parenthetical content that carries a NUMBER does ("(8 hr)"
+ * vs "(12 hr)" are different tiers); over/under distinctions ("> 4
+ * hr" vs "≤ 4 hr") are kept as words.
  */
 const tierKey = (label: string): string =>
   label
     .toLowerCase()
-    .replace(/\(.*?\)/g, "")
+    .replace(/\(([^)]*)\)/g, (_, inner: string) => {
+      const noMoney = inner.replace(/\$\s?[\d,.]+/g, "");
+      return /\d/.test(noMoney) ? ` ${noMoney} ` : " ";
+    })
     .replace(/\$\s?[\d,.]+/g, "")
     .replace(/[>≥]/g, " over ")
     .replace(/[<≤]/g, " under ")
