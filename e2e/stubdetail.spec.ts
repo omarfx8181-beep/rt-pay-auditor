@@ -32,7 +32,7 @@ test("period cards jump to the stub lines; shift-less periods record, not audit"
   const pastCard = page.locator("section", { hasText: "Jun 8 – Jun 21, 2026" }).first();
   await expect(pastCard).toContainText("made $3,000.00");
   await pastCard.locator('button:has-text("Stub details")').click();
-  await expect(page.locator("text=Just recording this one")).toBeVisible();
+  await expect(page.locator("text=Nothing to audit")).toBeVisible();
   await expect(page.locator("text=You're owed")).toHaveCount(0);
   await expect(page.locator("text=✓ saved").first()).toBeVisible(); // gross/net prefilled read as saved, not judged
 });

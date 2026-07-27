@@ -45,8 +45,8 @@ function OvertimeMeter({ period, cfg }: { period: PeriodResult; cfg: EngineConfi
       </div>
       <p className="mt-1.5 text-footnote text-ink-dim">
         {over
-          ? `You're past ${fmtNum(limit)} — ${fmtNum(period.otHours)} overtime hrs so far, and every extra straight hour now pays the overtime rate.`
-          : `${fmtNum(limit - straight)} more straight hours before overtime kicks in. Double-time hours don't count toward it.`}
+          ? `Past ${fmtNum(limit)} — extra hours pay overtime now.`
+          : `${fmtNum(limit - straight)} hrs to overtime.`}
       </p>
     </Card>
   );
@@ -182,13 +182,9 @@ function ShiftSheet({
           />
         </label>
       </div>
-      <p className="text-footnote text-ink-dim">
-        {s.date
-          ? wknd
-            ? "Weekend — weekend pay adds itself. ✓"
-            : "Weekday — weekend pay adds itself on Saturday and Sunday."
-          : "Pick a date so weekend pay can apply itself."}
-      </p>
+      {(wknd || s.date === "") && (
+        <p className="text-footnote text-ink-dim">{s.date === "" ? "Pick a date." : "Weekend pay ✓"}</p>
+      )}
 
       <div>
         <span className="label">Critical shift bonus</span>
@@ -237,7 +233,7 @@ function ShiftSheet({
         />
         <AdderToggle
           label="Premium"
-          hint="Premium-pay shift — a transport day counts the whole day."
+          hint="Transport days count in full."
           hours={s.premium}
           defaultHours={s.hours || "12"}
           onChange={(v) => onSet("premium", v)}
@@ -402,7 +398,7 @@ export default function Shifts({
 
       {shifts.length === 0 ? (
         <Card>
-          <p className="text-body">Your shifts live here. The more you add, the sharper your paycheck check.</p>
+          <p className="text-body">No shifts yet.</p>
           <button onClick={addShift} className="btn btn-primary pressable mt-4">
             <Plus size={16} /> Add a shift
           </button>
@@ -449,10 +445,9 @@ export default function Shifts({
           <HeartPulse size={13} className="text-blue" />
           <span className="eyebrow">Leave — sick · LOA · medical</span>
         </div>
-        <p className="text-footnote text-ink-dim">
-          Calling in? One tap logs today — hours prefill from today's scheduled shift when there is one. Paid at your
-          base rate (${fmtRate(cfg.baseRateCents)}/hr), never counts toward overtime, no weekend pay, and these hours
-          don't earn PTO. They show on your timecard as Time Off.
+        <p className="text-footnote text-ink-dim">One tap logs today at base rate (${fmtRate(cfg.baseRateCents)}/hr).</p>
+        <p className="mt-0.5 text-caption text-ink-dim/80">
+          No overtime credit · no weekend pay · earns no PTO · shows as "Time Off"
         </p>
 
         {leave.length > 0 && (

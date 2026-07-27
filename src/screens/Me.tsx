@@ -549,14 +549,14 @@ export default function Me({
 
       {/* ---- pay rules, in human rows ---- */}
       <div className="pt-3">
-        <Eyebrow className="mb-2">Your pay & the rules behind it</Eyebrow>
+        <Eyebrow className="mb-2">Pay rules</Eyebrow>
       </div>
       <Card title="Your pay rules">
         <RuleRow label="Weekend pay" hint="Extra per hour on Saturday and Sunday — applies itself." value={cfgDraft.weekendDiff} onChange={set("weekendDiff")} suffix="$/hr" />
-        <RuleRow label="Evening pay" hint="Extra per hour on evening shifts." value={cfgDraft.eveningDiff} onChange={set("eveningDiff")} suffix="$/hr" />
+        <RuleRow label="Evening pay" value={cfgDraft.eveningDiff} onChange={set("eveningDiff")} suffix="$/hr" />
         <RuleRow
           label="Evening hours this period"
-          hint="Copied from your timecard each period — Kronos credits evening hours, then removes 4 a day for day staff, so shifts alone can't compute it."
+          hint="From your timecard each period — shifts alone can't compute it. The timecard scan fills it."
           value={cfgDraft.eveningHours}
           onChange={set("eveningHours")}
           suffix="hrs"
@@ -564,8 +564,8 @@ export default function Me({
         />
         <RuleRow label="Overtime starts after" hint="Straight hours in a pay period before overtime kicks in." value={cfgDraft.otPeriod} onChange={set("otPeriod")} suffix="hrs" />
         <RuleRow label="Double time starts after" hint="Hours in a single day before double time kicks in." value={cfgDraft.dtDaily} onChange={set("dtDaily")} suffix="hrs" />
-        <RuleRow label="Charge pay" hint="Extra per hour when you're charge." value={cfgDraft.chargeRate} onChange={set("chargeRate")} suffix="$/hr" />
-        <RuleRow label="Premium pay" hint="Extra per hour on premium shifts." value={cfgDraft.premiumRate} onChange={set("premiumRate")} suffix="$/hr" />
+        <RuleRow label="Charge pay" value={cfgDraft.chargeRate} onChange={set("chargeRate")} suffix="$/hr" />
+        <RuleRow label="Premium pay" value={cfgDraft.premiumRate} onChange={set("premiumRate")} suffix="$/hr" />
         <RuleRow label="Preceptor pay" hint="Extra per hour while precepting — confirmed with payroll." value={cfgDraft.preceptorRate} onChange={set("preceptorRate")} suffix="$/hr" />
         <RuleRow label="Critical shift bonus" hint="What one bonus unit is worth." value={cfgDraft.unit548} onChange={set("unit548")} suffix="$/unit" />
       </Card>
@@ -664,24 +664,17 @@ export default function Me({
               );
             })}
           </div>
-          <p className="mt-3 text-footnote text-ink-dim">
-            Answers live here as history — remember to update the matching rate or tier above.
-          </p>
+          <p className="mt-3 text-footnote text-ink-dim">History only — update the matching rate above.</p>
         </Card>
       )}
 
       <div className="pt-3">
-        <Eyebrow className="mb-2">Set up once — scans, look & feel, tax numbers</Eyebrow>
+        <Eyebrow className="mb-2">Set up once</Eyebrow>
       </div>
       {/* ---- scan credentials (schedule + stub scans share these) ---- */}
       <div id="scan-credentials">
-      <Card title="Scans — your credentials, your device">
-        <p className="text-sm">
-          Best way to pull shifts: your ScheduleAnywhere <strong>calendar feed</strong> — in ScheduleAnywhere go to
-          Employee → iCalendar → Copy URL. No API key needed. Both values below live only in this browser: never in the
-          repo, never in JSON backups.
-        </p>
-        <div className="mt-3">
+      <Card title="Scans">
+        <div>
           <label className="flex flex-col sm:max-w-xl">
             <span className="label">ScheduleAnywhere feed URL</span>
             <input
@@ -695,12 +688,9 @@ export default function Me({
               className="input px-2.5 py-1.5 text-sm"
             />
           </label>
+          <p className="mt-1 text-footnote text-ink-dim">Employee → iCalendar → Copy URL. No key needed.</p>
         </div>
-        <p className="mt-4 text-sm">
-          The Anthropic API key powers every scan — schedule screenshots, stub photos on the check screen, and the
-          bulk stub upload below. Images go straight from your browser to the API; nothing is stored anywhere else.
-        </p>
-        <div className="mt-2 flex flex-wrap items-end gap-2">
+        <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="flex min-w-64 flex-1 flex-col sm:max-w-md">
             <span className="label">Anthropic API key</span>
             <input
@@ -723,6 +713,7 @@ export default function Me({
             {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
         </div>
+        <p className="mt-1 text-footnote text-ink-dim">Powers all photo scans. Stays on this phone.</p>
       </Card>
       </div>
 
@@ -745,7 +736,7 @@ export default function Me({
       <Disclosure
         title="Advanced"
         icon={<SlidersHorizontal size={13} className="text-ink-dim" />}
-        hint="Taxes and deductions — set from your real stub. Most people never open this."
+        hint="Taxes & deductions, from your stub."
       >
         <div className="space-y-5">
           <div>
@@ -788,7 +779,7 @@ export default function Me({
             />
             <RuleRow
               label="Call it even within"
-              hint="Stubs never match estimates to the penny. Drift and amounts paid OVER up to this are fine — being paid SHORT more than a nickel always flags, no matter what."
+              hint="Forgives drift and overpays up to this. Paid short always flags."
               value={closeEnoughDraft}
               onChange={(v) => {
                 setCloseEnoughDraft(v);
@@ -837,7 +828,7 @@ export default function Me({
             </div>
             <p className="mt-3 text-footnote text-ink-dim">
               Fairview {fmtCents(ytd.grossCents)} ({ytd.stubCount}/{ytd.periodCount} stub-true) · other{" "}
-              {fmtCents(ytd.otherGrossCents)} · real stub numbers always outrank estimates.
+              {fmtCents(ytd.otherGrossCents)}
             </p>
             <YearMoneyStory ytd={ytd} anchor={ytdAnchor} />
             {ytdAnchor &&
@@ -867,11 +858,9 @@ export default function Me({
                       </>
                     ) : (
                       <>
-                        Your newest stub says {fmtCents(ytdAnchor.grossCents)} made through {dayLabel(ytdAnchor.asOfEnd)} —
-                        the app has {fmtCents(through.grossCents)} across {through.periodCount} period
-                        {through.periodCount === 1 ? "" : "s"} ({deltaCents > 0 ? "+" : "−"}
-                        {fmtCents(Math.abs(deltaCents))}). A period may be missing, doubled, or still an estimate — scan
-                        or log its stub and this line turns green.
+                        Newest stub: {fmtCents(ytdAnchor.grossCents)} through {dayLabel(ytdAnchor.asOfEnd)} · app:{" "}
+                        {fmtCents(through.grossCents)} ({deltaCents > 0 ? "+" : "−"}
+                        {fmtCents(Math.abs(deltaCents))}). A period is missing, doubled, or estimated — scan its stub.
                       </>
                     )}
                   </p>
@@ -1015,13 +1004,7 @@ export default function Me({
                 : "Never backed up yet — two taps puts everything in iCloud Drive."
             }
           >
-            <p className="text-footnote text-ink-dim">
-              {lastBackupAt
-                ? `Last backed up ${new Date(lastBackupAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`
-                : "Never backed up yet."}{" "}
-              Back up now opens the share sheet — Save to Files → iCloud Drive and your whole pay history survives a
-              lost phone.
-            </p>
+            <p className="text-footnote text-ink-dim">Back up now → Save to Files → iCloud Drive.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button onClick={onShareBackup} className="btn btn-primary pressable">
                 <Upload size={15} /> Back up now
@@ -1045,18 +1028,14 @@ export default function Me({
               />
             </div>
             {importStatus && <p className="mt-2 text-footnote text-ink-dim">{importStatus}</p>}
+            <div className="mt-4 border-t border-surface-line/60 pt-3">
+              <button onClick={onDownloadPaydays} className="btn btn-ghost pressable">
+                <CalendarPlus size={15} /> Add paydays to your calendar
+              </button>
+              <p className="mt-1.5 text-caption text-ink-dim">The next 13 paydays. Timing: Advanced.</p>
+            </div>
           </Disclosure>
           </div>
-
-          <Card title="Paydays on your calendar">
-            <p className="text-footnote text-ink-dim">
-              The next 13 paydays as calendar events — let iOS do the reminding, since nothing here ever phones home.
-              Payday timing is set under Advanced.
-            </p>
-            <button onClick={onDownloadPaydays} className="btn btn-ghost pressable mt-3">
-              <CalendarPlus size={15} /> Add paydays to your calendar
-            </button>
-          </Card>
 
           <div className="flex items-center justify-between gap-3 pt-1">
             <p className="text-sm text-ink-dim">Pay periods, newest first.</p>

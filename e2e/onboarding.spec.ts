@@ -18,10 +18,10 @@ test("onboarding resumes at the saved step and never reappears once done", async
 
   await page.locator('button:has-text("Continue")').click();
   await page.locator('button:has-text("Skip for now")').last().click();
-  await expect(page.locator("text=Expected take-home")).toBeVisible();
+  await expect(page.locator("text=Expected this check")).toBeVisible();
 
   // done persists
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
-  await expect(page.locator("text=Expected take-home")).toBeVisible();
+  await expect(page.locator("text=Expected this check")).toBeVisible();
 });

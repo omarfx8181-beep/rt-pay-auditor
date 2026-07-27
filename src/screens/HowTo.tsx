@@ -30,7 +30,7 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
     >
       <div className="space-y-3">
         <button onClick={onStartTour} className="btn btn-primary pressable w-full text-xs">
-          <Footprints size={14} /> Take the guided tour — it walks you through each step
+          <Footprints size={14} /> Take the guided tour
         </button>
         <Step n={1} title="The rhythm, every two weeks">
           <p>

@@ -9,7 +9,7 @@ import { BadgeCheck, CircleAlert, FileDown, Mail, Plus, Trash2 } from "lucide-re
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num, todayIso, uid } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtUnits } from "../lib/format.ts";
-import { CalloutCard, Card } from "../ui/kit.tsx";
+import { CalloutCard, Card, Disclosure } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
 import { lineCloseEnough, type LineDelta, type Verdict } from "../lib/verdict.ts";
 import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
@@ -55,8 +55,7 @@ function VerdictBanner({
     return (
       <Card>
         <p className="text-subhead text-ink-dim">
-          So far so good — {verdict.matchedCount} line{verdict.matchedCount === 1 ? "" : "s"} match ✓. Enter the
-          take-home line to finish the check.
+          {verdict.matchedCount} line{verdict.matchedCount === 1 ? "" : "s"} match ✓ — enter take-home to finish.
         </p>
       </Card>
     );
@@ -69,8 +68,8 @@ function VerdictBanner({
           <CheckDraw /> Your check is right ✓
         </div>
         <p className="mt-2 text-body">
-          Paid in full — <span className="font-semibold tabular-nums">{fmtCents(verdict.paidNetCents)}</span> to your
-          account. Every shift, differential, and bonus checked out. Nice.
+          <span className="font-semibold tabular-nums">{fmtCents(verdict.paidNetCents)}</span> to your account — every
+          line checked out. Nice.
         </p>
       </CalloutCard>
     );
@@ -83,10 +82,9 @@ function VerdictBanner({
           <BadgeCheck size={24} /> Made whole — corrected ✓
         </div>
         <p className="mt-2 text-body">
-          This check came in short <span className="font-semibold tabular-nums">{fmtCents(verdict.owedCents)}</span>,
-          and payroll's correction check paid{" "}
-          <span className="font-semibold tabular-nums">{fmtCents(verdict.correctionCents)}</span> back. Case closed —
-          the money counts in your year totals.
+          Was short <span className="font-semibold tabular-nums">{fmtCents(verdict.owedCents)}</span> — the correction
+          paid <span className="font-semibold tabular-nums">{fmtCents(verdict.correctionCents)}</span> back. Counted in
+          your year totals.
         </p>
       </CalloutCard>
     );
@@ -101,7 +99,10 @@ function VerdictBanner({
         <p className="mt-2 text-body">
           {shortSentence(worst)}
           {rest.length > 0 && (
-            <> Also short: {rest.map((d) => `${d.label.toLowerCase()} (${fmtCents(Math.abs(d.deltaCents))})`).join(", ")}.</>
+            <>
+              {" "}
+              Also short: {rest.length} more line{rest.length === 1 ? "" : "s"} — the table below has them.
+            </>
           )}
           {verdict.earningsOvers.length > 0 && (
             <> Paid over on {verdict.earningsOvers.map((d) => d.label.toLowerCase()).join(", ")} — worth a rate check.</>
@@ -118,7 +119,7 @@ function VerdictBanner({
         </p>
         {emailHref ? (
           <a href={emailHref} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
-            <Mail size={16} /> Email HR — we've written it for you
+            <Mail size={16} /> Email HR — draft ready
           </a>
         ) : null}
         <button onClick={onReviewEmail} className="pressable mt-2 block min-h-11 py-1 text-subhead font-medium text-accent">
@@ -126,14 +127,12 @@ function VerdictBanner({
         </button>
         {identityMissing && (
           <p className="text-footnote text-ink-dim">
-            The draft signs with placeholders until you add your name and employee ID below — one time, saved on this
-            device.
+            Add your name and employee ID below to sign the draft — saved on this device.
           </p>
         )}
         {verdict.taxesFollow && (
           <p className="mt-2.5 text-footnote text-ink-dim">
-            Good news: you caught it. The stub's tax lines follow the shorted pay — they'll straighten out when it's
-            corrected.
+            Tax lines follow the shorted pay — they'll straighten out with the correction.
           </p>
         )}
       </CalloutCard>
@@ -175,7 +174,7 @@ function CorrectionsPanel({
     <Card>
       <div className="mb-1 flex items-center gap-1.5">
         <BadgeCheck size={13} className="text-pos" />
-        <span className="eyebrow">Correction checks — off-cycle fixes from payroll</span>
+        <span className="eyebrow">Correction checks</span>
       </div>
       {corrections.length > 0 && (
         <div className="mb-2 divide-y divide-surface-line/60 text-xs tabular-nums">
@@ -243,13 +242,14 @@ function CorrectionsPanel({
         </div>
       ) : (
         <button onClick={() => setOpen(true)} className="btn btn-ghost pressable text-xs">
-          <Plus size={13} /> Payroll sent a correction check? Log it
+          <Plus size={13} /> Log a correction check
         </button>
       )}
-      <p className="mt-2 text-footnote text-ink-dim">
-        Any day counts — correction checks land mid-week, off the normal paydays. Gross and take-home are on the
-        correction stub; once the gross covers what you were shorted, this check reads "made whole."
-      </p>
+      {open && (
+        <p className="mt-2 text-footnote text-ink-dim">
+          Once corrections cover the shortfall, this check reads "made whole."
+        </p>
+      )}
     </Card>
   );
 }
@@ -341,8 +341,7 @@ export default function Audit({
       {recordOnly ? (
         <Card>
           <p className="text-subhead">
-            Just recording this one — no shifts are logged for this period, so there's nothing to audit against.
-            Every line you enter still counts in the year totals and "Where the money went."
+            Nothing to audit — no shifts logged. Lines you enter still count in your year totals.
           </p>
         </Card>
       ) : (
@@ -368,11 +367,7 @@ export default function Audit({
         onYtdAnchor={onYtdAnchor}
       />
 
-      <p className="text-subhead text-ink-dim">
-        {recordOnly
-          ? "Or type the lines straight off the stub — they feed the year totals line by line."
-          : `Or type each line from your stub. Paid short by more than a nickel always flags — in dollars, and in bonus units where that's what was shorted; drift and overs are forgiven up to ${fmtCents(closeEnoughCents)} (Me → Advanced).`}
-      </p>
+      <p className="text-subhead text-ink-dim">Or type each line from your stub.</p>
 
       <Card>
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 sm:gap-x-3">
@@ -411,6 +406,16 @@ export default function Audit({
           ))}
         </div>
       </Card>
+
+      {!recordOnly && (
+        <Disclosure title="How flagging works" hint={`Short flags at a nickel. Drift forgiven to ${fmtCents(closeEnoughCents)}.`}>
+          <p className="text-footnote leading-relaxed text-ink-dim">
+            Paid short more than a nickel always flags — in dollars, and in bonus units when that's what was shorted.
+            Small drift and overpays are forgiven up to {fmtCents(closeEnoughCents)} ("call it even", Me → Advanced).
+            Short never clears green.
+          </p>
+        </Disclosure>
+      )}
 
       {!recordOnly && verdict.kind !== "intro" && (
         <button

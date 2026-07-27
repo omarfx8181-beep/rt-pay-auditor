@@ -19,7 +19,7 @@ test("year goal: meter, engine-priced plan, persistence, and bar deep-links", as
 
   // the plan translates the gap into effort
   await expect(page.locator("text=The plan to get there")).toBeVisible();
-  await expect(page.locator("text=Checks left this year")).toBeVisible();
+  await expect(page.locator("text=Needed per check")).toBeVisible();
   await expect(page.locator("text=Overtime, per check")).toBeVisible();
   await expect(page.locator("text=Extra 12-hr shifts, rest of the year")).toBeVisible();
 
@@ -29,11 +29,11 @@ test("year goal: meter, engine-priced plan, persistence, and bar deep-links", as
 
   // the strategizer: pickup menu, priced values, honest top-out
   await tabButton(page, "Goals").click();
-  await expect(page.locator("text=Strategize the pickups")).toBeVisible();
-  await expect(page.locator("text=a twelve ≈")).toBeVisible();
+  await expect(page.locator("text=Plan your pickups")).toBeVisible();
+  await expect(page.locator("text=12h ≈")).toBeVisible();
   await page.locator('label:has-text("Days open, per check") input').fill("2");
-  await expect(page.locator("text=Your open days top out at")).toBeVisible(); // $150k gap dwarfs 2 pickups
-  await expect(page.locator("text=the year lands around")).toBeVisible();
+  await expect(page.locator("text=Tops out at")).toBeVisible(); // $150k gap dwarfs 2 pickups
+  await expect(page.locator("text=Year lands ≈")).toBeVisible();
 
   // the goal survives a reload
   await page.reload({ waitUntil: "networkidle" });

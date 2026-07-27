@@ -53,7 +53,7 @@ function StatusPill({ verdict }: { verdict: Verdict }) {
   if (verdict.kind === "green") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-hero-pos/15 px-2.5 py-1 text-caption text-hero-pos">
-        <Check size={12} strokeWidth={2.5} /> Checked — looks right
+        <Check size={12} strokeWidth={2.5} /> Looks right
       </span>
     );
   }
@@ -67,7 +67,7 @@ function StatusPill({ verdict }: { verdict: Verdict }) {
   if (verdict.kind === "corrected") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-hero-pos/15 px-2.5 py-1 text-caption text-hero-pos">
-        <Check size={12} strokeWidth={2.5} /> Corrected — made whole
+        <Check size={12} strokeWidth={2.5} /> Made whole
       </span>
     );
   }
@@ -238,10 +238,10 @@ export default function Home({
     (verdict.kind === "intro" || verdict.kind === "progress") && untilPayday <= 3 && untilPayday >= -10;
   const paydayLine =
     untilPayday > 0
-      ? `Payday ${dayLabel(payday)} — the stub lands in Workday then.`
+      ? `Payday ${dayLabel(payday)} — stub lands in Workday.`
       : untilPayday === 0
-        ? "Payday is today — snap the stub when you have it."
-        : `Payday was ${dayLabel(payday)} — snap the stub when you have it.`;
+        ? "Payday today — snap your stub."
+        : `Paid ${dayLabel(payday)} — snap your stub.`;
 
   if (view !== "main") {
     return (
@@ -292,9 +292,7 @@ export default function Home({
 
       {empty ? (
         <Card>
-          <p className="text-body">
-            No shifts yet. Add a few — or snap your schedule — and we'll show what your next check should look like.
-          </p>
+          <p className="text-body">No shifts yet — add them to see what this check should pay.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button onClick={onGoToShifts} className="btn btn-primary pressable">
               <ScanLine size={16} /> Scan schedule
@@ -313,9 +311,7 @@ export default function Home({
               <StatusPill verdict={verdict} />
             </div>
             <div className="mt-3 text-hero-num tabular-nums">{fmtCents(heroCents)}</div>
-            <div className="mt-1 text-subhead text-hero-fg/60">
-              {showGross ? "Expected pay before taxes" : "Expected take-home this period"}
-            </div>
+            <div className="mt-1 text-subhead text-hero-fg/60">Expected this check</div>
             <div className="mt-3 inline-flex rounded-full bg-white/10 p-0.5">
               {([false, true] as const).map((gross) => (
                 <button
@@ -332,7 +328,7 @@ export default function Home({
             <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-footnote text-hero-fg/60">
               <span>{fmtNum(period.workedHours)} hours</span>
               <span>{fmtUnits(period.units548)} bonus units</span>
-              <span>{fmtCents(period.grossCents)} before taxes</span>
+              <span>{showGross ? `${fmtCents(net.netCents)} take-home` : `${fmtCents(period.grossCents)} before taxes`}</span>
             </div>
           </Hero>
           </div>
@@ -348,10 +344,7 @@ export default function Home({
             See the breakdown →
           </button>
 
-          <Disclosure
-            title="What if I pick up a shift?"
-            hint="See what one more shift would actually put in your account."
-          >
+          <Disclosure title="What if I pick up a shift?" hint="One more shift, priced after taxes.">
             <WhatIfBody shifts={shifts} cfg={cfg} cfgDraft={cfgDraft} whatIf={whatIf} setWhatIf={setWhatIf} />
           </Disclosure>
         </>
@@ -370,7 +363,7 @@ export default function Home({
 
       {backupStale && (
         <button onClick={onGoToMe} className="pressable block w-full px-2 py-1 text-center text-footnote text-amber">
-          Your pay history isn't backed up lately — it's two taps in Me → Backup.
+          Backup overdue — Me → Backup.
         </button>
       )}
     </div>

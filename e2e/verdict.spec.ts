@@ -8,7 +8,7 @@ test("seeded stub is green; shorting the bonus flips red with exactly $250; tax 
 
   // green — the seeded ACTUAL matches the engine
   await expect(page.locator("text=Your check is right")).toBeVisible();
-  await expect(page.locator("text=Paid in full")).toBeVisible();
+  await expect(page.locator("text=every line checked out")).toBeVisible();
 
   // red — the June scenario: bonus paid 5 units short
   await lineInput(page, "Critical shift bonus").fill("950.00");

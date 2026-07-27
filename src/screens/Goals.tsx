@@ -115,7 +115,6 @@ export default function Goals({
     plan && !plan.done && plan.extraPerCheckCents > 0
       ? buildPickupPlan(plan.extraPerCheckCents, values, kind, Math.max(0, Math.floor(num(maxDraft))))
       : null;
-  const hoursWord = (h: number) => (h === 16 ? "sixteen" : h === 12 ? "twelve" : h === 8 ? "eight" : `${h}-hr`);
   const landingCents =
     plan && pickup ? plan.madeCents + (plan.avgPerCheckCents + pickup.maxAddablePerCheckCents) * plan.checksLeft : 0;
   const oneEvery = plan && plan.extraShiftsTotal > 0 ? Math.max(1, Math.round(plan.checksLeft / plan.extraShiftsTotal)) : 0;
@@ -180,10 +179,7 @@ export default function Goals({
             <Target size={14} className="text-accent" />
             <span className="eyebrow">Set your {yearView} goal</span>
           </div>
-          <p className="text-body">
-            What should this year add up to? Pick a number and the plan below turns it into overtime hours, bonus
-            units, or extra shifts — priced with your real rates.
-          </p>
+          <p className="text-body">Set a target below — the plan prices it in overtime, bonus units, and extra shifts.</p>
         </Card>
       )}
 
@@ -217,158 +213,142 @@ export default function Goals({
             ))}
           </div>
         </div>
-        <p className="mt-2 text-footnote text-ink-dim">
-          Counts everything the Year card counts — Fairview checks (corrections included) plus other income.
-        </p>
+        <p className="mt-2 text-footnote text-ink-dim">Same count as the Year card: checks, corrections, other income.</p>
       </Card>
 
       {plan && !plan.done && (
         <Card title="The plan to get there">
           <div className="space-y-1 text-sm tabular-nums">
             <div className="flex justify-between gap-3">
-              <span className="text-ink-dim">Checks left this year</span>
+              <span className="text-ink-dim">Checks left</span>
               <span>{plan.checksLeft}</span>
             </div>
             <div className="flex justify-between gap-3">
-              <span className="text-ink-dim">Each one needs to bring in</span>
+              <span className="text-ink-dim">Needed per check</span>
               <span>{fmtCents(plan.neededPerCheckCents)}</span>
             </div>
             <div className="flex justify-between gap-3">
-              <span className="text-ink-dim">Your average check so far</span>
+              <span className="text-ink-dim">Average check so far</span>
               <span>{fmtCents(plan.avgPerCheckCents)}</span>
             </div>
           </div>
           {plan.extraPerCheckCents === 0 ? (
             <p className="mt-3 border-t border-surface-line/60 pt-3 text-subhead text-pos">
-              Your normal pace already lands this goal — keep doing exactly what you're doing.
+              On pace — nothing extra needed. ✓
             </p>
           ) : (
-            <div className="mt-3 border-t border-surface-line/60 pt-3">
-              <p className="text-subhead">
-                That's <span className="font-semibold tabular-nums">{fmtCents(plan.extraPerCheckCents)}</span> more
-                than your average check. Any one of these covers it:
-              </p>
-              <div className="mt-2 space-y-1.5 text-sm">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-ink-dim">Overtime, per check</span>
-                  <span className="font-semibold tabular-nums">+{fmtNum(plan.otHoursPerCheck)} hrs</span>
-                </div>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-ink-dim">Bonus units, per check</span>
-                  <span className="font-semibold tabular-nums">+{fmtUnits(plan.unitsPerCheck)} units</span>
-                </div>
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-ink-dim">Extra 12-hr shifts, rest of the year</span>
-                  <span className="font-semibold tabular-nums">
-                    {fmtUnits(plan.extraShiftsTotal)}
-                    {oneEvery > 1 ? ` (≈1 every ${oneEvery} checks)` : ""}
-                  </span>
+            <>
+              <div className="mt-3 border-t border-surface-line/60 pt-3">
+                <p className="text-subhead">
+                  <span className="font-semibold tabular-nums">+{fmtCents(plan.extraPerCheckCents)}</span>/check to
+                  close. Any one of these:
+                </p>
+                <div className="mt-2 space-y-1.5 text-sm">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-dim">Overtime, per check</span>
+                    <span className="font-semibold tabular-nums">+{fmtNum(plan.otHoursPerCheck)} hrs</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-dim">Bonus units, per check</span>
+                    <span className="font-semibold tabular-nums">+{fmtUnits(plan.unitsPerCheck)} units</span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-ink-dim">Extra 12-hr shifts, rest of the year</span>
+                    <span className="font-semibold tabular-nums">
+                      {fmtUnits(plan.extraShiftsTotal)}
+                      {oneEvery > 1 ? ` (≈1 every ${oneEvery} checks)` : ""}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <div className="mt-3 border-t border-surface-line/60 pt-3">
+                <p className="text-subhead font-semibold">Plan your pickups</p>
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  <div>
+                    <span className="label">Shifts you can pick up</span>
+                    <div className="mt-1 flex gap-1.5">
+                      {PICKUP_LENGTHS.map((h) => {
+                        const on = lengths.includes(h);
+                        return (
+                          <button
+                            key={h}
+                            onClick={() => {
+                              const next = on ? lengths.filter((x) => x !== h) : [...lengths, h];
+                              if (next.length > 0) persist({ lengths: next });
+                            }}
+                            className={`btn px-3 py-2 text-xs ${on ? "btn-primary" : "btn-ghost"} pressable`}
+                          >
+                            {h === 16 ? "16s (double)" : `${h}s`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <label className="flex flex-col">
+                    <span className="label">Days open, per check</span>
+                    <input
+                      value={maxDraft}
+                      onChange={(e) => {
+                        setMaxDraft(e.target.value);
+                        persist({ maxPickups: e.target.value.trim() });
+                      }}
+                      inputMode="numeric"
+                      placeholder="no limit"
+                      className="input w-24 px-2.5 py-2 text-right text-[16px] tabular-nums"
+                    />
+                  </label>
+                </div>
+
+                <p className="mt-2.5 text-footnote tabular-nums text-ink-dim">
+                  One pickup now:{" "}
+                  {values.map((v) => `${v.hours}h ≈ ${fmtCents(kind === "gross" ? v.grossCents : v.netCents)}`).join(" · ")}
+                </p>
+                <p className="text-caption text-ink-dim/80">Bonus units and double time included.</p>
+
+                {pickup && (
+                  <div className="mt-2.5">
+                    {pickup.covers ? (
+                      <>
+                        <p className="text-subhead">
+                          Per check:{" "}
+                          <span className="font-semibold">
+                            {pickup.parts.map((p) => `${p.count} × ${p.hours}h`).join(" + ")}
+                          </span>{" "}
+                          → +<span className="font-semibold tabular-nums">{fmtCents(pickup.addsPerCheckCents)}</span> ✓{" "}
+                          <span className="text-ink-dim">(gap {fmtCents(plan.extraPerCheckCents)})</span>
+                        </p>
+                        <p className="mt-1 text-footnote text-ink-dim">
+                          {pickup.pickupsPerCheck * plan.checksLeft} pickup
+                          {pickup.pickupsPerCheck * plan.checksLeft === 1 ? "" : "s"} left ({pickup.pickupsPerCheck}
+                          /check × {plan.checksLeft} checks).
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-subhead text-amber">
+                          Tops out at +{fmtCents(pickup.maxAddablePerCheckCents)}/check of{" "}
+                          {fmtCents(plan.extraPerCheckCents)} needed. Year lands ≈{" "}
+                          <span className="font-semibold tabular-nums">{fmtCents(landingCents)}</span>.
+                        </p>
+                        <p className="mt-1 text-footnote text-ink-dim">Open more days — or set the target there.</p>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
           )}
-          <p className="mt-3 text-footnote text-ink-dim">
-            Priced with your real rates: one extra 12-hr shift is worth{" "}
-            {fmtCents(kind === "gross" ? levers.perShiftGrossCents : levers.perShiftNetCents)} {kindWord} right now —
-            the same math as the what-if card.
-          </p>
           {ytd.periodCount < plan.checksElapsed && (
-            <p className="mt-1.5 text-footnote text-amber">
-              {plan.checksElapsed - ytd.periodCount} of this year's checks aren't logged yet, so the average reads low
-              and the plan overshoots — scan those old stubs (Me → Add your year) and this gets honest.
+            <p className="mt-3 text-footnote text-amber">
+              {plan.checksElapsed - ytd.periodCount} check{plan.checksElapsed - ytd.periodCount === 1 ? "" : "s"} not
+              logged — the plan overshoots. Scan old stubs: Me → Add your year.
             </p>
           )}
         </Card>
       )}
 
-      {plan && !plan.done && plan.extraPerCheckCents > 0 && (
-        <Card title="Strategize the pickups — what do you have open?">
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <span className="label">Shifts you can pick up</span>
-              <div className="mt-1 flex gap-1.5">
-                {PICKUP_LENGTHS.map((h) => {
-                  const on = lengths.includes(h);
-                  return (
-                    <button
-                      key={h}
-                      onClick={() => {
-                        const next = on ? lengths.filter((x) => x !== h) : [...lengths, h];
-                        if (next.length > 0) persist({ lengths: next });
-                      }}
-                      className={`btn px-3 py-2 text-xs ${on ? "btn-primary" : "btn-ghost"} pressable`}
-                    >
-                      {h === 16 ? "16s (double)" : `${h}s`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <label className="flex flex-col">
-              <span className="label">Days open, per check</span>
-              <input
-                value={maxDraft}
-                onChange={(e) => {
-                  setMaxDraft(e.target.value);
-                  persist({ maxPickups: e.target.value.trim() });
-                }}
-                inputMode="numeric"
-                placeholder="no limit"
-                className="input w-24 px-2.5 py-2 text-right text-[16px] tabular-nums"
-              />
-            </label>
-          </div>
-
-          <p className="mt-3 text-footnote tabular-nums text-ink-dim">
-            What one pays right now:{" "}
-            {values
-              .map(
-                (v) =>
-                  `a ${hoursWord(v.hours)} ≈ ${fmtCents(kind === "gross" ? v.grossCents : v.netCents)}${
-                    v.units > 0 ? ` (incl. its ${fmtUnits(v.units)} bonus units)` : ""
-                  }`,
-              )
-              .join(" · ")}
-            . Doubles pay double time past 12 hours — already counted.
-          </p>
-
-          {pickup && (
-            <div className="mt-3 border-t border-surface-line/60 pt-3">
-              {pickup.covers ? (
-                <>
-                  <p className="text-subhead">
-                    Per check:{" "}
-                    <span className="font-semibold">
-                      {pickup.parts.map((p) => `${p.count} × ${hoursWord(p.hours)}`).join(" + ")}
-                    </span>{" "}
-                    — adds ≈<span className="font-semibold tabular-nums">{fmtCents(pickup.addsPerCheckCents)}</span>{" "}
-                    against the {fmtCents(plan.extraPerCheckCents)} gap ✓
-                  </p>
-                  <p className="mt-1 text-footnote text-ink-dim">
-                    That's {pickup.pickupsPerCheck * plan.checksLeft} pickup
-                    {pickup.pickupsPerCheck * plan.checksLeft === 1 ? "" : "s"} across the rest of the year (
-                    {pickup.pickupsPerCheck}/check · {plan.checksLeft} checks left).
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-subhead text-amber">
-                    Your open days top out at ≈{fmtCents(pickup.maxAddablePerCheckCents)} per check — the goal needs{" "}
-                    {fmtCents(plan.extraPerCheckCents)} extra.
-                  </p>
-                  <p className="mt-1 text-footnote text-ink-dim">
-                    At that availability the year lands around{" "}
-                    <span className="font-semibold tabular-nums">{fmtCents(landingCents)}</span> {kindWord}. Open up
-                    more days, add lengths above, or set the target there and call it honest.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-        </Card>
-      )}
-
-      <Card title={`Every check of ${yearView} — tap a bar to open it`}>
+      <Card title={`Every check of ${yearView}`}>
         <div className="flex h-28 items-end gap-[3px]">
           {bars.map((b) => {
             const h = b.cents > 0 ? Math.max(6, (b.cents / maxBar) * 100) : 0;
@@ -404,7 +384,7 @@ export default function Goals({
           <span>Dec</span>
         </div>
         <p className="mt-2 text-footnote text-ink-dim">
-          Solid bars are real stubs; pale bars are estimates; a green dot means a correction check landed.
+          Solid = real stub · pale = estimate · dot = correction. Tap a bar to open it.
         </p>
       </Card>
 

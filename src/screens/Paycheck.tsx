@@ -159,7 +159,7 @@ export function BreakdownCards({
 
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Card title="What you earned — tap a line for the story, twice for the receipt">
+      <Card title="What you earned">
         <Rows>
           {period.lines
             .filter((l) => l.amountCents !== 0)

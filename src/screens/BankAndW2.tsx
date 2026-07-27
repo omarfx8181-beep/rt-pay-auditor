@@ -64,11 +64,11 @@ export function PtoCard({
     <Disclosure
       title="Time off bank — is Kronos right?"
       icon={<Landmark size={13} className="text-blue" />}
-      hint="Your PTO accrues from worked hours — the app can check the bank the same way it checks the check."
+      hint="Checks your PTO balance against your logged hours."
     >
       <MiniRow
-        label="Bank hours earned per hour worked"
-        hint="On your accrual statement — e.g. 0.0577. Ask HR once."
+        label="Accrual rate"
+        hint="Hours per hour worked — e.g. 0.0577, on your accrual statement."
         value={pto.accrualPerHour}
         onChange={set("accrualPerHour")}
         suffix="hrs"
@@ -85,10 +85,7 @@ export function PtoCard({
       <MiniRow label="Kronos shows right now" value={pto.kronosSays} onChange={set("kronosSays")} suffix="hrs" />
 
       {audit === null ? (
-        <p className="mt-3 text-footnote text-ink-dim">
-          Fill the accrual rate and a known-good balance and the app takes it from there — every worked hour you log
-          earns bank time, every sick day you log spends it.
-        </p>
+        <p className="mt-3 text-footnote text-ink-dim">Enter the accrual rate and a known-good balance to start.</p>
       ) : (
         <div className="mt-3 border-t border-surface-line/60 pt-3">
           <p className="text-subhead">

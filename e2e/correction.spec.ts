@@ -14,7 +14,7 @@ test("a red check flips to made-whole once the correction covers it", async ({ p
   await expect(page.locator("text=You're owed $250.00")).toBeVisible();
 
   // log payroll's mid-week correction stub
-  await page.locator('button:has-text("Payroll sent a correction check? Log it")').click();
+  await page.locator('button:has-text("Log a correction check")').click();
   await page.locator('label:has(span:text-is("Gross $")) input').fill("250.00");
   await page.locator('label:has(span:text-is("To your account $")) input').fill("180.50");
   await page.locator('input[placeholder*="what it fixed"]').fill("548 bonus shortfall");
@@ -26,7 +26,7 @@ test("a red check flips to made-whole once the correction covers it", async ({ p
 
   // the hero pill agrees
   await page.locator('button:has-text("This check")').first().click();
-  await expect(page.locator("text=Corrected — made whole")).toBeVisible();
+  await expect(page.locator("text=Made whole")).toBeVisible();
 
   // and the period card carries the extra money + the tag
   await tabButton(page, "Me").click();

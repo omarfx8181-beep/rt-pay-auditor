@@ -58,13 +58,8 @@ export default function TimecardPanel({
     >
       {state.status !== "preview" && (
         <>
-          <p className="text-footnote text-ink-dim">
-            Snap the Kronos timecard for this period. Your real punches replace the scheduled hours (bonus units and
-            extra pay stay put), days you picked up get added, and the evening-credit total fills the box under Me →
-            Your pay rules.
-          </p>
           {apiKey ? (
-            <label className="btn btn-ghost pressable mt-3 cursor-pointer text-xs">
+            <label className="btn btn-ghost pressable mt-1 cursor-pointer text-xs">
               <ClipboardCheck size={14} /> Scan the timecard
               <input
                 type="file"
@@ -79,8 +74,8 @@ export default function TimecardPanel({
             </label>
           ) : (
             <button
-              onClick={() => setState({ status: "error", msg: "One-time setup: add your Anthropic API key in Me → Scans, then this reads timecards by itself." })}
-              className="btn btn-ghost pressable mt-3 text-xs"
+              onClick={() => setState({ status: "error", msg: "Needs your API key — add it in Me → Scans." })}
+              className="btn btn-ghost pressable mt-1 text-xs"
             >
               <ClipboardCheck size={14} /> Scan the timecard
             </button>

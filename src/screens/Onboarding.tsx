@@ -119,10 +119,8 @@ export default function Onboarding({
               ))}
             </div>
             <p className="mt-4 text-footnote text-ink-dim">
-              This loads {PRESETS[presetIdx].facility.name}'s weekend, evening, overtime, and bonus rules for you.
-              More hospitals and roles are coming — they're presets, not code.
+              Loads {PRESETS[presetIdx].facility.name}'s pay rules — weekend, evening, overtime, bonus.
             </p>
-            <p className="mt-2 text-footnote text-ink-dim">This stays on your device.</p>
             <button
               onClick={() => {
                 onPickPreset(presetIdx);
@@ -151,8 +149,7 @@ export default function Onboarding({
               <span className="text-title-2 text-ink-dim">/hr</span>
             </div>
             <p className="mt-4 text-footnote text-ink-dim">
-              It's on your stub next to "Regular." You can add evening, weekend, and charge pay later — we've already
-              set the usual Fairview rates.
+              On your stub, next to "Regular." The other rates are already set.
             </p>
             <button onClick={finishRate} disabled={num(rate) <= 0} className="btn btn-primary pressable mt-8 w-full">
               Continue
