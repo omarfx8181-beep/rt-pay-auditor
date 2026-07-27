@@ -6,10 +6,11 @@
  * and the weekly tier chips. Scan stays on top; leave keeps one-tap
  * call-ins; the hour tiles read the period at a glance.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { HeartPulse, Minus, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
-import { blankLeave, blankShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
+import { shiftWorths, type ShiftWorth } from "../lib/worth.ts";
+import { blankLeave, blankShift, draftToLeave, draftToShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
 import type { FutureBatch } from "../lib/scanRouting.ts";
@@ -63,8 +64,8 @@ function Tag({ children, tone = "soft" }: { children: React.ReactNode; tone?: "s
   return <span className={`rounded-full px-2 py-0.5 text-caption ${tones[tone]}`}>{children}</span>;
 }
 
-/** The friendly list card: the shift at a glance, tap to edit. */
-function ShiftRow({ s, onOpen }: { s: ShiftDraft; onOpen: () => void }) {
+/** The friendly list card: the shift at a glance — with its price tag. */
+function ShiftRow({ s, worth, onOpen }: { s: ShiftDraft; worth: ShiftWorth | null; onOpen: () => void }) {
   const wknd = s.date !== "" && isWeekend(s.date);
   return (
     <button onClick={onOpen} className="card pressable w-full p-4 text-left">
@@ -83,6 +84,9 @@ function ShiftRow({ s, onOpen }: { s: ShiftDraft; onOpen: () => void }) {
         <div className="shrink-0 text-right">
           <div className="text-title-2 tabular-nums">{fmtNum(num(s.hours))}</div>
           <div className="text-caption text-ink-dim">hours</div>
+          {worth && worth.netCents > 0 && (
+            <div className="mt-0.5 text-caption font-medium tabular-nums text-pos">≈ {fmtCents(worth.netCents)}</div>
+          )}
         </div>
       </div>
     </button>
@@ -333,6 +337,12 @@ export default function Shifts({
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
 
+  // Each shift's real marginal value — the OT it unlocked included.
+  const worths = useMemo(
+    () => shiftWorths(shifts.map(draftToShift), cfg, leave.map(draftToLeave)),
+    [shifts, cfg, leave],
+  );
+
   // Replacing shifts from a scan is the one bulk-destructive action here —
   // keep the previous set for one undo window.
   const [replaced, setReplaced] = useState<ShiftDraft[] | null>(null);
@@ -407,12 +417,15 @@ export default function Shifts({
         <>
           <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
             {shifts.map((s) => (
-              <ShiftRow key={s.id} s={s} onOpen={() => setEditingId(s.id)} />
+              <ShiftRow key={s.id} s={s} worth={worths.get(s.id) ?? null} onOpen={() => setEditingId(s.id)} />
             ))}
           </div>
-          <button onClick={addShift} className="btn btn-ghost pressable">
-            <Plus size={15} /> Add shift
-          </button>
+          <div className="flex items-center justify-between gap-3">
+            <button onClick={addShift} className="btn btn-ghost pressable">
+              <Plus size={15} /> Add shift
+            </button>
+            <span className="text-caption tabular-nums text-ink-dim">≈ what each adds to your take-home</span>
+          </div>
         </>
       )}
 

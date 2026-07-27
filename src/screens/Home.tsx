@@ -5,20 +5,170 @@
  * quiet year line. Detail is one tap down: the check flow and the full
  * breakdown are sub-views of Home, not tabs.
  */
-import { useEffect, useRef, useState } from "react";
-import { CalendarRange, Check, ChevronDown, ChevronLeft, CircleAlert, Plus, ScanLine } from "lucide-react";
-import type { EngineConfig, NetResult, PeriodResult, Shift } from "../lib/engine.ts";
-import type { CfgDraft } from "../lib/draft.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarRange, Check, ChevronDown, ChevronLeft, CircleAlert, Play, Plus, ScanLine, ShieldCheck } from "lucide-react";
+import type { BonusTier, EngineConfig, NetResult, PeriodResult, Shift } from "../lib/engine.ts";
+import { num, todayIso, type CfgDraft } from "../lib/draft.ts";
 import type { AuditRow } from "../lib/audit.ts";
 import type { Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
 import { periodLabel, type CorrectionDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { daysUntil, paydayFor } from "../lib/payday.ts";
-import { todayIso } from "../lib/draft.ts";
+import { caughtSummary } from "../lib/caught.ts";
+import { checkDiff } from "../lib/checkDiff.ts";
+import { findLiveShift, todayShiftWithoutTimes, type OnNow } from "../lib/shiftClock.ts";
+import { shiftWorths } from "../lib/worth.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
 import Audit from "./Audit.tsx";
 import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
+
+/**
+ * The live shift ticker — open the app ON shift and watch the money
+ * count. Window from the schedule scan's note times, or a one-tap
+ * "I'm on now". Pure morale; the engine's marginal math underneath.
+ */
+function LiveTicker({
+  record,
+  shifts,
+  cfg,
+  onNow,
+  onSetOnNow,
+}: {
+  record: PayPeriod;
+  shifts: Shift[];
+  cfg: EngineConfig;
+  onNow: OnNow | null;
+  onSetOnNow: (v: OnNow | null) => void;
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const iv = setInterval(() => setNowMs(Date.now()), reduce ? 5000 : 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const now = new Date(nowMs);
+  const live = findLiveShift(record.shifts, now, onNow);
+  const candidate = live ? null : todayShiftWithoutTimes(record.shifts, now);
+  const worths = useMemo(() => shiftWorths(shifts, cfg), [shifts, cfg]);
+
+  // A manual start goes stale once its window (plus an hour) has passed.
+  useEffect(() => {
+    if (!onNow) return;
+    const s = record.shifts.find((x) => x.id === onNow.shiftId);
+    const hours = s ? Math.max(1, num(s.hours)) : 0;
+    if (!s || nowMs > onNow.startMs + (hours + 1) * 3600_000) onSetOnNow(null);
+  }, [onNow, nowMs, record.shifts, onSetOnNow]);
+
+  if (live) {
+    const w = worths.get(live.shift.id);
+    if (!w || w.netCents <= 0) return null;
+    const frac = Math.min(1, Math.max(0, (nowMs - live.startMs) / (live.endMs - live.startMs)));
+    const endLabel = new Date(live.endMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return (
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <Eyebrow>On the clock</Eyebrow>
+          <span className="flex items-center gap-1.5 text-caption text-pos">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pos/60 motion-reduce:hidden" />
+              <span className="relative inline-flex size-2 rounded-full bg-pos" />
+            </span>
+            live
+          </span>
+        </div>
+        <div className="mt-2 text-title-2 tabular-nums text-pos">{fmtCents(Math.round(w.netCents * frac))}</div>
+        <div className="mt-0.5 text-footnote tabular-nums text-ink-dim">
+          in your pocket so far · {fmtCents(w.netCents)} by {endLabel}
+        </div>
+        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-soft">
+          <div className="h-full rounded-full bg-pos transition-all" style={{ width: `${frac * 100}%` }} />
+        </div>
+      </Card>
+    );
+  }
+
+  if (candidate) {
+    return (
+      <button
+        onClick={() => onSetOnNow({ shiftId: candidate.id, startMs: Date.now() })}
+        className="pressable mx-auto flex min-h-11 items-center gap-1.5 px-3 py-1 text-footnote font-medium text-accent"
+      >
+        <Play size={13} /> On shift now? Watch it add up
+      </button>
+    );
+  }
+  return null;
+}
+
+/** The scoreboard — what the watchdog has caught, and the streak. */
+function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; closeEnoughCents: number }) {
+  const s = useMemo(() => caughtSummary(periods, closeEnoughCents), [periods, closeEnoughCents]);
+  if (s.caughtCents === 0 && s.cleanStreak < 2) return null;
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3">
+        <Eyebrow>The scoreboard</Eyebrow>
+        <ShieldCheck size={14} className="text-pos" />
+      </div>
+      {s.caughtCents > 0 && (
+        <>
+          <div className="mt-1 text-title-2 tabular-nums text-pos">{fmtCents(s.caughtCents)} caught</div>
+          <p className="mt-0.5 text-footnote tabular-nums text-ink-dim">
+            {s.firstCaughtEnd ? `since ${dayLabel(s.firstCaughtEnd)} · ` : ""}
+            {fmtCents(s.recoveredCents)} recovered
+            {s.openCents > 0 && <span className="text-neg"> · {fmtCents(s.openCents)} still open</span>}
+          </p>
+        </>
+      )}
+      {s.cleanStreak >= 2 && (
+        <p className={`text-footnote text-pos ${s.caughtCents > 0 ? "mt-1.5" : "mt-1"}`}>
+          {s.cleanStreak} clean checks in a row — they know you're watching.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/** "Why is this check different?" — engine drivers, plain rows. */
+function WhyDifferent({ record, periods }: { record: PayPeriod; periods: PayPeriod[] }) {
+  const d = useMemo(() => checkDiff(record, periods), [record, periods]);
+  if (!d || (Math.abs(d.netDeltaCents) < 100 && d.drivers.length === 0)) return null;
+  const up = d.netDeltaCents >= 0;
+  return (
+    <Disclosure
+      title="Why is this check different?"
+      hint={`${up ? "+" : "−"}${fmtCents(Math.abs(d.netDeltaCents))} take-home vs last check.`}
+    >
+      <div className="space-y-1.5 text-sm">
+        {d.shiftsDelta !== 0 && (
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-ink-dim">Shifts</span>
+            <span className="font-medium tabular-nums">{d.shiftsDelta > 0 ? "+" : ""}{d.shiftsDelta}</span>
+          </div>
+        )}
+        {d.drivers.slice(0, 5).map((dr) => (
+          <div key={dr.key} className="flex items-baseline justify-between gap-3">
+            <span className="min-w-0 truncate text-ink-dim">
+              {dr.label}
+              {dr.qtyDelta !== 0 && (
+                <span className="tabular-nums">
+                  {" "}({dr.qtyDelta > 0 ? "+" : "−"}
+                  {dr.isUnits ? fmtUnits(Math.abs(dr.qtyDelta)) + "u" : fmtNum(Math.abs(dr.qtyDelta)) + "h"})
+                </span>
+              )}
+            </span>
+            <span className={`font-medium tabular-nums ${dr.deltaCents >= 0 ? "text-pos" : "text-neg"}`}>
+              {dr.deltaCents >= 0 ? "+" : "−"}{fmtCents(Math.abs(dr.deltaCents))}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-footnote text-ink-dim">vs {periodLabel(d.prevStart, d.prevEnd)}</p>
+    </Disclosure>
+  );
+}
 
 /**
  * Restrained count-up for the hero number (V3 §3.4): 0 → value on first
@@ -168,6 +318,9 @@ export default function Home({
   cfg,
   cfgDraft,
   shifts,
+  tiers,
+  onNow,
+  onSetOnNow,
   whatIf,
   setWhatIf,
   identity,
@@ -201,6 +354,9 @@ export default function Home({
   cfg: EngineConfig;
   cfgDraft: CfgDraft;
   shifts: Shift[];
+  tiers: BonusTier[];
+  onNow: OnNow | null;
+  onSetOnNow: (v: OnNow | null) => void;
   whatIf: WhatIfDraft;
   setWhatIf: (wi: WhatIfDraft) => void;
   identity: EmailIdentity;
@@ -304,6 +460,7 @@ export default function Home({
         </Card>
       ) : (
         <>
+          <LiveTicker record={record} shifts={shifts} cfg={cfg} onNow={onNow} onSetOnNow={onSetOnNow} />
           <div id="tour-hero">
           <Hero>
             <div className="flex items-start justify-between gap-3">
@@ -344,11 +501,15 @@ export default function Home({
             See the breakdown →
           </button>
 
+          <WhyDifferent record={record} periods={periods} />
+
           <Disclosure title="What if I pick up a shift?" hint="One more shift, priced after taxes.">
-            <WhatIfBody shifts={shifts} cfg={cfg} cfgDraft={cfgDraft} whatIf={whatIf} setWhatIf={setWhatIf} />
+            <WhatIfBody shifts={shifts} cfg={cfg} cfgDraft={cfgDraft} tiers={tiers} whatIf={whatIf} setWhatIf={setWhatIf} />
           </Disclosure>
         </>
       )}
+
+      <TrophyCase periods={periods} closeEnoughCents={closeEnoughCents} />
 
       <button
         onClick={onGoToMe}

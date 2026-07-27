@@ -7,7 +7,7 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -37,6 +37,10 @@ import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
 import HowToCard from "./HowTo.tsx";
 import { PtoCard, W2Card } from "./BankAndW2.tsx";
+import TierScanPanel from "./TierScanPanel.tsx";
+import ShareRulesPanel from "./ShareRules.tsx";
+import Wrapped from "./Wrapped.tsx";
+import { buildWrapped } from "../lib/wrapped.ts";
 import type { PtoConfig } from "../lib/pto.ts";
 import { EMPTY_W2, type W2Typed } from "../lib/w2.ts";
 
@@ -434,6 +438,7 @@ export default function Me({
   w2Typed,
   onSaveW2,
   baseRateCents,
+  closeEnoughCents,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -483,11 +488,22 @@ export default function Me({
   w2Typed: Record<string, W2Typed>;
   onSaveW2: (year: string, next: W2Typed) => void;
   baseRateCents: number;
+  /** "Call it even" in cents — Wrapped's caught tally uses the same forgiveness as the verdict. */
+  closeEnoughCents: number;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   // The Year card can look at ANY year with data, not just the open
   // period's — same rollup, same anchors, chip-switched below.
   const [yearView, setYearView] = useState(year);
+  const [wrappedOpen, setWrappedOpen] = useState(false);
+  const wrapped = useMemo(
+    () => (wrappedOpen ? buildWrapped(periods, otherIncome, yearView, closeEnoughCents) : null),
+    [wrappedOpen, periods, otherIncome, yearView, closeEnoughCents],
+  );
+  useEffect(() => {
+    // A year with nothing logged has no reel — don't leave the flag stuck.
+    if (wrappedOpen && wrapped === null) setWrappedOpen(false);
+  }, [wrappedOpen, wrapped]);
   const years = useMemo(
     () =>
       [...new Set([
@@ -600,6 +616,7 @@ export default function Me({
             <Plus size={15} /> Add tier
           </button>
         </div>
+        <TierScanPanel apiKey={apiKey} tiers={tiers} onApply={(next) => setTiers(() => next)} />
       </Card>
 
       {unanswered.length > 0 && (
@@ -866,11 +883,16 @@ export default function Me({
                   </p>
                 );
               })()}
-            <button onClick={() => onDownloadYearCsv(yearView)} className="btn btn-ghost pressable mt-3 text-xs">
-              <Download size={13} /> Download {yearView} as a spreadsheet
-            </button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button onClick={() => setWrappedOpen(true)} className="btn btn-primary pressable text-xs">
+                ▶ The highlight reel
+              </button>
+              <button onClick={() => onDownloadYearCsv(yearView)} className="btn btn-ghost pressable text-xs">
+                <Download size={13} /> Download {yearView} as a spreadsheet
+              </button>
+            </div>
             <p className="mt-1.5 text-caption text-ink-dim">
-              Every period with gross, take-home, and the deduction split — for taxes or a loan file.
+              The spreadsheet has every period's gross, take-home, and deduction split — for taxes or a loan file.
             </p>
           </Card>
           </div>
@@ -1037,6 +1059,16 @@ export default function Me({
           </Disclosure>
           </div>
 
+          <ShareRulesPanel
+            name={`${FAIRVIEW_RT_PRESET.facility.name} — ${FAIRVIEW_RT_PRESET.role.shortName}`}
+            cfgDraft={cfgDraft}
+            tiers={tiers}
+            onApplyShared={(sharedCfg, sharedTiers) => {
+              setCfgDraft(() => sharedCfg);
+              setTiers(() => sharedTiers);
+            }}
+          />
+
           <div className="flex items-center justify-between gap-3 pt-1">
             <p className="text-sm text-ink-dim">Pay periods, newest first.</p>
             <button onClick={onCreateNext} className="btn btn-primary pressable shrink-0">
@@ -1117,6 +1149,9 @@ export default function Me({
         </div>
       </div>
 
+      {wrappedOpen && wrapped && (
+        <Wrapped stats={wrapped} unit548Cents={unit548Cents} onClose={() => setWrappedOpen(false)} />
+      )}
     </div>
   );
 }

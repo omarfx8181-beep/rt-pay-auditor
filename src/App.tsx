@@ -37,6 +37,7 @@ import Goals from "./screens/Goals.tsx";
 import { parseGoals, type GoalsSetting } from "./lib/goals.ts";
 import { parsePto, type PtoConfig } from "./lib/pto.ts";
 import { parseW2Setting, type W2Typed } from "./lib/w2.ts";
+import type { OnNow } from "./lib/shiftClock.ts";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
@@ -364,6 +365,23 @@ function PeriodWorkspace({
   const year = record.endDate.slice(0, 4);
   const ytd = useMemo(() => rollupYtd(periods, year, otherIncome), [periods, year, otherIncome]);
 
+  // The live-ticker's one-tap "I'm on now" — a settings row so it
+  // survives tab switches and the workspace remount alike.
+  const onNowRow = useLiveQuery(async () => (await db.settings.get("onNow")) ?? null, []);
+  const onNow = useMemo((): OnNow | null => {
+    if (!onNowRow?.value) return null;
+    try {
+      const v = JSON.parse(onNowRow.value) as OnNow;
+      return typeof v?.shiftId === "string" && Number.isFinite(v?.startMs) ? v : null;
+    } catch {
+      return null;
+    }
+  }, [onNowRow]);
+  const onSetOnNow = (v: OnNow | null) => {
+    if (v === null) void db.settings.delete("onNow");
+    else void db.settings.put({ key: "onNow", value: JSON.stringify(v) });
+  };
+
   const correctionGrossCents = useMemo(
     () => correctionTotals({ ...record, corrections }).grossCents,
     [record, corrections],
@@ -599,6 +617,9 @@ function PeriodWorkspace({
             cfg={cfg}
             cfgDraft={cfgDraft}
             shifts={shifts}
+            tiers={tiers}
+            onNow={onNow}
+            onSetOnNow={onSetOnNow}
             whatIf={whatIf}
             setWhatIf={setWhatIf}
             identity={identity}
@@ -704,6 +725,7 @@ function PeriodWorkspace({
             w2Typed={w2Typed}
             onSaveW2={(yr, next) => void db.settings.put({ key: "w2", value: JSON.stringify({ ...w2Typed, [yr]: next }) })}
             baseRateCents={cfg.baseRateCents}
+            closeEnoughCents={closeEnoughCents}
           />
         )}
       </main>

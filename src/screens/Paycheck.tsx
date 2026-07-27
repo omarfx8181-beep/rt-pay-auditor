@@ -7,7 +7,8 @@
  */
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { computeWhatIf, type EngineConfig, type NetResult, type PayLine, type PeriodResult, type Shift } from "../lib/engine.ts";
+import { computeWhatIf, type BonusTier, type EngineConfig, type NetResult, type PayLine, type PeriodResult, type Shift } from "../lib/engine.ts";
+import { PICKUP_LENGTHS, tierUnitsForLength } from "../lib/goals.ts";
 import { num, type CfgDraft } from "../lib/draft.ts";
 import { fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { plainLabel } from "../lib/labels.ts";
@@ -198,12 +199,15 @@ export function WhatIfBody({
   shifts,
   cfg,
   cfgDraft,
+  tiers,
   whatIf,
   setWhatIf,
 }: {
   shifts: Shift[];
   cfg: EngineConfig;
   cfgDraft: CfgDraft;
+  /** This week's tiers — the pickup chips price a length WITH its units. */
+  tiers: BonusTier[];
   whatIf: WhatIfDraft;
   setWhatIf: (wi: WhatIfDraft) => void;
 }) {
@@ -216,6 +220,23 @@ export function WhatIfBody({
 
   return (
     <div>
+      {/* One tap answers the charge nurse's text: length → real money. */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {PICKUP_LENGTHS.map((h) => {
+          const units = tierUnitsForLength(tiers, h);
+          const active = num(whatIf.hours) === h && num(whatIf.units548) === units;
+          return (
+            <button
+              key={h}
+              onClick={() => setWhatIf({ ...whatIf, hours: String(h), units548: String(units), charge: "0" })}
+              className={`btn px-3 py-1.5 text-xs ${active ? "btn-primary" : "btn-ghost"} pressable`}
+            >
+              {h === 16 ? "16h double" : `${h}h pickup`}
+              {units > 0 ? ` · ${fmtUnits(units)}u` : ""}
+            </button>
+          );
+        })}
+      </div>
       <div className="mb-3 flex flex-wrap items-end gap-3">
         <Field label="Hours" value={whatIf.hours} onChange={(v) => setWhatIf({ ...whatIf, hours: v })} w="w-16" />
         <Field label="Bonus units" value={whatIf.units548} onChange={(v) => setWhatIf({ ...whatIf, units548: v })} w="w-16" />
@@ -247,8 +268,7 @@ export function WhatIfBody({
         </div>
       </div>
       <p className="mt-2 text-footnote text-ink-dim">
-        Extra pay is taxed at your top rates ({cfgDraft.marginalFed}% federal + {cfgDraft.marginalMN}% Minnesota) —
-        change them in Me → Advanced.
+        Taxed at your top rates ({cfgDraft.marginalFed}% + {cfgDraft.marginalMN}%) — Me → Advanced.
       </p>
     </div>
   );

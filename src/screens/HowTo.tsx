@@ -38,6 +38,7 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
             snap the stub. The app compares every line and gives you a color: green, red, or amber. That's the whole
             routine.
           </p>
+          <p>Open the app mid-shift and Home counts what you're earning, live.</p>
         </Step>
 
         <Step n={2} title="One-time setup for photo scans">
@@ -60,8 +61,12 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
           </p>
           <p>
             Or tap <strong>Add shift</strong> and enter it by hand: date, hours, bonus units (the tier chips add the
-            right units), and the extra-pay toggles. After a shift, correct the hours to your real punches — sharper
-            inputs, sharper check.
+            right units), and the extra-pay toggles. Every card shows ≈ what that shift adds to your take-home,
+            overtime included. After a shift, correct the hours to your real punches — sharper inputs, sharper check.
+          </p>
+          <p>
+            Charge nurse texting about a pickup? Home → <strong>What if I pick up a shift?</strong> — tap 8h, 12h, or
+            16h and the real money answers in seconds.
           </p>
         </Step>
 
@@ -75,6 +80,10 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
             <span className="text-pos">Green</span> — paid in full, done. <span className="text-neg">Red</span> — the
             dollars you're owed, line by line. <span className="text-amber">Amber</span> — nothing shorted, but one
             thing deserves a look (the banner asks the exact question).
+          </p>
+          <p>
+            Check smaller than expected? <strong>Why is this check different?</strong> on Home names the drivers in
+            dollars. Home also keeps the scoreboard — everything the app has caught, and your clean streak.
           </p>
         </Step>
 
@@ -101,6 +110,11 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
             And set a year goal in the <strong>Goals</strong> tab — the meter fills as checks land, and the plan
             prices the overtime, bonus units, or extra shifts that close the gap.
           </p>
+          <p>
+            New bonus posting? Me → Bonus tiers → <strong>Scan the weekly posting</strong> — the tiers update
+            themselves and warn when one moved down. And the Year card's <strong>highlight reel</strong> replays your
+            year in big numbers.
+          </p>
         </Step>
 
         <Step n={7} title="Keep it safe">
@@ -109,6 +123,10 @@ export default function HowToCard({ onStartTour, onReplayTour }: { onStartTour: 
             <strong>Back up now</strong> → Save to Files → iCloud Drive. New phone or fresh install:{" "}
             <strong>Import</strong> the same file and everything merges back. <strong>Paydays on your calendar</strong>{" "}
             hands iOS the reminders, since the app never phones home.
+          </p>
+          <p>
+            A coworker wants this? <strong>Hand it to a coworker</strong> (below) turns your pay rules into a QR their
+            phone scans — rules only, nothing personal.
           </p>
         </Step>
 
