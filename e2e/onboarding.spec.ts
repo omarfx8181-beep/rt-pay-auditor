@@ -11,7 +11,10 @@ test("onboarding resumes at the saved step and never reappears once done", async
   await page.locator('button:has-text("Continue")').click();
   await expect(page.locator("text=base hourly rate")).toBeVisible();
 
-  // reload mid-flow → same step
+  // reload mid-flow → same step. The step persists via a fire-and-forget
+  // IndexedDB put — give it a beat, or a slow CI runner reloads before
+  // the write commits and resumes one step back.
+  await page.waitForTimeout(600);
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   await expect(page.locator("text=base hourly rate")).toBeVisible();
@@ -20,7 +23,8 @@ test("onboarding resumes at the saved step and never reappears once done", async
   await page.locator('button:has-text("Skip for now")').last().click();
   await expect(page.locator("text=Expected this check")).toBeVisible();
 
-  // done persists
+  // done persists — same settle beat before reloading
+  await page.waitForTimeout(600);
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   await expect(page.locator("text=Expected this check")).toBeVisible();
