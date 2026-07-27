@@ -27,9 +27,12 @@ test("tour auto-offers once, walks across tabs, and replays from the how-to card
   await page.locator('button:has-text("Back")').click();
   await expect(page.locator("text=Payday? Start here")).toBeVisible();
 
-  // Skip ends it; a reload never re-offers.
+  // Skip ends it; a reload never re-offers. tourDone persists via a
+  // fire-and-forget put — give it a beat so a slow CI runner doesn't
+  // reload before the write commits.
   await page.locator('button:has-text("Skip tour")').click();
   await expect(page.locator("text=Payday? Start here")).toHaveCount(0);
+  await page.waitForTimeout(600);
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   await expect(page.locator("text=Your pay period")).toHaveCount(0);

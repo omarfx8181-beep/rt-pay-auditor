@@ -35,7 +35,9 @@ test("year goal: meter, engine-priced plan, persistence, and bar deep-links", as
   await expect(page.locator("text=Tops out at")).toBeVisible(); // $150k gap dwarfs 2 pickups
   await expect(page.locator("text=Year lands ≈")).toBeVisible();
 
-  // the goal survives a reload
+  // the goal survives a reload (settle beat: the goal persists via a
+  // fire-and-forget settings put)
+  await page.waitForTimeout(600);
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForTimeout(800);
   await tabButton(page, "Goals").click();
