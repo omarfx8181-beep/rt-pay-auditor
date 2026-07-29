@@ -10,6 +10,7 @@ import {
   buildBackup,
   mergeBackup,
   nextPeriodRange,
+  overlappingEnds,
   parseBackup,
   periodLabel,
   rollupYtd,
@@ -21,7 +22,7 @@ import {
 } from "./lib/periods.ts";
 import type { FutureBatch } from "./lib/scanRouting.ts";
 import { buildYearCsv, yearCsvName } from "./lib/csv.ts";
-import { scanRowsToDrafts } from "./lib/scan.ts";
+import { scanRowsToDrafts, setScanModel } from "./lib/scan.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
 import { TabBar, UndoToast, type Tab } from "./ui/kit.tsx";
@@ -38,6 +39,9 @@ import { parseGoals, type GoalsSetting } from "./lib/goals.ts";
 import { parsePto, type PtoConfig } from "./lib/pto.ts";
 import { parseW2Setting, type W2Typed } from "./lib/w2.ts";
 import type { OnNow } from "./lib/shiftClock.ts";
+import { isInstalled, isIos, requestPersist } from "./lib/storageHealth.ts";
+import { releaseToShow } from "./lib/whatsNew.ts";
+import WhatsNewSheet from "./screens/WhatsNew.tsx";
 
 const TABS: Tab[] = [
   { id: "home", label: "Home", Icon: House },
@@ -75,6 +79,10 @@ export default function App() {
   // periods remounts the workspace (key=id) and must not yank the user
   // back to Home. Onboarding's "Scan my schedule" lands on Shifts.
   const [tab, setTab] = useState<string>("home");
+  // Importing a backup rewrites periods UNDER the mounted workspace; its
+  // key must change or stale drafts clobber the imported data on the
+  // next keystroke. The nonce forces the remount.
+  const [importNonce, setImportNonce] = useState(0);
   // Same reason for the delete-undo window: deleting the CURRENT period
   // switches periods, and the toast must survive that remount.
   const [deletedPeriod, setDeletedPeriod] = useState<{ period: PayPeriod; wasCurrent: boolean } | null>(null);
@@ -83,6 +91,28 @@ export default function App() {
     const t = setTimeout(() => setDeletedPeriod(null), 8000);
     return () => clearTimeout(t);
   }, [deletedPeriod]);
+
+  // v1.0 shell: ask the browser to never evict our storage (installed
+  // Home Screen apps are safe on iOS; browser tabs need the grant).
+  useEffect(() => {
+    void requestPersist();
+  }, []);
+
+  // The scan model is config, not a constant — Anthropic retires ids
+  // on their schedule (Me → Advanced overrides; blank = default).
+  const scanModelRow = useLiveQuery(async () => (await db.settings.get("scanModel")) ?? null, []);
+  useEffect(() => {
+    setScanModel(scanModelRow?.value ?? null);
+  }, [scanModelRow]);
+
+  // Announce updates once per version. Fresh installs record silently
+  // (onboarding's onDone stamps the version); data that predates the
+  // stamp means an UPDATE from pre-1.0 — those get the announcement.
+  const lastSeenRow = useLiveQuery(async () => (await db.settings.get("lastSeenVersion")) ?? null, []);
+  const release =
+    onboardingRow?.value === "done" && lastSeenRow !== undefined
+      ? releaseToShow(lastSeenRow?.value ?? "0.0.0", __APP_VERSION__)
+      : null;
 
   // The guided tour hops tabs, so it lives up here too. It offers itself
   // exactly once (after onboarding), and replays from Me → How to use.
@@ -151,12 +181,35 @@ export default function App() {
 
   const current = periods.find((p) => p.id === currentIdSetting?.value) ?? periods[0];
 
+  // A new phone's first move is often a RESTORE, not a setup — the
+  // onboarding offers it, and it must work before any state exists.
+  const restoreFromFile = async (file: File): Promise<string> => {
+    const backup = parseBackup(await file.text());
+    const existing = await db.periods.toArray();
+    const periodsMerge = mergeBackup(existing, backup.periods);
+    const existingOther = await db.otherIncome.toArray();
+    const otherMerge = mergeBackup(existingOther, backup.otherIncome ?? []);
+    await db.transaction("rw", db.periods, db.otherIncome, db.settings, async () => {
+      await db.periods.bulkPut(periodsMerge.merged);
+      await db.otherIncome.bulkPut(otherMerge.merged);
+      for (const [key, value] of Object.entries(backup.settings ?? {})) {
+        if (key !== "onboarding") await db.settings.put({ key, value });
+      }
+      await db.settings.put({ key: "onboarding", value: "done" });
+    });
+    const newest = [...backup.periods].sort((a, b) => (a.endDate < b.endDate ? 1 : -1))[0];
+    if (newest) await setCurrentPeriodId(newest.id);
+    setImportNonce((n) => n + 1);
+    return `Restored ${periodsMerge.added + periodsMerge.updated} period${periodsMerge.added + periodsMerge.updated === 1 ? "" : "s"}.`;
+  };
+
   // First run (and after updates until dismissed): the guided setup.
   if (onboardingRow?.value !== "done") {
     return (
       <Onboarding
         initialStep={Number.parseInt(onboardingRow?.value ?? "0", 10) || 0}
         baseRate={current.cfgDraft.baseRate}
+        onRestore={(file) => restoreFromFile(file)}
         onStep={(step) => void db.settings.put({ key: "onboarding", value: String(step) })}
         onSaveBaseRate={(rate) =>
           void db.periods.update(current.id, {
@@ -173,6 +226,8 @@ export default function App() {
         onDone={(goTo) => {
           setTab(goTo);
           void db.settings.put({ key: "onboarding", value: "done" });
+          // A fresh setup has nothing "new" — stamp so no announcement fires.
+          void db.settings.put({ key: "lastSeenVersion", value: __APP_VERSION__ });
         }}
       />
     );
@@ -219,7 +274,7 @@ export default function App() {
   return (
     <>
       <PeriodWorkspace
-        key={current.id}
+        key={`${current.id}:${importNonce}`}
         record={current}
         periods={periods}
         identity={identity}
@@ -234,9 +289,11 @@ export default function App() {
         goals={parseGoals(goalsRow?.value)}
         pto={parsePto(ptoRow?.value)}
         w2Typed={parseW2Setting(w2Row?.value)}
+        scanModel={scanModelRow?.value ?? ""}
         tab={tab}
         setTab={setTab}
         onDeletePeriod={(id) => void deletePeriod(id)}
+        onImported={() => setImportNonce((n) => n + 1)}
         onStartTour={() => setTourStep(0)}
         onOpenPeriodDetails={openPeriodDetails}
         homeIntent={homeIntent}
@@ -250,6 +307,12 @@ export default function App() {
         />
       )}
       {tourStep !== null && <Tour step={tourStep} onStep={setTourStep} onDone={endTour} setTab={setTab} />}
+      {release && tourStep === null && (
+        <WhatsNewSheet
+          release={release}
+          onClose={() => void db.settings.put({ key: "lastSeenVersion", value: __APP_VERSION__ })}
+        />
+      )}
     </>
   );
 }
@@ -287,9 +350,11 @@ function PeriodWorkspace({
   goals,
   pto,
   w2Typed,
+  scanModel,
   tab,
   setTab,
   onDeletePeriod,
+  onImported,
   onStartTour,
   onOpenPeriodDetails,
   homeIntent,
@@ -309,9 +374,13 @@ function PeriodWorkspace({
   goals: GoalsSetting;
   pto: PtoConfig;
   w2Typed: Record<string, W2Typed>;
+  /** Me → Advanced override for the scan model id; blank = default. */
+  scanModel: string;
   tab: string;
   setTab: (tab: string) => void;
   onDeletePeriod: (id: string) => void;
+  /** A backup import changed data under this mount — the parent remounts us. */
+  onImported: () => void;
   onStartTour: () => void;
   onOpenPeriodDetails: (id: string) => void;
   homeIntent: { view: "check" | "breakdown"; periodId: string } | null;
@@ -382,6 +451,11 @@ function PeriodWorkspace({
     else void db.settings.put({ key: "onNow", value: JSON.stringify(v) });
   };
 
+  // Un-installed iOS Safari can clear a quiet tab's storage — once real
+  // data exists, say so ONCE, warmly, on Home.
+  const installNudgeRow = useLiveQuery(async () => (await db.settings.get("installNudge")) ?? null, []);
+  const installNudge = installNudgeRow === null && periods.length > 1 && isIos() && !isInstalled();
+
   const correctionGrossCents = useMemo(
     () => correctionTotals({ ...record, corrections }).grossCents,
     [record, corrections],
@@ -427,6 +501,13 @@ function PeriodWorkspace({
   // deduction buckets stay stub-true. Rules snapshot from the earliest
   // period (closest in time to the old stub).
   const logPastStub = async (endDate: string, gross: string, net: string, startDate?: string, actual?: Record<string, string>) => {
+    // Same date already logged (double-tap, re-scan)? Never a twin period.
+    const twin = periods.find((p) => p.endDate === endDate);
+    if (twin) {
+      const merged = { ...(actual ?? { gross: gross.trim(), net: net.trim() }) };
+      if ((twin.actual?.net ?? "") === "") await db.periods.update(twin.id, { actual: merged, updatedAt: Date.now() });
+      return;
+    }
     const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
     const now = Date.now();
     await db.periods.add({
@@ -519,7 +600,9 @@ function PeriodWorkspace({
   const backupJson = async () => {
     const all = await db.periods.toArray();
     const others = await db.otherIncome.toArray();
-    return JSON.stringify(buildBackup(all, others, new Date().toISOString()), null, 2);
+    const settingRows = await db.settings.toArray();
+    const settings = Object.fromEntries(settingRows.map((s) => [s.key, s.value]));
+    return JSON.stringify(buildBackup(all, others, settings, new Date().toISOString()), null, 2);
   };
   const stampBackup = () => void db.settings.put({ key: "lastBackupAt", value: String(Date.now()) });
   const backupName = () => `rt-pay-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -583,13 +666,26 @@ function PeriodWorkspace({
       const backup = parseBackup(await file.text());
       const existing = await db.periods.toArray();
       const periodsMerge = mergeBackup(existing, backup.periods);
-      await db.periods.bulkPut(periodsMerge.merged);
       const existingOther = await db.otherIncome.toArray();
       const otherMerge = mergeBackup(existingOther, backup.otherIncome ?? []);
-      await db.otherIncome.bulkPut(otherMerge.merged);
+      // One transaction — an interrupted import never half-lands.
+      await db.transaction("rw", db.periods, db.otherIncome, db.settings, async () => {
+        await db.periods.bulkPut(periodsMerge.merged);
+        await db.otherIncome.bulkPut(otherMerge.merged);
+        // v3 settings: the backup fills gaps and updates values, but the
+        // secret/transient keys never ride in a file (parseBackup strips).
+        for (const [key, value] of Object.entries(backup.settings ?? {})) {
+          await db.settings.put({ key, value });
+        }
+      });
+      const dupes = overlappingEnds(periodsMerge.merged);
       setImportStatus(
-        `Imported: ${periodsMerge.added + otherMerge.added} added, ${periodsMerge.updated + otherMerge.updated} updated, ${periodsMerge.skipped + otherMerge.skipped} unchanged.`,
+        `Imported: ${periodsMerge.added + otherMerge.added} added, ${periodsMerge.updated + otherMerge.updated} updated, ${periodsMerge.skipped + otherMerge.skipped} unchanged.` +
+          (dupes.length > 0
+            ? ` Heads up: ${dupes.length} date${dupes.length === 1 ? "" : "s"} now ${dupes.length === 1 ? "has" : "have"} two periods — review below and delete the empty twin.`
+            : ""),
       );
+      onImported();
     } catch (err) {
       setImportStatus(String(err instanceof Error ? err.message : err));
     }
@@ -635,6 +731,8 @@ function PeriodWorkspace({
             corrections={corrections}
             setCorrections={setCorrections}
             backupStale={backupStale}
+            installNudge={installNudge}
+            onDismissInstallNudge={() => void db.settings.put({ key: "installNudge", value: "done" })}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 3)}
             initialView={homeIntent?.periodId === record.id ? homeIntent.view : null}
@@ -716,6 +814,8 @@ function PeriodWorkspace({
             onSetPaydayDelay={(v) => void db.settings.put({ key: "paydayDelayDays", value: v })}
             closeEnough={(closeEnoughCents / 100).toFixed(2)}
             onSetCloseEnough={(v) => void db.settings.put({ key: "closeEnough", value: v })}
+            scanModel={scanModel}
+            onSaveScanModel={(v) => void db.settings.put({ key: "scanModel", value: v.trim() })}
             onReplayTour={() => void db.settings.put({ key: "onboarding", value: "0" })}
             onStartTour={onStartTour}
             onOpenDetails={onOpenPeriodDetails}

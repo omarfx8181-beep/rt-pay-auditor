@@ -191,27 +191,81 @@ export async function filesToContentBlocks(files: File[]): Promise<unknown[]> {
   return blocks;
 }
 
-/** One vision call. Key comes from Settings; nothing else leaves the device, ever. */
+/**
+ * Model ids retire on Anthropic's schedule, not the user's — the
+ * active model is overridable from Me → Advanced (settings key
+ * "scanModel"; blank = the default).
+ */
+let activeModel = SCAN_MODEL;
+export function setScanModel(model: string | undefined | null): void {
+  activeModel = model && model.trim() !== "" ? model.trim() : SCAN_MODEL;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * One vision call. Key comes from Settings; nothing else leaves the
+ * device, ever. Hospitals are full of dead zones, so failure speaks
+ * plainly: offline notice, 90s timeout, one automatic retry on
+ * busy/overloaded, and mapped 401s — never a raw TypeError.
+ */
 export async function callClaude(content: unknown[], instruction: string, apiKey: string, maxTokens = 1000): Promise<string> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: SCAN_MODEL,
-      max_tokens: maxTokens,
-      messages: [{ role: "user", content: [...content, { type: "text", text: instruction }] }],
-    }),
-  });
-  const data = (await response.json()) as {
-    content?: Array<{ type: string; text?: string }>;
-    error?: { message?: string };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    throw new Error("You're offline — scans need a connection. Everything you've entered is safe on this device.");
+  }
+  const attempt = async (): Promise<Response> => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90_000);
+    try {
+      return await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: activeModel,
+          max_tokens: maxTokens,
+          messages: [{ role: "user", content: [...content, { type: "text", text: instruction }] }],
+        }),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new Error("The scan timed out — weak connection? Try again, or fewer photos at once.");
+      }
+      throw new Error("Couldn't reach the scan service — check your connection and try again.");
+    } finally {
+      clearTimeout(timer);
+    }
   };
-  if (!response.ok) throw new Error(data.error?.message ?? `API error (${response.status})`);
+
+  let response = await attempt();
+  if (response.status === 429 || response.status === 529) {
+    await sleep(2500);
+    response = await attempt();
+  }
+
+  const raw = await response.text();
+  let data: { content?: Array<{ type: string; text?: string }>; stop_reason?: string; error?: { type?: string; message?: string } };
+  try {
+    data = JSON.parse(raw) as typeof data;
+  } catch {
+    throw new Error(`The scan service answered strangely (HTTP ${response.status}) — try again in a minute.`);
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("That API key didn't work — check it in Me → Scans.");
+    if (response.status === 429 || response.status === 529) throw new Error("The scan service is busy — wait a minute and try again.");
+    if (data.error?.type === "not_found_error") {
+      throw new Error("That scan model isn't available anymore — set a newer one in Me → Advanced.");
+    }
+    throw new Error(data.error?.message ?? `API error (${response.status})`);
+  }
+  if (data.stop_reason === "max_tokens") {
+    throw new Error("Too much to read in one pass — try fewer pages or a tighter photo.");
+  }
   return (data.content ?? [])
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")

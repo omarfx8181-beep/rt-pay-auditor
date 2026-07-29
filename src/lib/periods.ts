@@ -352,25 +352,42 @@ export function yearGridEnds(periods: PayPeriod[], year: string): string[] {
 
 export interface BackupFile {
   app: "rt-pay-auditor";
-  /** v1 had periods only; v2 adds otherIncome. Both import fine. */
-  version: 1 | 2;
+  /** v1 periods only; v2 adds otherIncome; v3 adds settings. All import fine. */
+  version: 1 | 2 | 3;
   exportedAt: string;
   periods: PayPeriod[];
   otherIncome?: OtherIncomeDraft[];
+  /**
+   * v3: the whole product state — goals, YTD anchors, PTO/W-2 config,
+   * identity, tolerances… A restore on a new phone loses NOTHING
+   * (earlier versions silently dropped all of it).
+   */
+  settings?: Record<string, string>;
 }
 
-export const buildBackup = (periods: PayPeriod[], otherIncome: OtherIncomeDraft[], exportedAt: string): BackupFile => ({
-  app: "rt-pay-auditor",
-  version: 2,
-  exportedAt,
-  periods,
-  otherIncome,
-});
+/** Never exported: the API key (secret) and per-device transients. */
+export const PRIVATE_SETTING_KEYS = ["anthropicApiKey", "currentPeriodId", "onNow"];
+
+export function buildBackup(
+  periods: PayPeriod[],
+  otherIncome: OtherIncomeDraft[],
+  settings: Record<string, string>,
+  exportedAt: string,
+): BackupFile {
+  const safe: Record<string, string> = {};
+  for (const [k, v] of Object.entries(settings)) {
+    if (!PRIVATE_SETTING_KEYS.includes(k)) safe[k] = v;
+  }
+  return { app: "rt-pay-auditor", version: 3, exportedAt, periods, otherIncome, settings: safe };
+}
 
 export function parseBackup(text: string): BackupFile {
   const obj = JSON.parse(text) as Partial<BackupFile>;
   if (obj?.app !== "rt-pay-auditor" || !Array.isArray(obj.periods)) {
     throw new Error("Not an RT Pay Auditor backup file.");
+  }
+  if (typeof obj.version === "number" && obj.version > 3) {
+    throw new Error("This backup was made by a newer RT Pay — update the app first, then import.");
   }
   for (const p of obj.periods) {
     if (typeof p?.id !== "string" || typeof p?.startDate !== "string" || !Array.isArray(p?.shifts)) {
@@ -380,7 +397,27 @@ export function parseBackup(text: string): BackupFile {
   if (obj.otherIncome !== undefined && !Array.isArray(obj.otherIncome)) {
     throw new Error("Backup file has a malformed other-income section.");
   }
-  return { ...obj, otherIncome: obj.otherIncome ?? [] } as BackupFile;
+  const settings: Record<string, string> = {};
+  if (obj.settings !== undefined) {
+    if (typeof obj.settings !== "object" || obj.settings === null || Array.isArray(obj.settings)) {
+      throw new Error("Backup file has a malformed settings section.");
+    }
+    for (const [k, v] of Object.entries(obj.settings)) {
+      if (typeof v === "string" && !PRIVATE_SETTING_KEYS.includes(k)) settings[k] = v;
+    }
+  }
+  return { ...obj, otherIncome: obj.otherIncome ?? [], settings } as BackupFile;
+}
+
+/**
+ * Two devices can each have created "the same" period with different
+ * ids — merged, they double-count the year. Flag shared end dates so
+ * the import status can say so out loud.
+ */
+export function overlappingEnds(periods: PayPeriod[]): string[] {
+  const seen = new Map<string, number>();
+  for (const p of periods) seen.set(p.endDate, (seen.get(p.endDate) ?? 0) + 1);
+  return [...seen.entries()].filter(([, n]) => n > 1).map(([end]) => end).sort();
 }
 
 export interface MergeResult<T> {

@@ -19,7 +19,7 @@ import { checkDiff } from "../lib/checkDiff.ts";
 import { findLiveShift, todayShiftWithoutTimes, type OnNow } from "../lib/shiftClock.ts";
 import { shiftWorths } from "../lib/worth.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
-import { Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
+import { CalloutCard, Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
 import Audit from "./Audit.tsx";
 import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
 
@@ -349,6 +349,8 @@ export default function Home({
   corrections,
   setCorrections,
   backupStale,
+  installNudge,
+  onDismissInstallNudge,
   onGoToShifts,
   onGoToMe,
   initialView,
@@ -385,6 +387,9 @@ export default function Home({
   corrections: CorrectionDraft[];
   setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
   backupStale: boolean;
+  /** Real data in an un-installed iOS Safari tab — worth one warm warning. */
+  installNudge: boolean;
+  onDismissInstallNudge: () => void;
   onGoToShifts: () => void;
   onGoToMe: () => void;
   /** One-shot deep link from a period card ("Stub details") — consumed on mount. */
@@ -520,6 +525,19 @@ export default function Home({
             <WhatIfBody shifts={shifts} cfg={cfg} cfgDraft={cfgDraft} tiers={tiers} whatIf={whatIf} setWhatIf={setWhatIf} />
           </Disclosure>
         </>
+      )}
+
+      {installNudge && (
+        <CalloutCard tone="amber">
+          <p className="text-subhead font-semibold">Add RT Pay to your Home Screen</p>
+          <p className="mt-1 text-footnote text-ink-dim">
+            iOS can clear a Safari tab's data after 7 quiet days — an installed app is protected. Tap{" "}
+            <strong>Share → Add to Home Screen</strong>.
+          </p>
+          <button onClick={onDismissInstallNudge} className="btn btn-ghost pressable mt-2.5 text-xs">
+            Got it
+          </button>
+        </CalloutCard>
       )}
 
       <TrophyCase periods={periods} closeEnoughCents={closeEnoughCents} />

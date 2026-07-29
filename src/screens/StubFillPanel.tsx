@@ -6,10 +6,10 @@
  * matching and math, lib/scanRouting.ts picks the destination, and
  * nothing applies without the preview's say-so.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { scanStubForFill, stubLinesToActual, type StubFillResult } from "../lib/stubFill.ts";
-import { matchStubPeriod, type StubRoute } from "../lib/scanRouting.ts";
+import { matchStubPeriod, snapEndToGrid, type StubRoute } from "../lib/scanRouting.ts";
 import { periodLabel, type PayPeriod, type YtdAnchor } from "../lib/periods.ts";
 import { plainLabel } from "../lib/labels.ts";
 import { CalloutCard, Eyebrow } from "../ui/kit.tsx";
@@ -49,18 +49,25 @@ export default function StubFillPanel({
     setState({ status: "working" });
     try {
       const lines = await scanStubForFill(files, apiKey);
+      applied.current = false; // fresh preview → fresh apply allowance
       setState({ status: "preview", result: stubLinesToActual(lines) });
     } catch (err) {
       setState({ status: "error", msg: String(err instanceof Error ? err.message : err) });
     }
   };
 
+  const applied = useRef(false);
   const apply = (result: StubFillResult, route: StubRoute) => {
+    if (applied.current) return; // a fast double-tap must never create two periods
+    applied.current = true;
     if (route.kind === "current") onFillCurrent(result.actual);
     else if (route.kind === "existing") onFillExisting(route.period.id, result.actual);
     else onCreateAndFill(route.startDate, route.endDate, result.actual);
     if (result.ytdGrossCents !== null) {
-      const asOfEnd = result.periodEnd !== "" ? result.periodEnd : periodEnd;
+      // The anchor's as-of date must sit ON the biweekly grid — a
+      // one-day misread otherwise makes the year cross-check cry wolf.
+      const rawEnd = result.periodEnd !== "" ? result.periodEnd : periodEnd;
+      const asOfEnd = snapEndToGrid(rawEnd, periods) ?? rawEnd;
       onYtdAnchor({
         year: asOfEnd.slice(0, 4),
         asOfEnd,

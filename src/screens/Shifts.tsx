@@ -472,13 +472,13 @@ export default function Shifts({
                   type="date"
                   value={l.date}
                   onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, date: e.target.value } : x)))}
-                  className="input w-auto px-2 py-1 text-xs"
+                  className="input w-auto px-2 py-1"
                 />
                 <input
                   value={l.hours}
                   onChange={(e) => setLeave((arr) => arr.map((x) => (x.id === l.id ? { ...x, hours: e.target.value } : x)))}
                   inputMode="decimal"
-                  className="input w-16 px-2 py-1 text-right text-xs tabular-nums"
+                  className="input w-16 px-2 py-1 text-right tabular-nums"
                 />
                 <span className="text-footnote text-ink-dim">hrs</span>
                 <button

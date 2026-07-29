@@ -233,6 +233,8 @@
   }
   .input {
     @apply w-full rounded-xl border border-surface-line bg-surface-card px-3.5 py-2.5 text-ink outline-none;
+    /* 16px floor: anything smaller makes iOS Safari zoom-lurch on focus */
+    font-size: 16px;
   }
   .input::placeholder {
     color: rgb(var(--ink-faint));

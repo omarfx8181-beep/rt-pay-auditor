@@ -43,6 +43,7 @@ import Wrapped from "./Wrapped.tsx";
 import { buildWrapped } from "../lib/wrapped.ts";
 import type { PtoConfig } from "../lib/pto.ts";
 import { EMPTY_W2, type W2Typed } from "../lib/w2.ts";
+import { storageHealth, type StorageHealth } from "../lib/storageHealth.ts";
 
 const OPEN_QUESTIONS: Array<{ id: string; text: string }> = [
   { id: "transport", text: "Transport: $50 up to 4 hrs, $100 beyond — does door-to-door time count, or only the transferred hours?" },
@@ -119,7 +120,7 @@ function TierUnitsInput({ units, onCommit }: { units: number; onCommit: (units: 
         setDraft(String(units));
       }}
       inputMode="decimal"
-      className="input w-16 px-2.5 py-1.5 text-right text-sm tabular-nums"
+      className="input w-16 px-2.5 py-1.5 text-right tabular-nums"
       aria-label="Tier bonus units"
     />
   );
@@ -146,6 +147,7 @@ function StubScanPanel({
     | { status: "preview"; toAdd: ScannedStub[]; duplicates: ScannedStub[]; anchor: YtdAnchor | null }
   >({ status: "idle" });
 
+  const applied = useRef(false);
   const handleFiles = async (fileList: FileList) => {
     const files = Array.from(fileList);
     if (!files.length) return;
@@ -157,6 +159,7 @@ function StubScanPanel({
       if (plan.toAdd.length === 0 && plan.duplicates.length === 0 && anchor === null) {
         throw new Error("No stubs or year-to-date summary detected in those files.");
       }
+      applied.current = false; // fresh preview → fresh apply allowance
       setState({ status: "preview", ...plan, anchor });
     } catch (err) {
       setState({ status: "error", msg: String(err instanceof Error ? err.message : err) });
@@ -243,6 +246,8 @@ function StubScanPanel({
             {(state.toAdd.length > 0 || state.anchor) && (
               <button
                 onClick={() => {
+                  if (applied.current) return; // double-tap = one import, never two
+                  applied.current = true;
                   for (const s of state.toAdd) onLogPastStub(s.endDate, s.gross, s.net, stubStartDate(s), scannedStubActual(s));
                   if (state.anchor) onYtdAnchor(state.anchor);
                   setState({ status: "idle" });
@@ -439,6 +444,8 @@ export default function Me({
   onSaveW2,
   baseRateCents,
   closeEnoughCents,
+  scanModel,
+  onSaveScanModel,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -490,6 +497,9 @@ export default function Me({
   baseRateCents: number;
   /** "Call it even" in cents — Wrapped's caught tally uses the same forgiveness as the verdict. */
   closeEnoughCents: number;
+  /** Scan model override; blank = the built-in default. */
+  scanModel: string;
+  onSaveScanModel: (v: string) => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
   // The Year card can look at ANY year with data, not just the open
@@ -593,7 +603,7 @@ export default function Me({
               <input
                 value={t.label}
                 onChange={(e) => setTiers((arr) => arr.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                className="input min-w-0 flex-1 px-2.5 py-1.5 text-sm"
+                className="input min-w-0 flex-1 px-2.5 py-1.5"
               />
               <TierUnitsInput
                 units={t.units}
@@ -633,7 +643,7 @@ export default function Me({
                     value={drafts[q.id] ?? ""}
                     onChange={(e) => setDrafts((d) => ({ ...d, [q.id]: e.target.value }))}
                     placeholder="payroll's answer…"
-                    className="input min-w-48 flex-1 px-2.5 py-1.5 text-xs sm:max-w-md"
+                    className="input min-w-48 flex-1 px-2.5 py-1.5 sm:max-w-md"
                   />
                   <button
                     onClick={() => {
@@ -702,7 +712,7 @@ export default function Me({
               }}
               placeholder="https://www.scheduleanywhere.com/ical/…"
               autoComplete="off"
-              className="input px-2.5 py-1.5 text-sm"
+              className="input px-2.5 py-1.5"
             />
           </label>
           <p className="mt-1 text-footnote text-ink-dim">Employee → iCalendar → Copy URL. No key needed.</p>
@@ -719,7 +729,7 @@ export default function Me({
               }}
               placeholder="sk-ant-…"
               autoComplete="off"
-              className="input px-2.5 py-1.5 text-sm"
+              className="input px-2.5 py-1.5"
             />
           </label>
           <button
@@ -804,6 +814,17 @@ export default function Me({
               }}
               suffix="$"
             />
+            <label className="mt-3 flex flex-col border-t border-surface-line/60 pt-3">
+              <span className="label">Scan model</span>
+              <input
+                defaultValue={scanModel}
+                onChange={(e) => onSaveScanModel(e.target.value)}
+                placeholder="default"
+                autoComplete="off"
+                className="input px-2.5 py-1.5 text-[16px] sm:max-w-md"
+              />
+              <span className="mt-1 text-footnote text-ink-dim">Only if Anthropic retires the default — blank uses it.</span>
+            </label>
           </div>
           <p className="text-footnote leading-relaxed text-ink-dim">
             Baked in: Social Security 6.2% and Medicare 1.45% apply to gross minus your pretax medical, dental, and FSA
@@ -912,7 +933,7 @@ export default function Me({
               <StubScanPanel
                 apiKey={apiKey}
                 periods={periods}
-                paydayDelayDays={Number(paydayDelay) || 5}
+                paydayDelayDays={paydayDelay.trim() !== "" && Number.isFinite(Number(paydayDelay)) && Number(paydayDelay) >= 0 ? Number(paydayDelay) : 5}
                 onLogPastStub={onLogPastStub}
                 onYtdAnchor={onYtdAnchor}
               />
@@ -928,7 +949,7 @@ export default function Me({
                         stubEndTouched.current = true;
                         setStubEnd(e.target.value);
                       }}
-                      className="input w-auto px-2 py-1.5 text-xs"
+                      className="input w-auto px-2 py-1.5"
                     />
                   </label>
                   <label className="flex flex-col">
@@ -937,7 +958,7 @@ export default function Me({
                       value={stubGross}
                       onChange={(e) => setStubGross(e.target.value)}
                       inputMode="decimal"
-                      className="input w-24 px-2 py-1.5 text-right text-xs tabular-nums"
+                      className="input w-24 px-2 py-1.5 text-right tabular-nums"
                     />
                   </label>
                   <label className="flex flex-col">
@@ -946,7 +967,7 @@ export default function Me({
                       value={stubNet}
                       onChange={(e) => setStubNet(e.target.value)}
                       inputMode="decimal"
-                      className="input w-24 px-2 py-1.5 text-right text-xs tabular-nums"
+                      className="input w-24 px-2 py-1.5 text-right tabular-nums"
                     />
                   </label>
                   <button
@@ -980,27 +1001,27 @@ export default function Me({
                       type="date"
                       value={o.date}
                       onChange={(e) => onUpdateOther(o.id, { date: e.target.value })}
-                      className="input w-auto px-2 py-1 text-xs"
+                      className="input w-auto px-2 py-1"
                     />
                     <input
                       value={o.source}
                       onChange={(e) => onUpdateOther(o.id, { source: e.target.value })}
                       placeholder="where from"
-                      className="input min-w-24 flex-1 px-2 py-1 text-xs"
+                      className="input min-w-24 flex-1 px-2 py-1"
                     />
                     <input
                       value={o.gross}
                       onChange={(e) => onUpdateOther(o.id, { gross: e.target.value })}
                       inputMode="decimal"
                       placeholder="gross"
-                      className="input w-20 px-2 py-1 text-right text-xs tabular-nums"
+                      className="input w-20 px-2 py-1 text-right tabular-nums"
                     />
                     <input
                       value={o.net}
                       onChange={(e) => onUpdateOther(o.id, { net: e.target.value })}
                       inputMode="decimal"
                       placeholder="net"
-                      className="input w-20 px-2 py-1 text-right text-xs tabular-nums"
+                      className="input w-20 px-2 py-1 text-right tabular-nums"
                     />
                     <button
                       onClick={() => onDeleteOther(o.id)}
@@ -1111,7 +1132,7 @@ export default function Me({
                       type="date"
                       value={p.startDate}
                       onChange={(e) => e.target.value && onSetDates(p.id, e.target.value)}
-                      className="input w-auto px-2 py-1 text-xs"
+                      className="input w-auto px-2 py-1"
                     />
                   </label>
                   <button
@@ -1152,10 +1173,43 @@ export default function Me({
         </div>
       </div>
 
+      <AboutCard periodCount={periods.length} />
+
       {wrappedOpen && wrapped && (
         <Wrapped stats={wrapped} unit548Cents={unit548Cents} onClose={() => setWrappedOpen(false)} />
       )}
     </div>
+  );
+}
+
+/** Version, storage health, and the one honest disclaimer a money tool owes. */
+function AboutCard({ periodCount }: { periodCount: number }) {
+  const [health, setHealth] = useState<StorageHealth | null>(null);
+  useEffect(() => {
+    void storageHealth().then(setHealth);
+  }, []);
+  return (
+    <Card title="About">
+      <p className="text-footnote tabular-nums text-ink-dim">
+        RT Pay {__APP_VERSION__} · {periodCount} period{periodCount === 1 ? "" : "s"} on this device
+      </p>
+      {health && (
+        <p className="mt-1 text-footnote tabular-nums text-ink-dim">
+          {health.installed ? "Installed ✓" : "Running in the browser"} ·{" "}
+          {health.persisted === true
+            ? "storage protected ✓"
+            : health.persisted === false
+              ? "storage not protected — install to Home Screen, and keep backups"
+              : "storage status unknown"}
+          {health.usageBytes !== null && health.usageBytes > 0
+            ? ` · ${(health.usageBytes / 1024 / 1024).toFixed(1)} MB`
+            : ""}
+        </p>
+      )}
+      <p className="mt-2 text-caption text-ink-dim/80">
+        Estimates come from your own rules — always verify with payroll. Not tax or legal advice.
+      </p>
+    </Card>
   );
 }
 

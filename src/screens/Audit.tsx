@@ -201,7 +201,7 @@ function CorrectionsPanel({
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col">
               <span className="label">Paid on</span>
-              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="input w-auto px-2 py-1.5 text-xs" />
+              <input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} className="input w-auto px-2 py-1.5" />
             </label>
             <label className="flex flex-col">
               <span className="label">Gross $</span>

@@ -30,6 +30,7 @@ export default function Onboarding({
   onStep,
   onSaveBaseRate,
   onPickPreset,
+  onRestore,
   onDone,
 }: {
   initialStep: number;
@@ -37,11 +38,14 @@ export default function Onboarding({
   onStep: (step: number) => void;
   onSaveBaseRate: (rate: string) => void;
   onPickPreset: (presetIndex: number) => void;
+  /** New phone? Restoring a backup IS the setup — resolves with a status line. */
+  onRestore: (file: File) => Promise<string>;
   onDone: (goTo: "home" | "shifts") => void;
 }) {
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), STEPS - 1));
   const [rate, setRate] = useState(initialBaseRate);
   const [presetIdx, setPresetIdx] = useState(0);
+  const [restoreMsg, setRestoreMsg] = useState("");
 
   const go = (s: number) => {
     setStep(s);
@@ -89,6 +93,20 @@ export default function Onboarding({
             <p className="mt-4 text-center text-footnote text-ink-dim">
               No account, no cloud — everything stays on this device.
             </p>
+            <label className="pressable mx-auto mt-2 block min-h-11 cursor-pointer py-2 text-center text-footnote font-medium text-accent">
+              New phone? Restore your backup
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onRestore(f).catch((err: unknown) => setRestoreMsg(String(err instanceof Error ? err.message : err)));
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {restoreMsg !== "" && <p className="mt-1 text-center text-footnote text-neg">{restoreMsg}</p>}
           </div>
         )}
 

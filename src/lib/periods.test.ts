@@ -10,6 +10,7 @@ import {
   buildBackup,
   mergeBackup,
   nextPeriodRange,
+  overlappingEnds,
   parseBackup,
   periodLabel,
   prevPeriodRange,
@@ -144,12 +145,38 @@ describe("backup merge", () => {
     expect(() => parseBackup('{"app":"rt-pay-auditor","periods":[{"nope":true}]}')).toThrow(/malformed/i);
   });
 
-  test("v2 round-trips other income; v1 files (no otherIncome) still import", () => {
+  test("v3 round-trips settings and other income; v1/v2 files still import", () => {
     const other = [{ id: "o1", date: "2026-03-15", source: "Side gig", gross: "100", net: "", updatedAt: 5 }];
-    const v2 = parseBackup(JSON.stringify(buildBackup([demoPeriod()], other, "2026-07-12T00:00:00Z")));
-    expect(v2.otherIncome).toHaveLength(1);
+    const settings = { goals: '{"2026":{"target":"150000","kind":"gross"}}', identity: '{"name":"O"}' };
+    const v3 = parseBackup(JSON.stringify(buildBackup([demoPeriod()], other, settings, "2026-07-12T00:00:00Z")));
+    expect(v3.version).toBe(3);
+    expect(v3.otherIncome).toHaveLength(1);
+    expect(v3.settings).toEqual(settings);
     const v1 = parseBackup('{"app":"rt-pay-auditor","version":1,"exportedAt":"x","periods":[]}');
     expect(v1.otherIncome).toEqual([]);
+    expect(v1.settings).toEqual({});
+    const v2 = parseBackup('{"app":"rt-pay-auditor","version":2,"exportedAt":"x","periods":[],"otherIncome":[]}');
+    expect(v2.settings).toEqual({});
+  });
+
+  test("the API key and per-device transients NEVER ride in a backup — export or import side", () => {
+    const leaky = { anthropicApiKey: "sk-ant-secret", currentPeriodId: "p1", onNow: "{}", goals: "{}" };
+    const built = buildBackup([], [], leaky, "x");
+    expect(built.settings).toEqual({ goals: "{}" });
+    // a hand-edited file smuggling the keys is stripped on parse too
+    const parsed = parseBackup(
+      '{"app":"rt-pay-auditor","version":3,"exportedAt":"x","periods":[],"settings":{"anthropicApiKey":"sk-ant-x","goals":"{}"}}',
+    );
+    expect(parsed.settings).toEqual({ goals: "{}" });
+  });
+
+  test("files from a NEWER app version are refused with a plain message", () => {
+    expect(() => parseBackup('{"app":"rt-pay-auditor","version":4,"exportedAt":"x","periods":[]}')).toThrow(/newer RT Pay/i);
+  });
+
+  test("overlappingEnds flags two periods covering the same dates", () => {
+    expect(overlappingEnds([demoPeriod(), demoPeriod({ id: "p2" })])).toEqual(["2026-07-05"]);
+    expect(overlappingEnds([demoPeriod()])).toEqual([]);
   });
 
   test("merge by id: newer updatedAt wins, older is skipped, new ids are added", () => {
