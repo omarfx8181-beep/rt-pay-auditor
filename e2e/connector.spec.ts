@@ -23,7 +23,7 @@ test("a clean newest check offers the next period; its payday later announces th
 
   // green hands over the rhythm's next step
   await page.locator('button:has-text("Start the next period")').click();
-  await expect(page.locator("text=Jul 6 – Jul 19, 2026")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Jul 6 – Jul 19, 2026" })).toBeVisible();
 
   // that period's payday (Jul 24) has passed — once it has shifts, it's a waiting check
   await tabButton(page, "Shifts").click();
