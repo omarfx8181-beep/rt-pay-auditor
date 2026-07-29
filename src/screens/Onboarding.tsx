@@ -81,7 +81,7 @@ export default function Onboarding({
         {step === 0 && (
           <div>
             <div className="eyebrow text-accent">RT Pay</div>
-            <h1 className="mt-3 text-large-title tracking-tight">
+            <h1 className="mt-3 text-large-title">
               Know what your check should say — before it lands.
             </h1>
             <p className="mt-4 text-body text-ink-dim">
@@ -118,7 +118,7 @@ export default function Onboarding({
                 <button
                   key={preset.facility.name + preset.role.name}
                   onClick={() => setPresetIdx(i)}
-                  className={`w-full rounded-2xl border p-5 text-left shadow-card ${
+                  className={`w-full rounded-2xl border p-5 text-left ${
                     i === presetIdx ? "border-accent bg-accent/10" : "border-surface-line bg-surface-card"
                   }`}
                 >

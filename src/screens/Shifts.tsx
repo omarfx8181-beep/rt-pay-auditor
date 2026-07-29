@@ -373,7 +373,7 @@ export default function Shifts({
   return (
     <div className="space-y-3">
       <div>
-        <h1 className="text-large-title tracking-tight">Shifts</h1>
+        <h1 className="text-large-title">Shifts</h1>
         <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
       </div>
 

@@ -66,7 +66,7 @@ function LiveTicker({
     const frac = Math.min(1, Math.max(0, (nowMs - live.startMs) / (live.endMs - live.startMs)));
     const endLabel = new Date(live.endMs).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
     return (
-      <Card>
+      <Card quiet>
         <div className="flex items-center justify-between gap-3">
           <Eyebrow>On the clock</Eyebrow>
           <span className="flex items-center gap-1.5 text-caption text-pos">
@@ -78,10 +78,10 @@ function LiveTicker({
           </span>
         </div>
         <div className="mt-2 text-title-2 tabular-nums text-pos">{fmtCents(Math.round(w.netCents * frac))}</div>
-        <div className="mt-0.5 text-footnote tabular-nums text-ink-dim">
+        <div className="mt-1 text-footnote tabular-nums text-ink-dim">
           in your pocket so far · {fmtCents(w.netCents)} by {endLabel}
         </div>
-        <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-surface-soft">
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-surface-soft">
           <div
             className="h-full rounded-full bg-pos transition-all motion-reduce:transition-none"
             style={{ width: `${frac * 100}%` }}
@@ -120,15 +120,15 @@ function TrophyCase({
   const s = useMemo(() => caughtSummary(periods, closeEnoughCents, todayIso()), [periods, closeEnoughCents]);
   if (s.caughtCents === 0 && s.cleanStreak < 2) return null;
   return (
-    <Card>
+    <Card quiet>
       <div className="flex items-center justify-between gap-3">
         <Eyebrow>The scoreboard</Eyebrow>
         <ShieldCheck size={14} className="text-pos" />
       </div>
       {s.caughtCents > 0 && (
         <>
-          <div className="mt-1 text-title-2 tabular-nums text-pos">{fmtCents(s.caughtCents)} caught</div>
-          <p className="mt-0.5 text-footnote tabular-nums text-ink-dim">
+          <div className="mt-2 text-title-2 tabular-nums text-pos">{fmtCents(s.caughtCents)} caught</div>
+          <p className="mt-1 text-footnote tabular-nums text-ink-dim">
             {s.firstCaughtEnd ? `since ${dayLabel(s.firstCaughtEnd)}` : ""}
             {s.recoveredCents > 0 && ` · ${fmtCents(s.recoveredCents)} recovered`}
           </p>
@@ -138,7 +138,7 @@ function TrophyCase({
         <button
           key={c.periodId}
           onClick={() => onOpenPeriodDetails(c.periodId)}
-          className="pressable mt-1.5 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl bg-neg/10 px-3 py-2 text-left"
+          className="pressable mt-2 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl bg-neg/10 px-3 py-2 text-left"
         >
           <span className="text-footnote text-neg">
             {dayLabel(c.endDate)} · <span className="font-semibold tabular-nums">{fmtCents(c.openCents)}</span> still open
@@ -147,7 +147,7 @@ function TrophyCase({
         </button>
       ))}
       {s.cleanStreak >= 2 && (
-        <p className={`text-footnote text-pos ${s.caughtCents > 0 ? "mt-1.5" : "mt-1"}`}>
+        <p className="mt-2 text-footnote text-pos">
           {s.cleanStreak} clean checks in a row — they know you're watching.
         </p>
       )}
@@ -316,7 +316,7 @@ function PeriodPicker({
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="pressable inline-flex min-h-11 items-center gap-1.5 rounded-full border border-surface-line bg-surface-card px-3.5 py-2 text-subhead font-medium shadow-card"
+        className="pressable inline-flex min-h-11 items-center gap-1.5 rounded-full border border-surface-line bg-surface-card px-3.5 py-2 text-subhead font-medium"
       >
         <CalendarRange size={15} className="text-ink-dim" />
         {periodLabel(current.startDate, current.endDate)}
@@ -568,7 +568,7 @@ export default function Home({
                 if (waiting[0].periodId === record.id) setView("check");
                 else onOpenPeriodDetails(waiting[0].periodId);
               }}
-              className="pressable flex w-full items-center justify-between gap-3 rounded-2xl border border-amber/40 bg-amber/10 px-4 py-3 text-left shadow-card"
+              className="pressable flex w-full items-center justify-between gap-3 rounded-2xl border border-amber/40 bg-amber/10 px-4 py-3 text-left"
             >
               <span className="text-subhead">
                 <span className="font-semibold">Payday was {dayLabel(waiting[0].payday)}</span>
@@ -585,9 +585,9 @@ export default function Home({
               <Eyebrow className="text-hero-fg/50">This check</Eyebrow>
               <StatusPill verdict={verdict} />
             </div>
-            <div className="mt-3 text-hero-num tabular-nums">{fmtCents(heroCents)}</div>
+            <div className="mt-2 text-hero-num tabular-nums">{fmtCents(heroCents)}</div>
             <div className="mt-1 text-subhead text-hero-fg/60">Expected this check</div>
-            <div className="mt-3 inline-flex rounded-full bg-white/10 p-0.5">
+            <div className="mt-4 inline-flex rounded-full bg-white/10 p-0.5">
               {([false, true] as const).map((gross) => (
                 <button
                   key={String(gross)}
@@ -642,7 +642,7 @@ export default function Home({
             iOS can clear a Safari tab's data after 7 quiet days — an installed app is protected. Tap{" "}
             <strong>Share → Add to Home Screen</strong>.
           </p>
-          <button onClick={onDismissInstallNudge} className="btn btn-ghost pressable mt-2.5 text-xs">
+          <button onClick={onDismissInstallNudge} className="btn btn-ghost pressable mt-4 text-xs">
             Got it
           </button>
         </CalloutCard>
@@ -656,7 +656,7 @@ export default function Home({
 
       <button
         onClick={onGoToMe}
-        className="pressable flex w-full items-baseline justify-between gap-3 rounded-2xl border border-surface-line bg-surface-card px-5 py-4 text-left shadow-card"
+        className="pressable flex w-full items-baseline justify-between gap-3 rounded-2xl border border-surface-line bg-surface-card px-5 py-4 text-left"
       >
         <span className="text-subhead text-ink-dim">
           {year} so far · made <span className="font-semibold text-ink">{fmtCents(ytd.totalGrossCents)}</span> · take-home{" "}

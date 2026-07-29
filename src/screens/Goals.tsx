@@ -124,7 +124,7 @@ export default function Goals({
   return (
     <div className="space-y-3">
       <div>
-        <h1 className="text-large-title tracking-tight">Goals</h1>
+        <h1 className="text-large-title">Goals</h1>
         <p className="mt-1 text-subhead text-ink-dim">Pick the number — the plan prices the shifts.</p>
       </div>
 
