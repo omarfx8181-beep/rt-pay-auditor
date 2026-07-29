@@ -11,6 +11,7 @@ import { Target } from "lucide-react";
 import type { BonusTier, EngineConfig, Shift } from "../lib/engine.ts";
 import { periodMoney, rollupYtd, yearGridEnds, type OtherIncomeDraft, type PayPeriod } from "../lib/periods.ts";
 import { buildGoalPlan, buildPickupPlan, goalLevers, PICKUP_LENGTHS, pickupValues, type GoalKind, type GoalsSetting, type YearGoal } from "../lib/goals.ts";
+import { weeklyHours } from "../lib/workweek.ts";
 import { num, todayIso } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Eyebrow, Hero, StatTile } from "../ui/kit.tsx";
@@ -81,6 +82,7 @@ export default function Goals({
   };
 
   const ytd = useMemo(() => rollupYtd(periods, yearView, otherIncome), [periods, yearView, otherIncome]);
+  const weekly = useMemo(() => weeklyHours(periods, yearView, todayIso()), [periods, yearView]);
   const madeCents = kind === "gross" ? ytd.totalGrossCents : ytd.totalNetCents;
   const levers = useMemo(() => goalLevers(shifts, cfg), [shifts, cfg]);
   const plan = useMemo(
@@ -388,11 +390,23 @@ export default function Goals({
         </p>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <StatTile label="Worked" value={fmtNum(ytd.workedHours) + " h"} tone="pos" sub="this year" />
+        <StatTile
+          label="Each week"
+          value={weekly ? fmtNum(weekly.weeklyHours) + " h" : "—"}
+          sub={
+            weekly
+              ? weekly.leaveHours > 0
+                ? `average · ${fmtNum(weekly.weeklyPaidHours)} h with PTO`
+                : `average · ${weekly.checksCounted} finished check${weekly.checksCounted === 1 ? "" : "s"}`
+              : "no finished checks yet"
+          }
+        />
+        <StatTile label="Time off" value={fmtNum(ytd.leaveHours) + " h"} sub="PTO & leave" />
         <StatTile label="Overtime" value={fmtNum(ytd.otHours) + " h"} tone="amber" sub="this year" />
         <StatTile label="Double time" value={fmtNum(ytd.dtHours) + " h"} tone="neg" sub="this year" />
         <StatTile label="Bonus units" value={fmtUnits(ytd.units548)} tone="accent" sub={`≈ ${fmtCents(Math.round(ytd.units548 * cfg.unit548Cents))}`} />
-        <StatTile label="Worked" value={fmtNum(ytd.workedHours) + " h"} tone="pos" sub="this year" />
       </div>
     </div>
   );

@@ -12,6 +12,10 @@ test("year goal: meter, engine-priced plan, persistence, and bar deep-links", as
   // empty state invites a goal
   await expect(page.locator("text=Set your 2026 goal")).toBeVisible();
 
+  // hours stats: the seeded 112.4-hour fortnight averages 56.2 h/week
+  await expect(page.locator("text=Each week")).toBeVisible();
+  await expect(page.locator("text=56.20 h")).toBeVisible();
+
   // set $150k before taxes
   await page.locator('label:has-text("Target for 2026") input').fill("150000");
   await expect(page.locator("text=of $150,000.00 before taxes")).toBeVisible();
