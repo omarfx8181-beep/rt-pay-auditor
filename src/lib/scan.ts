@@ -213,11 +213,11 @@ export async function callClaude(content: unknown[], instruction: string, apiKey
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     throw new Error("You're offline — scans need a connection. Everything you've entered is safe on this device.");
   }
-  const attempt = async (): Promise<Response> => {
+  const attempt = async (): Promise<{ status: number; raw: string }> => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 90_000);
     try {
-      return await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         signal: ctrl.signal,
         headers: {
@@ -232,6 +232,9 @@ export async function callClaude(content: unknown[], instruction: string, apiKey
           messages: [{ role: "user", content: [...content, { type: "text", text: instruction }] }],
         }),
       });
+      // read INSIDE the timer — a stalled body must time out too
+      const raw = await response.text();
+      return { status: response.status, raw };
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         throw new Error("The scan timed out — weak connection? Try again, or fewer photos at once.");
@@ -242,26 +245,26 @@ export async function callClaude(content: unknown[], instruction: string, apiKey
     }
   };
 
-  let response = await attempt();
-  if (response.status === 429 || response.status === 529) {
+  let { status, raw } = await attempt();
+  if (status === 429 || status === 529) {
     await sleep(2500);
-    response = await attempt();
+    ({ status, raw } = await attempt());
   }
 
-  const raw = await response.text();
+  const ok = status >= 200 && status < 300;
   let data: { content?: Array<{ type: string; text?: string }>; stop_reason?: string; error?: { type?: string; message?: string } };
   try {
     data = JSON.parse(raw) as typeof data;
   } catch {
-    throw new Error(`The scan service answered strangely (HTTP ${response.status}) — try again in a minute.`);
+    throw new Error(`The scan service answered strangely (HTTP ${status}) — try again in a minute.`);
   }
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) throw new Error("That API key didn't work — check it in Me → Scans.");
-    if (response.status === 429 || response.status === 529) throw new Error("The scan service is busy — wait a minute and try again.");
+  if (!ok) {
+    if (status === 401 || status === 403) throw new Error("That API key didn't work — check it in Me → Scans.");
+    if (status === 429 || status === 529) throw new Error("The scan service is busy — wait a minute and try again.");
     if (data.error?.type === "not_found_error") {
       throw new Error("That scan model isn't available anymore — set a newer one in Me → Advanced.");
     }
-    throw new Error(data.error?.message ?? `API error (${response.status})`);
+    throw new Error(data.error?.message ?? `API error (${status})`);
   }
   if (data.stop_reason === "max_tokens") {
     throw new Error("Too much to read in one pass — try fewer pages or a tighter photo.");

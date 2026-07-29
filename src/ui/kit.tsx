@@ -36,7 +36,7 @@ export function Field({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           inputMode="decimal"
-          className={`input ${w} px-2.5 py-1.5 text-sm tabular-nums`}
+          className={`input ${w} px-2.5 py-1.5 tabular-nums`}
         />
         {suffix ? <span className="text-[11px] text-ink-dim">{suffix}</span> : null}
       </span>

@@ -365,8 +365,21 @@ export interface BackupFile {
   settings?: Record<string, string>;
 }
 
-/** Never exported: the API key (secret) and per-device transients. */
-export const PRIVATE_SETTING_KEYS = ["anthropicApiKey", "currentPeriodId", "onNow"];
+/**
+ * Never exported: the API key (secret) and per-device transients —
+ * wizard progress, nudge dismissals, and stamps that describe THIS
+ * device, not the data. (A rescue file taken mid-onboarding must never
+ * throw an established device back into the setup wizard.)
+ */
+export const PRIVATE_SETTING_KEYS = [
+  "anthropicApiKey",
+  "currentPeriodId",
+  "onNow",
+  "onboarding",
+  "lastBackupAt",
+  "installNudge",
+  "lastSeenVersion",
+];
 
 export function buildBackup(
   periods: PayPeriod[],
@@ -390,7 +403,17 @@ export function parseBackup(text: string): BackupFile {
     throw new Error("This backup was made by a newer RT Pay — update the app first, then import.");
   }
   for (const p of obj.periods) {
-    if (typeof p?.id !== "string" || typeof p?.startDate !== "string" || !Array.isArray(p?.shifts)) {
+    // A poison row restored onto a fresh phone becomes an unfixable
+    // crash loop — refuse the file up front instead.
+    if (
+      typeof p?.id !== "string" ||
+      typeof p?.startDate !== "string" ||
+      typeof p?.endDate !== "string" ||
+      !Array.isArray(p?.shifts) ||
+      typeof p?.cfgDraft !== "object" ||
+      p?.cfgDraft === null ||
+      !Array.isArray(p?.tiers)
+    ) {
       throw new Error("Backup file has a malformed period entry.");
     }
   }
@@ -407,6 +430,32 @@ export function parseBackup(text: string): BackupFile {
     }
   }
   return { ...obj, otherIncome: obj.otherIncome ?? [], settings } as BackupFile;
+}
+
+/**
+ * YTD anchors carry their own capturedAt — merging two anchor maps
+ * keeps the NEWER capture per year, so importing an old backup can
+ * never regress payroll's ground truth (mirrors saveYtdAnchor's
+ * "older scans never regress it" rule).
+ */
+export function mergeYtdAnchorSettings(localRaw: string | undefined, incomingRaw: string | undefined): string {
+  const parse = (raw: string | undefined): Record<string, YtdAnchor> => {
+    if (!raw) return {};
+    try {
+      const obj = JSON.parse(raw) as Record<string, YtdAnchor>;
+      return obj && typeof obj === "object" ? obj : {};
+    } catch {
+      return {};
+    }
+  };
+  const local = parse(localRaw);
+  const incoming = parse(incomingRaw);
+  const merged: Record<string, YtdAnchor> = { ...local };
+  for (const [year, anc] of Object.entries(incoming)) {
+    const cur = merged[year];
+    if (!cur || (anc?.capturedAt ?? 0) > (cur.capturedAt ?? 0)) merged[year] = anc;
+  }
+  return JSON.stringify(merged);
 }
 
 /**

@@ -20,7 +20,8 @@ export function isInstalled(): boolean {
 }
 
 export function isIos(): boolean {
-  return /iphone|ipad|ipod/i.test(navigator.userAgent);
+  // iPadOS 13+ masquerades as a Mac — the touch-point check unmasks it.
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) || (/Mac/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 }
 
 /** Best-effort: ask the browser to never evict our storage. */

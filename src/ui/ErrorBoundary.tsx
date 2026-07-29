@@ -31,8 +31,9 @@ interface State {
 export default class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null, rescueMsg: "", detailsOpen: false };
 
-  static getDerivedStateFromError(error: Error): Partial<State> {
-    return { error };
+  static getDerivedStateFromError(error: unknown): Partial<State> {
+    // Anything can be thrown — normalize so the net always catches.
+    return { error: error instanceof Error ? error : new Error(String(error ?? "Unknown error")) };
   }
 
   render() {

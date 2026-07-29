@@ -9,6 +9,7 @@ import {
   addDays,
   buildBackup,
   mergeBackup,
+  mergeYtdAnchorSettings,
   nextPeriodRange,
   overlappingEnds,
   parseBackup,
@@ -40,6 +41,7 @@ import { parsePto, type PtoConfig } from "./lib/pto.ts";
 import { parseW2Setting, type W2Typed } from "./lib/w2.ts";
 import type { OnNow } from "./lib/shiftClock.ts";
 import { isInstalled, isIos, requestPersist } from "./lib/storageHealth.ts";
+import { applyUpdate, onUpdateReady } from "./lib/swUpdate.ts";
 import { releaseToShow } from "./lib/whatsNew.ts";
 import WhatsNewSheet from "./screens/WhatsNew.tsx";
 
@@ -97,6 +99,10 @@ export default function App() {
   useEffect(() => {
     void requestPersist();
   }, []);
+
+  // A new build installed and is waiting — offer the restart, never force it.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => onUpdateReady(() => setUpdateReady(true)), []);
 
   // The scan model is config, not a constant — Anthropic retires ids
   // on their schedule (Me → Advanced overrides; blank = default).
@@ -185,17 +191,25 @@ export default function App() {
   // onboarding offers it, and it must work before any state exists.
   const restoreFromFile = async (file: File): Promise<string> => {
     const backup = parseBackup(await file.text());
+    if (backup.periods.length === 0) {
+      throw new Error("That backup has no pay periods — pick a different file.");
+    }
     const existing = await db.periods.toArray();
+    // The fresh install's demo seed must not survive a restore — the
+    // backup carries the user's REAL copy of that window, and merge-by-id
+    // would keep both, double-counting a full check in the year.
+    const backupIds = new Set(backup.periods.map((p) => p.id));
+    const pristineSeedIds = existing.filter((p) => p.updatedAt === p.createdAt && !backupIds.has(p.id)).map((p) => p.id);
     const periodsMerge = mergeBackup(existing, backup.periods);
     const existingOther = await db.otherIncome.toArray();
     const otherMerge = mergeBackup(existingOther, backup.otherIncome ?? []);
     await db.transaction("rw", db.periods, db.otherIncome, db.settings, async () => {
       await db.periods.bulkPut(periodsMerge.merged);
+      for (const id of pristineSeedIds) await db.periods.delete(id);
       await db.otherIncome.bulkPut(otherMerge.merged);
-      for (const [key, value] of Object.entries(backup.settings ?? {})) {
-        if (key !== "onboarding") await db.settings.put({ key, value });
-      }
+      await applyBackupSettings(backup.settings ?? {});
       await db.settings.put({ key: "onboarding", value: "done" });
+      await db.settings.put({ key: "lastSeenVersion", value: __APP_VERSION__ });
     });
     const newest = [...backup.periods].sort((a, b) => (a.endDate < b.endDate ? 1 : -1))[0];
     if (newest) await setCurrentPeriodId(newest.id);
@@ -306,6 +320,14 @@ export default function App() {
           onDismiss={() => setDeletedPeriod(null)}
         />
       )}
+      {updateReady && (
+        <div className="fixed inset-x-0 bottom-[max(88px,calc(env(safe-area-inset-bottom)+72px))] z-40 mx-auto flex w-fit max-w-[calc(100vw-40px)] items-center gap-3 rounded-full border border-surface-line bg-surface-card py-1.5 pl-4 pr-1.5 shadow-lg">
+          <span className="text-footnote">A new version is ready.</span>
+          <button onClick={() => applyUpdate()} className="btn btn-primary pressable min-h-9 px-3 py-1.5 text-xs">
+            Restart
+          </button>
+        </div>
+      )}
       {tourStep !== null && <Tour step={tourStep} onStep={setTourStep} onDone={endTour} setTab={setTab} />}
       {release && tourStep === null && (
         <WhatsNewSheet
@@ -315,6 +337,23 @@ export default function App() {
       )}
     </>
   );
+}
+
+/**
+ * Settings from a backup FILL GAPS — they never overwrite a value this
+ * device already has (an old file must not regress newer goals, PTO,
+ * or identity). YTD anchors are the exception: they carry their own
+ * capturedAt, so the newer capture wins per year in either direction.
+ */
+async function applyBackupSettings(settings: Record<string, string>): Promise<void> {
+  for (const [key, value] of Object.entries(settings)) {
+    if (key === "ytdAnchors") {
+      const local = await db.settings.get("ytdAnchors");
+      await db.settings.put({ key, value: mergeYtdAnchorSettings(local?.value, value) });
+    } else if ((await db.settings.get(key)) === undefined) {
+      await db.settings.put({ key, value });
+    }
+  }
 }
 
 /**
@@ -501,11 +540,16 @@ function PeriodWorkspace({
   // deduction buckets stay stub-true. Rules snapshot from the earliest
   // period (closest in time to the old stub).
   const logPastStub = async (endDate: string, gross: string, net: string, startDate?: string, actual?: Record<string, string>) => {
-    // Same date already logged (double-tap, re-scan)? Never a twin period.
+    // Same date already logged (re-entry, re-scan, double-tap)? Update
+    // that period — never a twin. Incoming values MERGE over what's
+    // there (itemized lines survive a totals-only re-entry), and if the
+    // twin is the OPEN period the workspace remounts so stale drafts
+    // can't revert the save.
     const twin = periods.find((p) => p.endDate === endDate);
     if (twin) {
-      const merged = { ...(actual ?? { gross: gross.trim(), net: net.trim() }) };
-      if ((twin.actual?.net ?? "") === "") await db.periods.update(twin.id, { actual: merged, updatedAt: Date.now() });
+      const incoming = actual ?? { gross: gross.trim(), net: net.trim() };
+      await db.periods.update(twin.id, { actual: { ...twin.actual, ...incoming }, updatedAt: Date.now() });
+      if (twin.id === record.id) onImported();
       return;
     }
     const earliest = periods.reduce((a, b) => (a.startDate < b.startDate ? a : b));
@@ -672,11 +716,7 @@ function PeriodWorkspace({
       await db.transaction("rw", db.periods, db.otherIncome, db.settings, async () => {
         await db.periods.bulkPut(periodsMerge.merged);
         await db.otherIncome.bulkPut(otherMerge.merged);
-        // v3 settings: the backup fills gaps and updates values, but the
-        // secret/transient keys never ride in a file (parseBackup strips).
-        for (const [key, value] of Object.entries(backup.settings ?? {})) {
-          await db.settings.put({ key, value });
-        }
+        await applyBackupSettings(backup.settings ?? {});
       });
       const dupes = overlappingEnds(periodsMerge.merged);
       setImportStatus(

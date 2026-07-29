@@ -18,7 +18,10 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       VitePWA({
-        registerType: "autoUpdate",
+        // prompt: the update waits for the user's tap — autoUpdate
+        // hard-reloads the page the moment a new worker activates,
+        // which would kill an in-flight scan or a mid-debounce edit.
+        registerType: "prompt",
         includeAssets: ["apple-touch-icon.png"],
         manifest: {
           name: "RT Pay",

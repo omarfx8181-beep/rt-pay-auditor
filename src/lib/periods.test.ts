@@ -10,6 +10,7 @@ import {
   buildBackup,
   mergeBackup,
   nextPeriodRange,
+  mergeYtdAnchorSettings,
   overlappingEnds,
   parseBackup,
   periodLabel,
@@ -160,14 +161,49 @@ describe("backup merge", () => {
   });
 
   test("the API key and per-device transients NEVER ride in a backup — export or import side", () => {
-    const leaky = { anthropicApiKey: "sk-ant-secret", currentPeriodId: "p1", onNow: "{}", goals: "{}" };
+    const leaky = {
+      anthropicApiKey: "sk-ant-secret",
+      currentPeriodId: "p1",
+      onNow: "{}",
+      onboarding: "2", // a mid-setup rescue file must not re-trigger the wizard on import
+      lastBackupAt: "123",
+      installNudge: "done",
+      lastSeenVersion: "1.0.0",
+      goals: "{}",
+    };
     const built = buildBackup([], [], leaky, "x");
     expect(built.settings).toEqual({ goals: "{}" });
     // a hand-edited file smuggling the keys is stripped on parse too
     const parsed = parseBackup(
-      '{"app":"rt-pay-auditor","version":3,"exportedAt":"x","periods":[],"settings":{"anthropicApiKey":"sk-ant-x","goals":"{}"}}',
+      '{"app":"rt-pay-auditor","version":3,"exportedAt":"x","periods":[],"settings":{"anthropicApiKey":"sk-ant-x","onboarding":"1","goals":"{}"}}',
     );
     expect(parsed.settings).toEqual({ goals: "{}" });
+  });
+
+  test("a period missing endDate or cfgDraft is refused — a poison row must never restore", () => {
+    const bad = (over: string) =>
+      `{"app":"rt-pay-auditor","version":3,"exportedAt":"x","periods":[${over}]}`;
+    const full = demoPeriod();
+    const without = (key: keyof PayPeriod) => {
+      const { [key]: _drop, ...rest } = full;
+      return JSON.stringify(rest);
+    };
+    expect(() => parseBackup(bad(without("endDate")))).toThrow(/malformed/i);
+    expect(() => parseBackup(bad(without("cfgDraft")))).toThrow(/malformed/i);
+    expect(() => parseBackup(bad(without("tiers")))).toThrow(/malformed/i);
+    expect(parseBackup(bad(JSON.stringify(full))).periods).toHaveLength(1);
+  });
+
+  test("mergeYtdAnchorSettings: the newer capture wins per year, in either direction", () => {
+    const anchor = (grossCents: number, capturedAt: number) =>
+      ({ year: "2026", asOfEnd: "2026-07-05", grossCents, netCents: null, capturedAt });
+    const local = JSON.stringify({ "2026": anchor(500000, 200), "2025": anchor(100, 50) });
+    const oldFile = JSON.stringify({ "2026": anchor(400000, 100), "2024": anchor(999, 10) });
+    const merged = JSON.parse(mergeYtdAnchorSettings(local, oldFile)) as Record<string, { grossCents: number }>;
+    expect(merged["2026"].grossCents).toBe(500000); // old file never regresses the newer anchor
+    expect(merged["2024"].grossCents).toBe(999); // but fills years the device lacks
+    expect(merged["2025"].grossCents).toBe(100);
+    expect(mergeYtdAnchorSettings(undefined, "junk")).toBe("{}");
   });
 
   test("files from a NEWER app version are refused with a plain message", () => {
