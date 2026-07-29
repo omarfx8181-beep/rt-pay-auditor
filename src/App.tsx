@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarClock, CircleUserRound, House, Target } from "lucide-react";
 import { computeNet, computePeriod, type BonusTier } from "./lib/engine.ts";
-import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
+import { blankShift, draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
 import { computeVerdict } from "./lib/verdict.ts";
 import {
@@ -433,6 +433,10 @@ function PeriodWorkspace({
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
+  // "I'm taking it" on the what-if card: the new shift opens in the
+  // Shifts sheet ready for its date. Lives here — Shifts remounts per
+  // tab switch and consumes it on mount.
+  const [shiftsEditIntent, setShiftsEditIntent] = useState<string | null>(null);
   const tabIndex = useRef(tab === "shifts" ? 1 : tab === "goals" ? 2 : tab === "me" ? 3 : 0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
@@ -775,6 +779,14 @@ function PeriodWorkspace({
             onDismissInstallNudge={() => void db.settings.put({ key: "installNudge", value: "done" })}
             onGoToShifts={() => selectTab("shifts", 1)}
             onGoToMe={() => selectTab("me", 3)}
+            onOpenPeriodDetails={onOpenPeriodDetails}
+            onCelebrated={() => void db.periods.update(record.id, { celebratedAt: Date.now() })}
+            onAddShift={(hours, units548, charge) => {
+              const fresh = { ...blankShift(), hours, units548, charge };
+              setShiftDrafts((arr) => [...arr, fresh]);
+              setShiftsEditIntent(fresh.id);
+              selectTab("shifts", 1);
+            }}
             initialView={homeIntent?.periodId === record.id ? homeIntent.view : null}
             onViewConsumed={onHomeIntentConsumed}
           />
@@ -794,6 +806,8 @@ function PeriodWorkspace({
             periodEnd={record.endDate}
             onFileFuture={(batches) => void fileFutureShifts(batches)}
             onSetEveningHours={(hours) => setCfgDraft((d) => ({ ...d, eveningHours: hours }))}
+            initialEditId={shiftsEditIntent}
+            onEditConsumed={() => setShiftsEditIntent(null)}
           />
         )}
         {tab === "goals" && (

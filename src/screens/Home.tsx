@@ -14,7 +14,8 @@ import type { Verdict } from "../lib/verdict.ts";
 import type { EmailIdentity } from "../lib/hrEmail.ts";
 import { periodLabel, type CorrectionDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { daysUntil, paydayFor } from "../lib/payday.ts";
-import { caughtSummary } from "../lib/caught.ts";
+import { checksWaiting } from "../lib/attention.ts";
+import { caughtSummary, periodVerdict } from "../lib/caught.ts";
 import { checkDiff } from "../lib/checkDiff.ts";
 import { findLiveShift, todayShiftWithoutTimes, type OnNow } from "../lib/shiftClock.ts";
 import { shiftWorths } from "../lib/worth.ts";
@@ -106,8 +107,16 @@ function LiveTicker({
   return null;
 }
 
-/** The scoreboard — what the watchdog has caught, and the streak. */
-function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; closeEnoughCents: number }) {
+/** The scoreboard — what the watchdog has caught, and the streak. Open dollars tap into their dispute. */
+function TrophyCase({
+  periods,
+  closeEnoughCents,
+  onOpenPeriodDetails,
+}: {
+  periods: PayPeriod[];
+  closeEnoughCents: number;
+  onOpenPeriodDetails: (id: string) => void;
+}) {
   const s = useMemo(() => caughtSummary(periods, closeEnoughCents, todayIso()), [periods, closeEnoughCents]);
   if (s.caughtCents === 0 && s.cleanStreak < 2) return null;
   return (
@@ -122,10 +131,21 @@ function TrophyCase({ periods, closeEnoughCents }: { periods: PayPeriod[]; close
           <p className="mt-0.5 text-footnote tabular-nums text-ink-dim">
             {s.firstCaughtEnd ? `since ${dayLabel(s.firstCaughtEnd)}` : ""}
             {s.recoveredCents > 0 && ` · ${fmtCents(s.recoveredCents)} recovered`}
-            {s.openCents > 0 && <span className="text-neg"> · {fmtCents(s.openCents)} still open</span>}
           </p>
         </>
       )}
+      {s.openCatches.map((c) => (
+        <button
+          key={c.periodId}
+          onClick={() => onOpenPeriodDetails(c.periodId)}
+          className="pressable mt-1.5 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl bg-neg/10 px-3 py-2 text-left"
+        >
+          <span className="text-footnote text-neg">
+            {dayLabel(c.endDate)} · <span className="font-semibold tabular-nums">{fmtCents(c.openCents)}</span> still open
+          </span>
+          <span className="text-neg">→</span>
+        </button>
+      ))}
       {s.cleanStreak >= 2 && (
         <p className={`text-footnote text-pos ${s.caughtCents > 0 ? "mt-1.5" : "mt-1"}`}>
           {s.cleanStreak} clean checks in a row — they know you're watching.
@@ -248,15 +268,30 @@ function StatusPill({ verdict }: { verdict: Verdict }) {
   );
 }
 
+/** Each period's standing at a glance — the watchdog colors, in the switcher. */
+function pickerStatus(p: PayPeriod, closeEnoughCents: number): { dot: string; word: string } {
+  if (p.shifts.length === 0 && (p.leave ?? []).length === 0) {
+    return (p.actual?.net ?? "") !== "" ? { dot: "bg-surface-line", word: "recorded" } : { dot: "bg-surface-line", word: "" };
+  }
+  const v = periodVerdict(p, closeEnoughCents);
+  if (v.kind === "green") return { dot: "bg-pos", word: "right" };
+  if (v.kind === "corrected") return { dot: "bg-pos", word: "made whole" };
+  if (v.kind === "red") return { dot: "bg-neg", word: `${fmtCents(v.owedCents - Math.min(v.correctionCents, v.owedCents))} owed` };
+  if (v.kind === "amber") return { dot: "bg-amber", word: "needs a look" };
+  return { dot: "bg-surface-line", word: "not checked" };
+}
+
 /** Quiet period switcher — full period management lives in Me. */
 function PeriodPicker({
   periods,
   currentId,
+  closeEnoughCents,
   onSelect,
   onCreateNext,
 }: {
   periods: PayPeriod[];
   currentId: string;
+  closeEnoughCents: number;
   onSelect: (id: string) => void;
   onCreateNext: () => void;
 }) {
@@ -296,9 +331,15 @@ function PeriodPicker({
                 } ${p.archived ? "opacity-60" : ""}`}
               >
                 <span>{periodLabel(p.startDate, p.endDate)}</span>
-                <span className="text-caption text-ink-dim">
-                  {p.id === current.id ? "current" : p.archived ? "archived" : (p.actual?.net ?? "") !== "" ? "checked" : ""}
-                </span>
+                {(() => {
+                  const s = p.archived ? { dot: "bg-surface-line", word: "archived" } : pickerStatus(p, closeEnoughCents);
+                  return (
+                    <span className="flex items-center gap-1.5 text-caption tabular-nums text-ink-dim">
+                      {p.id === current.id && s.word === "" ? "current" : s.word}
+                      <span className={`size-1.5 rounded-full ${s.dot}`} aria-hidden />
+                    </span>
+                  );
+                })()}
               </button>
             ))}
           </div>
@@ -353,6 +394,9 @@ export default function Home({
   onDismissInstallNudge,
   onGoToShifts,
   onGoToMe,
+  onOpenPeriodDetails,
+  onCelebrated,
+  onAddShift,
   initialView,
   onViewConsumed,
 }: {
@@ -392,6 +436,12 @@ export default function Home({
   onDismissInstallNudge: () => void;
   onGoToShifts: () => void;
   onGoToMe: () => void;
+  /** Open another period's check screen (the app-level deep link). */
+  onOpenPeriodDetails: (id: string) => void;
+  /** Stamp this period's first green — the celebration fires once, ever. */
+  onCelebrated: () => void;
+  /** "I'm taking it" on the what-if card — the priced shift becomes real. */
+  onAddShift: (hours: string, units548: string, charge: string) => void;
   /** One-shot deep link from a period card ("Stub details") — consumed on mount. */
   initialView: "check" | "breakdown" | null;
   onViewConsumed: () => void;
@@ -404,6 +454,13 @@ export default function Home({
   const [showGross, setShowGross] = useState(false);
   const heroCents = useCountUp(showGross ? period.grossCents : net.netCents);
   const empty = shifts.length === 0 && period.leaveHours === 0;
+
+  // The payday ritual: has a payday passed whose check was never
+  // audited? One tap lands on the oldest one waiting.
+  const waiting = useMemo(
+    () => checksWaiting(periods, paydayDelayDays, todayIso(), closeEnoughCents),
+    [periods, paydayDelayDays, closeEnoughCents],
+  );
 
   // Quiet payday line while the check hasn't happened yet.
   const payday = paydayFor(record.endDate, paydayDelayDays);
@@ -431,6 +488,10 @@ export default function Home({
           <Audit
             recordOnly={shifts.length === 0 && period.leaveHours === 0}
             closeEnoughCents={closeEnoughCents}
+            celebrate={!record.celebratedAt}
+            onCelebrated={onCelebrated}
+            isNewest={!periods.some((p) => p.endDate > record.endDate)}
+            onCreateNext={onCreateNext}
             corrections={corrections}
             setCorrections={setCorrections}
             rows={auditRows}
@@ -460,7 +521,13 @@ export default function Home({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <PeriodPicker periods={periods} currentId={record.id} onSelect={onSelectPeriod} onCreateNext={onCreateNext} />
+        <PeriodPicker
+          periods={periods}
+          currentId={record.id}
+          closeEnoughCents={closeEnoughCents}
+          onSelect={onSelectPeriod}
+          onCreateNext={onCreateNext}
+        />
         {record.archived ? <span className="text-caption text-ink-dim">archived</span> : null}
       </div>
 
@@ -478,6 +545,22 @@ export default function Home({
         </Card>
       ) : (
         <>
+          {waiting.length > 0 && (
+            <button
+              onClick={() => {
+                if (waiting[0].periodId === record.id) setView("check");
+                else onOpenPeriodDetails(waiting[0].periodId);
+              }}
+              className="pressable flex w-full items-center justify-between gap-3 rounded-2xl border border-amber/40 bg-amber/10 px-4 py-3 text-left shadow-card"
+            >
+              <span className="text-subhead">
+                <span className="font-semibold">Payday was {dayLabel(waiting[0].payday)}</span>
+                {waiting.length === 1 ? " — that check is waiting." : ` — ${waiting.length} checks are waiting.`}
+              </span>
+              <span className="shrink-0 text-amber">→</span>
+            </button>
+          )}
+
           <LiveTicker record={record} shifts={shifts} cfg={cfg} onNow={onNow} onSetOnNow={onSetOnNow} />
           <div id="tour-hero">
           <Hero>
@@ -522,7 +605,15 @@ export default function Home({
           <WhyDifferent record={record} periods={periods} />
 
           <Disclosure title="What if I pick up a shift?" hint="One more shift, priced after taxes.">
-            <WhatIfBody shifts={shifts} cfg={cfg} cfgDraft={cfgDraft} tiers={tiers} whatIf={whatIf} setWhatIf={setWhatIf} />
+            <WhatIfBody
+              shifts={shifts}
+              cfg={cfg}
+              cfgDraft={cfgDraft}
+              tiers={tiers}
+              whatIf={whatIf}
+              setWhatIf={setWhatIf}
+              onAddShift={onAddShift}
+            />
           </Disclosure>
         </>
       )}
@@ -540,7 +631,11 @@ export default function Home({
         </CalloutCard>
       )}
 
-      <TrophyCase periods={periods} closeEnoughCents={closeEnoughCents} />
+      <TrophyCase
+        periods={periods}
+        closeEnoughCents={closeEnoughCents}
+        onOpenPeriodDetails={(id) => (id === record.id ? setView("check") : onOpenPeriodDetails(id))}
+      />
 
       <button
         onClick={onGoToMe}

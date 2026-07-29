@@ -202,6 +202,7 @@ export function WhatIfBody({
   tiers,
   whatIf,
   setWhatIf,
+  onAddShift,
 }: {
   shifts: Shift[];
   cfg: EngineConfig;
@@ -210,6 +211,8 @@ export function WhatIfBody({
   tiers: BonusTier[];
   whatIf: WhatIfDraft;
   setWhatIf: (wi: WhatIfDraft) => void;
+  /** "I'm taking it" — the priced shift becomes a real one, sheet open. */
+  onAddShift?: (hours: string, units548: string, charge: string) => void;
 }) {
   const wi = computeWhatIf(shifts, cfg, {
     hours: num(whatIf.hours),
@@ -267,6 +270,14 @@ export function WhatIfBody({
           </span>
         </div>
       </div>
+      {onAddShift && wi.dGrossCents > 0 && (
+        <button
+          onClick={() => onAddShift(whatIf.hours, whatIf.units548, whatIf.charge)}
+          className="btn btn-ghost pressable mt-3 text-xs"
+        >
+          I'm taking it — add the shift
+        </button>
+      )}
       <p className="mt-2 text-footnote text-ink-dim">
         Taxed at your top rates ({cfgDraft.marginalFed}% + {cfgDraft.marginalMN}%) — Me → Advanced.
       </p>

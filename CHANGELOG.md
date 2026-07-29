@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0 — July 2026
+
+Everything connects — the features stop being islands.
+
+- **The payday ritual**: opening the app after a payday announces which checks are still waiting to be audited; one tap lands on the oldest.
+- The scoreboard's open dollars tap straight into the period that's owed.
+- **"I'm taking it — add the shift"** on the what-if card commits the priced pickup as a real shift with the editor open.
+- The period switcher carries every check's verdict color (green / "$250.00 owed" / amber / not checked).
+- A period's first green check bursts once (reduced-motion safe, stamped so it never replays), and a clean newest check offers "Start the next period."
+
 ## 1.0.0 — July 2026
 
 The finished product. Everything below ships behind 185+ unit tests, 16 E2E browser tests, and a CI gate.

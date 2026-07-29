@@ -319,6 +319,8 @@ export default function Shifts({
   periodEnd,
   onFileFuture,
   onSetEveningHours,
+  initialEditId = null,
+  onEditConsumed,
 }: {
   shifts: ShiftDraft[];
   setShifts: (updater: (arr: ShiftDraft[]) => ShiftDraft[]) => void;
@@ -333,8 +335,15 @@ export default function Shifts({
   periodEnd: string;
   onFileFuture: (batches: FutureBatch[]) => void;
   onSetEveningHours: (hours: string) => void;
+  /** "I'm taking it" hand-off: this shift's sheet opens on mount. */
+  initialEditId?: string | null;
+  onEditConsumed?: () => void;
 }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(initialEditId);
+  useEffect(() => {
+    if (initialEditId !== null) onEditConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
 
   // Each shift's real marginal value — the OT it unlocked included.

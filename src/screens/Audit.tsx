@@ -4,7 +4,7 @@
  * you're owed and hands you the HR email, amber asks one guided
  * question. The line-by-line table sits below in plain language.
  */
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BadgeCheck, CircleAlert, FileDown, Mail, Plus, Trash2 } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num, todayIso, uid } from "../lib/draft.ts";
@@ -17,6 +17,29 @@ import { type CorrectionDraft, type PayPeriod, type YtdAnchor } from "../lib/per
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
 import ProofPacket from "./ProofPacket.tsx";
+
+/**
+ * The once-per-check burst — twelve bits of terracotta and green, 700ms,
+ * only the FIRST time a period turns green. Motion-reduced users get
+ * the drawn checkmark alone.
+ */
+function Burst() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden motion-reduce:hidden" aria-hidden>
+      {Array.from({ length: 12 }, (_, i) => {
+        const angle = (i / 12) * Math.PI * 2;
+        const r = 64 + (i % 3) * 22;
+        return (
+          <span
+            key={i}
+            className={`burst-bit absolute left-1/2 top-8 size-2 rounded-full ${i % 2 === 0 ? "bg-pos" : "bg-accent"}`}
+            style={{ "--bx": `${Math.cos(angle) * r}px`, "--by": `${Math.sin(angle) * r}px` } as React.CSSProperties}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 /** The clean-audit celebration: a checkmark that draws itself. */
 function CheckDraw() {
@@ -41,12 +64,20 @@ function VerdictBanner({
   verdict,
   emailHref,
   identityMissing,
+  celebrating,
+  isNewest,
+  onCreateNext,
   onReviewEmail,
 }: {
   verdict: Verdict;
   /** mailto: URL with the pre-written draft; null when no shortfall email exists. */
   emailHref: string | null;
   identityMissing: boolean;
+  /** First time this check turned green — burst once. */
+  celebrating: boolean;
+  /** Newest period → a clean check hands you the next step of the rhythm. */
+  isNewest: boolean;
+  onCreateNext: () => void;
   onReviewEmail: () => void;
 }) {
   if (verdict.kind === "intro") return null;
@@ -63,15 +94,23 @@ function VerdictBanner({
 
   if (verdict.kind === "green") {
     return (
-      <CalloutCard tone="pos">
-        <div className="flex items-center gap-2 text-title-2 text-pos">
-          <CheckDraw /> Your check is right ✓
-        </div>
-        <p className="mt-2 text-body">
-          <span className="font-semibold tabular-nums">{fmtCents(verdict.paidNetCents)}</span> to your account — every
-          line checked out. Nice.
-        </p>
-      </CalloutCard>
+      <div className="relative">
+        {celebrating && <Burst />}
+        <CalloutCard tone="pos">
+          <div className="flex items-center gap-2 text-title-2 text-pos">
+            <CheckDraw /> Your check is right ✓
+          </div>
+          <p className="mt-2 text-body">
+            <span className="font-semibold tabular-nums">{fmtCents(verdict.paidNetCents)}</span> to your account — every
+            line checked out. Nice.
+          </p>
+          {isNewest && (
+            <button onClick={onCreateNext} className="pressable mt-2 flex min-h-11 items-center gap-1 text-subhead font-medium text-accent">
+              Start the next period →
+            </button>
+          )}
+        </CalloutCard>
+      </div>
     );
   }
 
@@ -86,6 +125,11 @@ function VerdictBanner({
           paid <span className="font-semibold tabular-nums">{fmtCents(verdict.correctionCents)}</span> back. Counted in
           your year totals.
         </p>
+        {isNewest && (
+          <button onClick={onCreateNext} className="pressable mt-2 flex min-h-11 items-center gap-1 text-subhead font-medium text-accent">
+            Start the next period →
+          </button>
+        )}
       </CalloutCard>
     );
   }
@@ -257,6 +301,10 @@ function CorrectionsPanel({
 export default function Audit({
   recordOnly = false,
   closeEnoughCents = 5,
+  celebrate = false,
+  onCelebrated,
+  isNewest = false,
+  onCreateNext,
   corrections,
   setCorrections,
   rows,
@@ -284,6 +332,11 @@ export default function Audit({
   recordOnly?: boolean;
   /** "Call it even" forgiveness (Me → Advanced) — overs/drift only; unders keep the nickel. */
   closeEnoughCents?: number;
+  /** This green is this period's FIRST — burst once, then stamp it. */
+  celebrate?: boolean;
+  onCelebrated?: () => void;
+  isNewest?: boolean;
+  onCreateNext?: () => void;
   corrections: CorrectionDraft[];
   setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
   rows: AuditRow[];
@@ -305,6 +358,13 @@ export default function Audit({
 }) {
   const emailRef = useRef<HTMLDivElement>(null);
   const [proofOpen, setProofOpen] = useState(false);
+
+  // The burst fires exactly once per period: `celebrate` is true only
+  // until the stamp lands; keep it visually alive for this mount.
+  const [celebrating] = useState(celebrate && verdict.kind === "green");
+  useEffect(() => {
+    if (celebrate && verdict.kind === "green") onCelebrated?.();
+  }, [celebrate, verdict.kind, onCelebrated]);
 
   const judged = rows.map((row) => {
     const raw = actual[row.key] ?? "";
@@ -349,6 +409,9 @@ export default function Audit({
           verdict={verdict}
           emailHref={emailHref}
           identityMissing={identity.name.trim() === "" || identity.employeeId.trim() === ""}
+          celebrating={celebrating}
+          isNewest={isNewest && onCreateNext !== undefined}
+          onCreateNext={() => onCreateNext?.()}
           onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
         />
       )}

@@ -45,6 +45,8 @@ export interface PayPeriod {
   archived: boolean;
   createdAt: number;
   updatedAt: number;
+  /** Stamped the first time this check turns green — the celebration fires once. */
+  celebratedAt?: number;
 }
 
 export const PERIOD_DAYS = 14;

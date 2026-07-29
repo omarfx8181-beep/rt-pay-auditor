@@ -246,6 +246,20 @@
   .label {
     @apply mb-1.5 block text-[12px] leading-4 font-medium tracking-[0.08em] uppercase text-ink-dim;
   }
+  /* green day's once-per-check burst (reduced motion hides the container) */
+  @keyframes burst-out {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--bx), var(--by)) scale(0.35);
+      opacity: 0;
+    }
+  }
+  .burst-bit {
+    animation: burst-out 700ms ease-out forwards;
+  }
 }
 
 /* ---- Checkmark draw — the clean-audit celebration ---- */

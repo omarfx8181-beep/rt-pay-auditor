@@ -14,6 +14,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "1.1.0",
+    date: "July 2026",
+    title: "Everything connects",
+    points: [
+      "Open the app after payday and it tells you which checks are waiting to be audited — one tap lands on the oldest.",
+      "The scoreboard's \"still open\" dollars now open the dispute they count.",
+      "\"I'm taking it\" on the what-if card turns the priced pickup into a real shift, sheet open, ready for its date.",
+      "The period switcher shows every check's color — green, red with the dollars, amber.",
+      "A first-ever green check gets a little celebration, and a clean newest check offers to start the next period.",
+    ],
+  },
+  {
     version: "1.0.0",
     date: "July 2026",
     title: "RT Pay 1.0 — the finished product",

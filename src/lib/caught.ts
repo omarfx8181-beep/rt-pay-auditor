@@ -36,6 +36,8 @@ export interface CaughtSummary {
   cleanStreak: number;
   /** End date of the earliest catch — "watching since". */
   firstCaughtEnd: string | null;
+  /** Catches still owed money, newest first — each taps into its dispute. */
+  openCatches: Array<{ periodId: string; endDate: string; openCents: Cents }>;
 }
 
 /**
@@ -56,6 +58,7 @@ export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number, to
   let cleanStreak = 0;
   let streakAlive = true;
   let firstCaughtEnd: string | null = null;
+  const openCatches: CaughtSummary["openCatches"] = [];
 
   for (const p of sorted) {
     const auditable = p.shifts.length > 0 || (p.leave ?? []).length > 0;
@@ -69,6 +72,7 @@ export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number, to
       caughtCents += v.owedCents;
       recoveredCents += paidBack;
       openCents += v.owedCents - paidBack;
+      openCatches.push({ periodId: p.id, endDate: p.endDate, openCents: v.owedCents - paidBack });
       caughtCount += 1;
       firstCaughtEnd = p.endDate;
       streakAlive = false;
@@ -86,5 +90,5 @@ export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number, to
     }
   }
 
-  return { caughtCents, recoveredCents, openCents, caughtCount, checkedCount, cleanStreak, firstCaughtEnd };
+  return { caughtCents, recoveredCents, openCents, caughtCount, checkedCount, cleanStreak, firstCaughtEnd, openCatches };
 }
