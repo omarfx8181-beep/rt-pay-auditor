@@ -26,7 +26,7 @@ import { buildYearCsv, yearCsvName } from "./lib/csv.ts";
 import { scanRowsToDrafts, setScanModel } from "./lib/scan.ts";
 import { db, setCurrentPeriodId } from "./db/db.ts";
 import { EMPTY_IDENTITY, type EmailIdentity } from "./lib/hrEmail.ts";
-import { TabBar, UndoToast, type Tab } from "./ui/kit.tsx";
+import { BrandMark, TabBar, UndoToast, type Tab } from "./ui/kit.tsx";
 import Home from "./screens/Home.tsx";
 import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
@@ -188,7 +188,9 @@ export default function App() {
     return (
       <div className="grid min-h-screen place-items-center">
         <div className="max-w-sm px-6 text-center">
-          <h1 className="text-large-title tracking-tight">RT Pay</h1>
+          <h1 className="text-large-title">
+            <BrandMark />
+          </h1>
           <p className="mt-2 text-subhead text-ink-dim">Know what the check should say — before it lands.</p>
           {dbError !== "" && (
             <p className="mt-4 text-sm text-neg">
@@ -760,7 +762,7 @@ function PeriodWorkspace({
   return (
     // print:hidden — printing is reserved for the proof packet, which
     // portals outside this shell and prints alone.
-    <div className="mx-auto min-h-screen w-full max-w-2xl px-5 pb-28 pt-[max(20px,env(safe-area-inset-top))] print:hidden md:max-w-5xl md:pb-12">
+    <div className="mx-auto min-h-screen w-full max-w-2xl pb-28 pl-[max(20px,env(safe-area-inset-left))] pr-[max(20px,env(safe-area-inset-right))] pt-[max(20px,env(safe-area-inset-top))] print:hidden md:max-w-5xl md:pb-12">
       <TabBar tabs={TABS} active={tab} onSelect={selectTab} />
 
       <main key={tab} className="page-enter md:mt-5">

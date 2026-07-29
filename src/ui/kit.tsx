@@ -13,6 +13,18 @@ export function Eyebrow({ children, accent, className = "" }: { children: ReactN
   return <div className={`eyebrow ${accent ? "text-accent" : ""} ${className}`}>{children}</div>;
 }
 
+/**
+ * The serif "RT." mark from the home-screen icon — icon → launch → app
+ * should feel like one object. System serif; the period is terracotta.
+ */
+export function BrandMark({ className = "" }: { className?: string }) {
+  return (
+    <span className={`tracking-tight ${className}`} style={{ fontFamily: "'New York', Georgia, 'Times New Roman', serif" }}>
+      RT<span className="text-accent">.</span>
+    </span>
+  );
+}
+
 export function Field({
   label,
   value,
@@ -210,7 +222,7 @@ export function Sheet({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-surface-card px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(20,17,15,0.18)]"
+            className="fixed inset-x-0 bottom-0 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] z-50 mx-auto max-h-[88dvh] w-full max-w-2xl overflow-y-auto rounded-t-2xl bg-surface-card px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(20,17,15,0.18)]"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -243,7 +255,10 @@ export interface Tab {
 export function TabBar({ tabs, active, onSelect }: { tabs: Tab[]; active: string; onSelect: (id: string, index: number) => void }) {
   return (
     <>
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-line bg-surface-bg/85 backdrop-blur-lg md:hidden">
+      <nav
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-surface-line bg-surface-bg/85 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] backdrop-blur-lg md:hidden"
+      >
         <div className="mx-auto flex max-w-2xl items-stretch justify-around px-2 pb-[env(safe-area-inset-bottom)]">
           {tabs.map(({ id, label, Icon }, i) => {
             const isActive = active === id;

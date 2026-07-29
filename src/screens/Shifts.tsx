@@ -418,6 +418,9 @@ export default function Shifts({
       {shifts.length === 0 ? (
         <Card>
           <p className="text-body">No shifts yet.</p>
+          <p className="mt-1 text-footnote tabular-nums text-ink-dim">
+            Scan your schedule up top, or add the first one by hand.
+          </p>
           <button onClick={addShift} className="btn btn-primary pressable mt-4">
             <Plus size={16} /> Add a shift
           </button>

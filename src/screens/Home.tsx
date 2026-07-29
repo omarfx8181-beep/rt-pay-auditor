@@ -213,15 +213,20 @@ function WhyDifferent({ record, periods }: { record: PayPeriod; periods: PayPeri
 }
 
 /**
- * Restrained count-up for the hero number (V3 §3.4): 0 → value on first
- * mount, previous → next on changes. Honors prefers-reduced-motion.
+ * Restrained count-up for the hero number (V3 §3.4). The 0 → value
+ * fanfare plays only the FIRST time a period is ever shown — Home
+ * remounts on every tab/period switch, and repeating it dulled the
+ * real moments. Re-entries animate previous → next.
  */
-function useCountUp(targetCents: number, ms = 600): number {
-  const [value, setValue] = useState(targetCents);
-  const prev = useRef<number | null>(null);
+const lastShownCents = new Map<string, number>();
+
+function useCountUp(memoryKey: string, targetCents: number, ms = 600): number {
+  const [value, setValue] = useState(() => lastShownCents.get(memoryKey) ?? targetCents);
+  const prev = useRef<number | null>(lastShownCents.get(memoryKey) ?? null);
   useEffect(() => {
     const from = prev.current ?? 0;
     prev.current = targetCents;
+    lastShownCents.set(memoryKey, targetCents);
     if (from === targetCents || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setValue(targetCents);
       return;
@@ -461,7 +466,7 @@ export default function Home({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [showGross, setShowGross] = useState(false);
-  const heroCents = useCountUp(showGross ? period.grossCents : net.netCents);
+  const heroCents = useCountUp(record.id, showGross ? period.grossCents : net.netCents);
   const empty = shifts.length === 0 && period.leaveHours === 0;
 
   // The payday ritual: has a payday passed whose check was never
@@ -543,6 +548,9 @@ export default function Home({
       {empty ? (
         <Card>
           <p className="text-body">No shifts yet — add them to see what this check should pay.</p>
+          <p className="mt-1 text-footnote tabular-nums text-ink-dim">
+            This check covers {periodLabel(record.startDate, record.endDate)} · payday {dayLabel(payday)}
+          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <button onClick={onGoToShifts} className="btn btn-primary pressable">
               <ScanLine size={16} /> Scan schedule
