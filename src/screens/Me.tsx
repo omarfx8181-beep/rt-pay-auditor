@@ -609,7 +609,7 @@ export default function Me({
 
   return (
     <div className="space-y-3">
-      <h1 className="text-large-title tracking-tight">Me</h1>
+      <h1 className="text-large-title">Me</h1>
 
       {/* ---- role & employer (from the preset) + the one number that matters ---- */}
       <Anchor id="me-rate" flash={flash === "rate"}>

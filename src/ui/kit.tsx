@@ -58,9 +58,20 @@ export function Field({
 
 /* ---------------- surfaces ---------------- */
 
-export function Card({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
+export function Card({
+  title,
+  children,
+  quiet,
+  className = "",
+}: {
+  title?: string;
+  children: ReactNode;
+  /** Ambient tier — transparent on the paper; white stays for money. */
+  quiet?: boolean;
+  className?: string;
+}) {
   return (
-    <section className={`card p-4 sm:p-5 ${className}`}>
+    <section className={`${quiet ? "card-quiet" : "card"} p-4 sm:p-5 ${className}`}>
       {title ? <Eyebrow className="mb-3">{title}</Eyebrow> : null}
       {children}
     </section>
@@ -83,7 +94,7 @@ export function CalloutCard({
   children: ReactNode;
   className?: string;
 }) {
-  return <section className={`rounded-2xl border p-4 shadow-card ${CALLOUT_TONES[tone]} ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border p-4 ${CALLOUT_TONES[tone]} ${className}`}>{children}</section>;
 }
 
 /** Card whose content hides behind its header — the antidote to number soup. */
@@ -103,7 +114,7 @@ export function Disclosure({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className="card p-4">
+    <section className="card-quiet p-4">
       <button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -115,8 +126,8 @@ export function Disclosure({
         </span>
         <ChevronDown size={14} className={`shrink-0 text-ink-dim transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {!open && hint ? <p className="mt-1.5 text-[11px] text-ink-dim">{hint}</p> : null}
-      {open && <div className="reveal mt-3">{children}</div>}
+      {!open && hint ? <p className="mt-1 text-[11px] text-ink-dim">{hint}</p> : null}
+      {open && <div className="reveal mt-4">{children}</div>}
     </section>
   );
 }
@@ -154,8 +165,8 @@ export function StatTile({
   return (
     <div className="card p-4">
       <Eyebrow>{label}</Eyebrow>
-      <div className={`mt-1 font-display text-2xl font-semibold leading-none tabular-nums ${STAT_TONES[tone]}`}>{value}</div>
-      {sub ? <div className="mt-1.5 text-[11px] text-ink-dim">{sub}</div> : null}
+      <div className={`mt-2 font-display text-2xl font-semibold leading-none tabular-nums ${STAT_TONES[tone]}`}>{value}</div>
+      {sub ? <div className="mt-1 text-[11px] text-ink-dim">{sub}</div> : null}
     </div>
   );
 }
@@ -174,7 +185,7 @@ export function UndoToast({
 }) {
   return (
     <div className="fixed inset-x-4 bottom-20 z-40 mx-auto max-w-md md:bottom-6">
-      <div className="card flex items-center justify-between gap-3 p-3">
+      <div className="card flex items-center justify-between gap-3 p-3 shadow-[0_8px_24px_rgba(20,17,15,0.18)]">
         <span className="min-w-0 flex-1 text-subhead">{message}</span>
         <button onClick={onUndo} className="btn btn-primary pressable min-h-9 px-3 py-1.5 text-xs">
           Undo

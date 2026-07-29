@@ -124,12 +124,15 @@
   --text-hero-num: 40px;
   --text-hero-num--line-height: 44px;
   --text-hero-num--font-weight: 700;
+  --text-hero-num--letter-spacing: -0.02em;
   --text-large-title: 34px;
   --text-large-title--line-height: 40px;
   --text-large-title--font-weight: 700;
+  --text-large-title--letter-spacing: -0.02em;
   --text-title-2: 22px;
   --text-title-2--line-height: 28px;
   --text-title-2--font-weight: 600;
+  --text-title-2--letter-spacing: -0.01em;
   --text-headline: 17px;
   --text-headline--line-height: 22px;
   --text-headline--font-weight: 600;
@@ -146,7 +149,8 @@
   /* Cards: 20px radius (§3.3) — rounded-2xl everywhere cards live. */
   --radius-2xl: 20px;
 
-  /* The only shadow — Knockdown's near-flat ink-tinted pair. */
+  /* Hairlines separate, shadows float: resting cards are border-only.
+     This near-flat pair remains for small floating knobs (toggles). */
   --shadow-card: 0 1px 2px rgba(20, 17, 15, 0.04), 0 1px 0 rgba(20, 17, 15, 0.03);
 
   /* On-hero money colors = the espresso-mode pos/neg (tokens.md §2);
@@ -169,9 +173,8 @@
     @apply bg-surface-bg text-ink font-sans antialiased;
     /* Editorial-light paper washes (Knockdown); dark goes flat. */
     background-image:
-      radial-gradient(circle at 12% 8%, rgb(var(--accent) / 0.06), transparent 40%),
-      radial-gradient(circle at 88% 92%, rgb(var(--pos) / 0.06), transparent 40%);
-    background-attachment: fixed;
+      radial-gradient(circle at 12% 8%, rgb(var(--accent) / 0.04), transparent 40%),
+      radial-gradient(circle at 88% 92%, rgb(var(--pos) / 0.04), transparent 40%);
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
     text-rendering: optimizeLegibility;
@@ -200,11 +203,16 @@
    ============================================================ */
 @layer components {
   .card {
-    @apply rounded-2xl border border-surface-line bg-surface-card shadow-card;
+    @apply rounded-2xl border border-surface-line bg-surface-card;
+  }
+  /* Quiet tier — ambient cards (disclosures, tickers, scoreboards) sit
+     on the paper itself; white is reserved for money-bearing surfaces. */
+  .card-quiet {
+    @apply rounded-2xl border border-surface-line bg-transparent;
   }
   /* Status hero = Knockdown's ink block carrying the V3 big number. */
   .hero {
-    @apply rounded-2xl p-5 shadow-card;
+    @apply rounded-2xl p-5;
     background: rgb(var(--hero-bg));
     color: rgb(var(--hero-fg));
   }

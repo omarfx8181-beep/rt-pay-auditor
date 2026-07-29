@@ -461,7 +461,7 @@ export default function Shifts({
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-large-title tracking-tight">Shifts</h1>
+          <h1 className="text-large-title">Shifts</h1>
           <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
         </div>
         {shifts.some((s) => s.date !== "") && (
