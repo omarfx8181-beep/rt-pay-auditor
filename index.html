@@ -12,7 +12,21 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="RT Pay" />
-    <script type="module" crossorigin src="/rt-pay-auditor/assets/index-8NSrvjaO.js"></script>
+    <!-- paint the right paper BEFORE any JS/CSS loads — no cream flash on dark launches -->
+    <style>
+      html { background: #f4efe6; }
+      @media (prefers-color-scheme: dark) { html { background: #171310; } }
+      html[data-mode="dark"] { background: #171310; }
+      html[data-mode="light"] { background: #f4efe6; }
+    </style>
+    <script>
+      try {
+        var m = localStorage.getItem("rtpay-mode");
+        if (m === "dark" || m === "light") document.documentElement.dataset.mode = m;
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/rt-pay-auditor/assets/index-BJnrl40I.js"></script>
+    <link rel="modulepreload" crossorigin href="/rt-pay-auditor/assets/jsx-runtime-D8nDyRPw.js">
     <link rel="stylesheet" crossorigin href="/rt-pay-auditor/assets/index-CuWTi-Q3.css">
   <link rel="manifest" href="/rt-pay-auditor/manifest.webmanifest"></head>
   <body>
