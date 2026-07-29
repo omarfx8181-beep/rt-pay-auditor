@@ -12,6 +12,19 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="RT Pay" />
+    <!-- paint the right paper BEFORE any JS/CSS loads — no cream flash on dark launches -->
+    <style>
+      html { background: #f4efe6; }
+      @media (prefers-color-scheme: dark) { html { background: #171310; } }
+      html[data-mode="dark"] { background: #171310; }
+      html[data-mode="light"] { background: #f4efe6; }
+    </style>
+    <script>
+      try {
+        var m = localStorage.getItem("rtpay-mode");
+        if (m === "dark" || m === "light") document.documentElement.dataset.mode = m;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

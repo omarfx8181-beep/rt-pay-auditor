@@ -3,7 +3,7 @@ import { describe, expect, test } from "vitest";
 import { DEFAULT_TIERS } from "./engine.ts";
 import { ACTUAL_SEED, DEFAULT_CFG_DRAFT, DEMO_SHIFTS } from "./draft.ts";
 import type { PayPeriod } from "./periods.ts";
-import { caughtSummary, periodVerdict } from "./caught.ts";
+import { caughtSummary, milestones, periodVerdict } from "./caught.ts";
 
 let seq = 0;
 const period = (endDate: string, over: Partial<PayPeriod> = {}): PayPeriod => ({
@@ -77,6 +77,19 @@ describe("caughtSummary", () => {
     expect(s.caughtCents).toBe(0);
     expect(s.checkedCount).toBe(1);
     expect(s.cleanStreak).toBe(1);
+  });
+
+  test("milestones derive from the summary — never stored, never for breathing", () => {
+    const none = caughtSummary([period("2026-07-05")], 100); // one green check
+    expect(milestones(none)).toEqual([]);
+    const caught = caughtSummary(
+      [period("2026-06-21", { actual: SHORTED, corrections: [CORRECTION] }), period("2026-07-05")],
+      100,
+    );
+    const ids = milestones(caught).map((m) => m.id);
+    expect(ids).toContain("first-catch");
+    expect(ids).toContain("recovered");
+    expect(ids).not.toContain("streak-5");
   });
 
   test("an amber (needs-a-look) check pauses the streak without counting as caught", () => {

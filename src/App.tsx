@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarClock, CircleUserRound, House, Target } from "lucide-react";
 import { computeNet, computePeriod, type BonusTier } from "./lib/engine.ts";
@@ -33,8 +33,9 @@ import type { WhatIfDraft } from "./screens/Paycheck.tsx";
 import { FAIRVIEW_RT_PRESET, PRESETS } from "./lib/presets.ts";
 import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
 import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
-import Onboarding from "./screens/Onboarding.tsx";
-import Tour from "./screens/Tour.tsx";
+// Rare, heavy screens load on demand — the biweekly hot path stays lean.
+const Onboarding = lazy(() => import("./screens/Onboarding.tsx"));
+const Tour = lazy(() => import("./screens/Tour.tsx"));
 import Goals from "./screens/Goals.tsx";
 import { parseGoals, type GoalsSetting } from "./lib/goals.ts";
 import { parsePto, type PtoConfig } from "./lib/pto.ts";
@@ -145,11 +146,26 @@ export default function App() {
     void setCurrentPeriodId(id);
   };
 
-  // Reflect the chosen appearance on <html>; "system" removes the override.
+  // Reflect the chosen appearance on <html>; "system" removes the
+  // override. A localStorage mirror lets index.html stamp the mode
+  // BEFORE first paint (no cream flash for dark-mode users), and the
+  // theme-color metas follow the override so the iOS status bar
+  // matches the app instead of the system.
   const appearance = (appearanceRow?.value as AppearanceMode) || "system";
   useEffect(() => {
-    if (appearance === "system") delete document.documentElement.dataset.mode;
-    else document.documentElement.dataset.mode = appearance;
+    if (appearance === "system") {
+      delete document.documentElement.dataset.mode;
+      localStorage.removeItem("rtpay-mode");
+    } else {
+      document.documentElement.dataset.mode = appearance;
+      localStorage.setItem("rtpay-mode", appearance);
+    }
+    const metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+    for (const meta of metas) {
+      const dark = meta.media.includes("dark");
+      if (appearance === "system") meta.content = dark ? "#171310" : "#f4efe6";
+      else meta.content = appearance === "dark" ? "#171310" : "#f4efe6";
+    }
   }, [appearance]);
 
   if (
@@ -220,6 +236,7 @@ export default function App() {
   // First run (and after updates until dismissed): the guided setup.
   if (onboardingRow?.value !== "done") {
     return (
+      <Suspense fallback={null}>
       <Onboarding
         initialStep={Number.parseInt(onboardingRow?.value ?? "0", 10) || 0}
         baseRate={current.cfgDraft.baseRate}
@@ -244,6 +261,7 @@ export default function App() {
           void db.settings.put({ key: "lastSeenVersion", value: __APP_VERSION__ });
         }}
       />
+      </Suspense>
     );
   }
 
@@ -328,7 +346,11 @@ export default function App() {
           </button>
         </div>
       )}
-      {tourStep !== null && <Tour step={tourStep} onStep={setTourStep} onDone={endTour} setTab={setTab} />}
+      {tourStep !== null && (
+        <Suspense fallback={null}>
+          <Tour step={tourStep} onStep={setTourStep} onDone={endTour} setTab={setTab} />
+        </Suspense>
+      )}
       {release && tourStep === null && (
         <WhatsNewSheet
           release={release}

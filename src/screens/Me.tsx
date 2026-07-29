@@ -7,7 +7,7 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -35,11 +35,12 @@ import { planStubImports, scannedStubActual, scanStubFiles, stubStartDate, type 
 import { summaryToAnchor } from "../lib/scanRouting.ts";
 import { dayLabel, fmtCents } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow } from "../ui/kit.tsx";
-import HowToCard from "./HowTo.tsx";
+const HowToCard = lazy(() => import("./HowTo.tsx"));
 import { PtoCard, W2Card } from "./BankAndW2.tsx";
 import TierScanPanel from "./TierScanPanel.tsx";
-import ShareRulesPanel from "./ShareRules.tsx";
-import Wrapped from "./Wrapped.tsx";
+// carries qrcode + jsQR — never in the first-load bundle
+const ShareRulesPanel = lazy(() => import("./ShareRules.tsx"));
+const Wrapped = lazy(() => import("./Wrapped.tsx"));
 import { buildWrapped } from "../lib/wrapped.ts";
 import type { PtoConfig } from "../lib/pto.ts";
 import { EMPTY_W2, type W2Typed } from "../lib/w2.ts";
@@ -571,7 +572,9 @@ export default function Me({
         <p className="mt-3 text-footnote text-ink-dim">Everything you enter stays on this device.</p>
       </Card>
 
-      <HowToCard onStartTour={onStartTour} onReplayTour={onReplayTour} />
+      <Suspense fallback={null}>
+        <HowToCard onStartTour={onStartTour} onReplayTour={onReplayTour} />
+      </Suspense>
 
       {/* ---- pay rules, in human rows ---- */}
       <div className="pt-3">
@@ -1082,6 +1085,7 @@ export default function Me({
           </Disclosure>
           </div>
 
+          <Suspense fallback={null}>
           <ShareRulesPanel
             name={`${FAIRVIEW_RT_PRESET.facility.name} — ${FAIRVIEW_RT_PRESET.role.shortName}`}
             cfgDraft={cfgDraft}
@@ -1092,6 +1096,7 @@ export default function Me({
               setTiers(() => sharedTiers);
             }}
           />
+          </Suspense>
 
           <div className="flex items-center justify-between gap-3 pt-1">
             <p className="text-sm text-ink-dim">Pay periods, newest first.</p>
@@ -1176,7 +1181,9 @@ export default function Me({
       <AboutCard periodCount={periods.length} />
 
       {wrappedOpen && wrapped && (
-        <Wrapped stats={wrapped} unit548Cents={unit548Cents} onClose={() => setWrappedOpen(false)} />
+        <Suspense fallback={null}>
+          <Wrapped stats={wrapped} unit548Cents={unit548Cents} onClose={() => setWrappedOpen(false)} />
+        </Suspense>
       )}
     </div>
   );

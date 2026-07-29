@@ -4,7 +4,7 @@
  * you're owed and hands you the HR email, amber asks one guided
  * question. The line-by-line table sits below in plain language.
  */
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BadgeCheck, CircleAlert, FileDown, Mail, Plus, Trash2 } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num, todayIso, uid } from "../lib/draft.ts";
@@ -16,7 +16,7 @@ import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
 import { type CorrectionDraft, type PayPeriod, type YtdAnchor } from "../lib/periods.ts";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
-import ProofPacket from "./ProofPacket.tsx";
+const ProofPacket = lazy(() => import("./ProofPacket.tsx"));
 
 /**
  * The once-per-check burst — twelve bits of terracotta and green, 700ms,
@@ -489,6 +489,7 @@ export default function Audit({
         </button>
       )}
       {proofOpen && (
+        <Suspense fallback={null}>
         <ProofPacket
           rows={rows}
           actual={actual}
@@ -501,6 +502,7 @@ export default function Audit({
           identity={identity}
           onClose={() => setProofOpen(false)}
         />
+        </Suspense>
       )}
 
       {!recordOnly && verdict.kind !== "corrected" && discrepancies.length > 0 && (

@@ -39,6 +39,9 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ["**/*.{js,css,html,woff2,png,svg}"],
+          // Non-latin Inter subsets stay fetchable online but out of the
+          // precache — they were ~40% of it and this app writes English.
+          globIgnores: ["**/inter-*cyrillic*", "**/inter-*greek*", "**/inter-*vietnamese*"],
         },
       }),
     ],

@@ -92,3 +92,25 @@ export function caughtSummary(periods: PayPeriod[], closeEnoughCents: number, to
 
   return { caughtCents, recoveredCents, openCents, caughtCount, checkedCount, cleanStreak, firstCaughtEnd, openCatches };
 }
+
+export interface Milestone {
+  id: string;
+  label: string;
+}
+
+/**
+ * Quiet, earned records — derived from the summary like everything
+ * else, never a stored counter. No points, no badges-for-breathing:
+ * each one marks something a paycheck watchdog can be proud of.
+ */
+export function milestones(s: CaughtSummary): Milestone[] {
+  const earned: Milestone[] = [];
+  if (s.caughtCount >= 1) earned.push({ id: "first-catch", label: "First catch — the app paid for itself" });
+  if (s.caughtCents >= 50000) earned.push({ id: "caught-500", label: "$500+ caught" });
+  if (s.recoveredCents >= 25000) earned.push({ id: "recovered", label: "Money clawed back" });
+  if (s.cleanStreak >= 5) earned.push({ id: "streak-5", label: "5 clean checks straight" });
+  if (s.cleanStreak >= 10) earned.push({ id: "streak-10", label: "10 clean checks straight" });
+  if (s.checkedCount >= 10) earned.push({ id: "checked-10", label: "10 checks verified" });
+  if (s.checkedCount >= 26) earned.push({ id: "checked-26", label: "A full year verified" });
+  return earned;
+}

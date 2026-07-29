@@ -15,7 +15,7 @@ import type { EmailIdentity } from "../lib/hrEmail.ts";
 import { periodLabel, type CorrectionDraft, type PayPeriod, type YtdAnchor, type YtdRollup } from "../lib/periods.ts";
 import { daysUntil, paydayFor } from "../lib/payday.ts";
 import { checksWaiting } from "../lib/attention.ts";
-import { caughtSummary, periodVerdict } from "../lib/caught.ts";
+import { caughtSummary, milestones, periodVerdict } from "../lib/caught.ts";
 import { checkDiff } from "../lib/checkDiff.ts";
 import { findLiveShift, todayShiftWithoutTimes, type OnNow } from "../lib/shiftClock.ts";
 import { shiftWorths } from "../lib/worth.ts";
@@ -150,6 +150,15 @@ function TrophyCase({
         <p className={`text-footnote text-pos ${s.caughtCents > 0 ? "mt-1.5" : "mt-1"}`}>
           {s.cleanStreak} clean checks in a row — they know you're watching.
         </p>
+      )}
+      {milestones(s).length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {milestones(s).map((m) => (
+            <span key={m.id} className="rounded-full bg-accent/10 px-2 py-0.5 text-caption text-accent">
+              {m.label}
+            </span>
+          ))}
+        </div>
       )}
     </Card>
   );

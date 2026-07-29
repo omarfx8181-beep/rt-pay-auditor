@@ -14,6 +14,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "1.2.0",
+    date: "July 2026",
+    title: "Faster, smoother, and keeping score",
+    points: [
+      "The app opens noticeably faster — rarely-used screens now load only when you need them.",
+      "No more white flash launching in dark mode, and the iPhone status bar finally matches your chosen look.",
+      "The scoreboard earns records: first catch, money clawed back, 5 clean checks straight, a full year verified.",
+    ],
+  },
+  {
     version: "1.1.0",
     date: "July 2026",
     title: "Everything connects",

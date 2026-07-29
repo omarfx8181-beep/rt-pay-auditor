@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — July 2026
+
+Faster, smoother, keeping score.
+
+- **Code-splitting**: the main bundle dropped 787→616 kB (gzip 253→192) — the QR share screen alone carried 158 kB of QR libraries that now load only when opened. Wrapped, the tour, onboarding, the how-to, and the PDF record are all on-demand too.
+- **Zero-flash launch**: the page paints the right paper color before any code loads (no cream flash for dark-mode users), and the iOS status bar follows the in-app appearance override, not just the system.
+- **Slimmer offline cache**: non-latin font subsets left the precache (~40% of it) — still fetchable online, never pre-downloaded.
+- **Milestone records** on the scoreboard: first catch, $500+ caught, money clawed back, 5/10 clean checks straight, 10 checks verified, a full year verified. Derived from the same math as everything else — never a stored counter.
+
 ## 1.1.0 — July 2026
 
 Everything connects — the features stop being islands.
