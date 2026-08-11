@@ -69,6 +69,27 @@ describe("estimateW2 — box math from the year's own data", () => {
     expect(est.totalsOnlyCount).toBe(0);
   });
 
+  test("empty catch-up windows never move a box", () => {
+    // The grid rolls empty periods forward. Each still carries a full
+    // period of Section-125 deductions and a negative engine withholding,
+    // so leaving them in took ~$419 off Box 1 apiece — on a document
+    // Omar checks against the real W-2.
+    const alone = estimateW2([demoPeriod()], "2026")!;
+    const withGaps = estimateW2(
+      [
+        demoPeriod(),
+        demoPeriod({ id: "e1", startDate: "2026-07-06", endDate: "2026-07-19", shifts: [], leave: [], actual: {} }),
+        demoPeriod({ id: "e2", startDate: "2026-07-20", endDate: "2026-08-02", shifts: [], leave: [], actual: {} }),
+      ],
+      "2026",
+    )!;
+    expect(withGaps.box1Cents).toBe(alone.box1Cents);
+    expect(withGaps.box2Cents).toBe(alone.box2Cents);
+    expect(withGaps.box3Cents).toBe(alone.box3Cents);
+    expect(withGaps.box17Cents).toBe(alone.box17Cents);
+    expect(withGaps.periodCount).toBe(1); // an empty window is not a paycheck
+  });
+
   test("corrections add wages to every box's base; empty year → null", () => {
     const withCorr = demoPeriod({ corrections: [{ id: "c", payDate: "2026-07-15", gross: "250", net: "180", note: "", updatedAt: 1 }] });
     const est = estimateW2([withCorr], "2026")!;

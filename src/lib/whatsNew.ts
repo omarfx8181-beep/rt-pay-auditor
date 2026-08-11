@@ -14,7 +14,9 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    version: "1.3.0",
+    // Carries the 1.3.0 feature list: releaseToShow matches the running
+    // version exactly, and the patch landed before anyone opened 1.3.0.
+    version: "1.3.1",
     date: "August 2026",
     title: "The watchdog follows through",
     points: [

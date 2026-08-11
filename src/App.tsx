@@ -10,6 +10,7 @@ import {
   buildBackup,
   mergeBackup,
   mergeYtdAnchorSettings,
+  gridWindowFor,
   nextPeriodRange,
   overlappingEnds,
   parseBackup,
@@ -654,10 +655,21 @@ function PeriodWorkspace({
     }
     const latest = latestPeriod();
     const ranges = periodRangesThrough(latest.endDate, today);
-    if (ranges.length === 0) return false;
-    const fresh = ranges.map((range) => emptyPeriod(latest, range));
-    await db.periods.bulkAdd(fresh);
-    await setCurrentPeriodId(fresh[fresh.length - 1].id);
+    if (ranges.length > 0) {
+      const fresh = ranges.map((range) => emptyPeriod(latest, range));
+      await db.periods.bulkAdd(fresh);
+      await setCurrentPeriodId(fresh[fresh.length - 1].id);
+      return true;
+    }
+    // Nothing to roll forward: today sits in a HOLE below the newest
+    // period. A schedule scan files only the blocks it saw, so a skipped
+    // fortnight leaves a real gap — fill just that window rather than
+    // swallowing the tap.
+    const gap = gridWindowFor(latest.startDate, today);
+    if (gap === null || periodCovering(periods, gap.endDate) !== null) return false;
+    const one = emptyPeriod(latest, gap);
+    await db.periods.add(one);
+    await setCurrentPeriodId(one.id);
     return true;
   };
 

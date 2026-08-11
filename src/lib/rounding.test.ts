@@ -212,3 +212,45 @@ describe("roundingLoss on a real scan payload", () => {
     });
   });
 });
+
+describe("roundingLoss — the second-pass review's findings", () => {
+  // A cost-center transfer, a float to another unit, or two shifts in a
+  // day all print a SECOND punch pair with no break between them. Payroll
+  // still auto-deducts the meal, so keying "was the meal punched?" off
+  // pair count billed the contract term as a shave.
+  test("back-to-back segments are one stretch of work — the meal still comes off", () => {
+    const transfer = day("2026-06-24", 12, ["06:45", "12:00"], ["12:00", "19:15"]); // 12.5 h clock, no break
+    expect(roundingLoss([transfer], CFG)).toBeNull(); // 12.5 − 0.5 meal = 12.00 paid: exact
+  });
+
+  test("a real punched break is still recognised as one", () => {
+    // Same span, but 30 minutes actually off the clock — the meal is
+    // already out of the punched total and must NOT come off twice.
+    const punchedBreak = day("2026-06-25", 12, ["06:45", "12:00"], ["12:30", "19:15"]);
+    expect(roundingLoss([punchedBreak], CFG)).toBeNull(); // 12.00 on the clock, 12.00 paid
+  });
+
+  test("a shave on a transfer day is measured against the meal-deducted span", () => {
+    const shaved = day("2026-06-26", 11.75, ["06:45", "12:00"], ["12:00", "19:15"]);
+    const r = roundingLoss([shaved], CFG);
+    expect(r?.minutes).toBe(15); // 12.5 − 0.5 = 12.00 worked vs 11.75 paid
+    expect(r?.unexplained).toEqual([]);
+  });
+
+  // The 16-hour pickup — the app's origin story. Kronos takes two meals
+  // on a double, the model takes one, so the whole gap lands in
+  // `unexplained` and the old noise gate returned null: total silence on
+  // the one day worth questioning.
+  test("a day too far off to be rounding is reported, not swallowed", () => {
+    const double = day("2026-06-28", 15.5, ["06:45", "23:15"]); // 16.5 clock − 0.5 = 16.00 vs 15.50
+    const r = roundingLoss([double], CFG);
+    expect(r).not.toBeNull();
+    expect(r?.unexplained).toEqual(["2026-06-28"]);
+    expect(r?.minutes).toBe(0); // never PRICED as rounding — just named
+    expect(r?.estCents).toBe(0);
+  });
+
+  test("still silent when there is genuinely nothing to say", () => {
+    expect(roundingLoss([day("2026-06-29", 12, ["06:45", "19:15"])], CFG)).toBeNull();
+  });
+});

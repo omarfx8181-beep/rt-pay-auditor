@@ -58,10 +58,6 @@ function OvertimeMeter({ period, cfg }: { period: PeriodResult; cfg: EngineConfi
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Field for field how it was handed over — nothing typed into it yet. */
-const untouched = (s: ShiftDraft, seed: ShiftDraft): boolean =>
-  (Object.keys(seed) as Array<keyof ShiftDraft>).every((k) => s[k] === seed[k]);
-
 /**
  * Kronos rounds punches to the quarter hour, and the shaved minutes
  * never reach the stub — no earnings line to audit them against. So
@@ -77,13 +73,20 @@ function RoundingNote({ days, cfg }: { days: TimecardDay[]; cfg: EngineConfig })
   const odd = loss.unexplained.length;
   return (
     <p className="text-footnote tabular-nums text-amber">
-      Kronos rounding: −{loss.minutes} min ≈ −{fmtCents(loss.estCents)} this timecard.
-      {loss.netMinutes <= 0
-        ? " Other days paid it back — the period nets out ahead."
-        : loss.netMinutes < loss.minutes
-          ? ` Net of the days it paid up: −${loss.netMinutes} min.`
-          : ""}
-      {odd > 0 && ` ${odd} day${odd === 1 ? "" : "s"} punched too far off to be rounding — check those punches.`}
+      {loss.minutes >= 1 && (
+        <>
+          Kronos rounding: −{loss.minutes} min ≈ −{fmtCents(loss.estCents)} this timecard.
+          {loss.netMinutes <= 0
+            ? " Other days paid it back — the period nets out ahead."
+            : loss.netMinutes < loss.minutes
+              ? ` Net of the days it paid up: −${loss.netMinutes} min.`
+              : ""}{" "}
+        </>
+      )}
+      {odd > 0 &&
+        `${odd} day${odd === 1 ? "" : "s"} paid too far off the punches to be rounding — worth checking (${loss.unexplained
+          .map((d) => dayLabel(d))
+          .join(", ")}).`}
     </p>
   );
 }
@@ -374,10 +377,11 @@ export default function Shifts({
 }) {
   const [editingId, setEditingId] = useState<string | null>(initialEditId);
   // A shift the app HANDED over — the what-if's "I'm taking it", the Home
-  // Screen's "Add a shift" — counts in the engine the moment it exists.
-  // Keep the handed-over copy: closing the sheet on one still untouched
-  // drops it again, so a mis-tap never leaves 12 phantom hours in a
-  // period the check then reads as short.
+  // Screen's "Add a shift" — counts in the engine the moment it exists,
+  // so a mis-tap would otherwise leave phantom hours behind. Keep the
+  // handed-over copy so DISMISSING the sheet can take it back. Only
+  // dismissing: the shortcut hands over a complete shift (today, 12 h),
+  // and "Done" on a shift that is already right must never delete it.
   const seeded = useRef<ShiftDraft | null>(null);
   useEffect(() => {
     if (initialEditId === null) return;
@@ -386,10 +390,28 @@ export default function Shifts({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
-  const closeSheet = () => {
+  /** Any edit inside the sheet — a reverted one still counts as engaging with it. */
+  const touched = useRef(false);
+  const openSheet = (id: string) => {
+    touched.current = false;
+    setEditingId(id);
+  };
+  /** "Done" means keep it. Always — the shortcut hands over a shift that is already right. */
+  const keepSheet = () => {
+    seeded.current = null;
+    setEditingId(null);
+  };
+  /**
+   * Backdrop or ✕ = "I didn't mean to open this". A shift the APP handed
+   * over (the what-if's "I'm taking it", the Home Screen shortcut) and
+   * that was never touched goes back out with it — otherwise a mis-tap
+   * leaves 12 phantom hours inflating the check. Anything the user typed,
+   * and anything they added themselves, always stays.
+   */
+  const dismissSheet = () => {
     const seed = seeded.current;
-    if (seed !== null && seed.id === editingId) {
-      setShifts((arr) => arr.filter((s) => s.id !== seed.id || !untouched(s, seed)));
+    if (seed !== null && seed.id === editingId && !touched.current) {
+      setShifts((arr) => arr.filter((s) => s.id !== seed.id));
       seeded.current = null;
     }
     setEditingId(null);
@@ -410,13 +432,15 @@ export default function Shifts({
     return () => clearTimeout(t);
   }, [replaced]);
 
-  const setShift = (id: string, key: keyof ShiftDraft, value: string) =>
+  const setShift = (id: string, key: keyof ShiftDraft, value: string) => {
+    touched.current = true;
     setShifts((arr) => arr.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
+  };
 
   const addShift = () => {
     const fresh = blankShift();
     setShifts((arr) => [...arr, fresh]);
-    setEditingId(fresh.id); // new shift opens in the sheet, ready to fill
+    openSheet(fresh.id); // new shift opens in the sheet, ready to fill
   };
 
   // The period's shifts as a calendar file. Same UID per shift every
@@ -500,7 +524,7 @@ export default function Shifts({
         <>
           <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
             {shifts.map((s) => (
-              <ShiftRow key={s.id} s={s} worth={worths.get(s.id) ?? null} onOpen={() => setEditingId(s.id)} />
+              <ShiftRow key={s.id} s={s} worth={worths.get(s.id) ?? null} onOpen={() => openSheet(s.id)} />
             ))}
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -512,7 +536,7 @@ export default function Shifts({
         </>
       )}
 
-      <Sheet open={editing !== null} onClose={closeSheet} title={editing?.date ? dayLabel(editing.date) : "New shift"}>
+      <Sheet open={editing !== null} onClose={dismissSheet} title={editing?.date ? dayLabel(editing.date) : "New shift"}>
         {editing && (
           <ShiftSheet
             s={editing}
@@ -531,7 +555,7 @@ export default function Shifts({
               setShifts((arr) => arr.filter((x) => x.id !== editing.id));
               setEditingId(null);
             }}
-            onClose={closeSheet}
+            onClose={keepSheet}
           />
         )}
       </Sheet>

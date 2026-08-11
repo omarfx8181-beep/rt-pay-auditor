@@ -13,7 +13,7 @@
 import type { Cents } from "./engine.ts";
 import { computeNet, computePeriod } from "./engine.ts";
 import { draftToConfig, draftToLeave, draftToShift } from "./draft.ts";
-import { parseDollars, periodMoney, type PayPeriod } from "./periods.ts";
+import { isPlaceholder, parseDollars, periodMoney, type PayPeriod } from "./periods.ts";
 
 export interface W2Estimate {
   year: string;
@@ -46,6 +46,10 @@ export function estimateW2(periods: PayPeriod[], year: string): W2Estimate | nul
     correctionGrossCents: 0,
   };
   for (const p of inYear) {
+    // An empty window the grid rolled forward has no wages, but it still
+    // carries a full period of Section-125 deductions and a negative
+    // engine withholding — left in, each one quietly took ~$419 off Box 1.
+    if (isPlaceholder(p)) continue;
     const m = periodMoney(p);
     const cfg = draftToConfig(p.cfgDraft);
     const engineNet = computeNet(computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave)).grossCents, cfg);

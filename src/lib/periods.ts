@@ -125,6 +125,28 @@ export const periodRangesThrough = (
   return end >= dateStr ? ranges : [];
 };
 
+/**
+ * The biweekly window holding `dateStr`, on the same grid as
+ * `anchorStartDate`. Rolling forward can't reach a date that sits in a
+ * HOLE below the newest period — a schedule scan files only the blocks
+ * it saw, so a skipped fortnight leaves a real gap — so that window is
+ * derived arithmetically instead. Null past MAX_CATCH_UP_PERIODS in
+ * either direction: that far off is a wrong date, not a gap.
+ */
+export const gridWindowFor = (
+  anchorStartDate: string,
+  dateStr: string,
+): { startDate: string; endDate: string } | null => {
+  const day = 86_400_000;
+  const days = Math.round(
+    (new Date(dateStr + "T12:00:00").getTime() - new Date(anchorStartDate + "T12:00:00").getTime()) / day,
+  );
+  const steps = Math.floor(days / PERIOD_DAYS);
+  if (Math.abs(steps) > MAX_CATCH_UP_PERIODS) return null;
+  const startDate = addDays(anchorStartDate, steps * PERIOD_DAYS);
+  return { startDate, endDate: addDays(startDate, PERIOD_DAYS - 1) };
+};
+
 /* ---------------- other income (non-Fairview) ---------------- */
 
 export interface OtherIncomeDraft {
@@ -213,25 +235,27 @@ export function correctionTotals(p: PayPeriod): { grossCents: Cents; netCents: C
   return { grossCents, netCents };
 }
 
+/**
+ * A period holding NOTHING — no shifts, no leave, not one stub line — is
+ * a window the grid rolled forward, not a paycheck. The engine still
+ * prices one (imputed life posts per period, and the fixed deductions
+ * come out against no pay, so it reads +$1.81 gross and MINUS $403.20
+ * take-home), so anything summing periods must skip these or it invents
+ * money nobody was paid or docked. Corrections are real money and count
+ * even here, so callers add them back separately.
+ */
+export const isPlaceholder = (p: PayPeriod): boolean =>
+  p.shifts.length === 0 &&
+  (p.leave?.length ?? 0) === 0 &&
+  !Object.values(p.actual ?? {}).some((v) => (v ?? "").trim() !== "");
+
 export function periodMoney(p: PayPeriod): PeriodMoney {
   const cfg = draftToConfig(p.cfgDraft);
   const period = computePeriod(p.shifts.map(draftToShift), cfg, (p.leave ?? []).map(draftToLeave));
   const net = computeNet(period.grossCents, cfg);
   const actualGross = parseDollars(p.actual?.gross);
   const actualNet = parseDollars(p.actual?.net);
-  /**
-   * A period holding NOTHING — no shifts, no leave, not one stub line —
-   * is a placeholder the grid rolled forward, not a paycheck. The engine
-   * still prices one (imputed life posts per period, and the fixed
-   * deductions come out against no pay, so it reads +$1.81 gross and
-   * MINUS $403.20 take-home), and summing that into the year would
-   * invent money nobody was paid or docked. Corrections are real money
-   * and still count, so they ride below.
-   */
-  const placeholder =
-    p.shifts.length === 0 &&
-    (p.leave?.length ?? 0) === 0 &&
-    !Object.values(p.actual ?? {}).some((v) => (v ?? "").trim() !== "");
+  const placeholder = isPlaceholder(p);
   const hasLineDetail =
     p.shifts.length > 0 ||
     (p.leave?.length ?? 0) > 0 ||

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.1 — August 2026
+
+Five defects a second adversarial review found in 1.3.0, all fixed before anyone met them.
+
+- **"Add a shift" no longer deletes the shift it just made.** The Home Screen shortcut hands over a complete shift (today, 12 h); an over-eager phantom-shift guard treated "accepted the defaults" as "never touched it" and removed it on Done — after it had already been saved. Done now always keeps; only dismissing the sheet (✕ or backdrop) can take back an untouched hand-off, and any edit — even one you undo — marks it yours.
+- **The W-2 box check no longer loses ~$419 of Box 1 per empty period.** An empty window carries no wages but a full period of Section-125 deductions, so each one quietly shrank Boxes 1, 2, 3, 5 and 17. Placeholder periods are now skipped there, the same rule the year totals already use.
+- **Kronos rounding: a transfer day is no longer billed as a shave.** Whether the meal was punched or auto-deducted is now decided by a real gap between segments, not by how many punch pairs the day has — a cost-center transfer or a float prints two back-to-back pairs with the meal still auto-deducted, and that was reading as ~$26 of stolen time.
+- **Rounding no longer goes silent on the biggest anomalies.** Days too far off to *be* rounding were held back until some other day produced a priced loss, so a 16-hour double whose whole gap was unexplained showed nothing at all. Anomalies now speak for themselves, by date, without being priced as rounding.
+- **The dispute clock can be started after the fact.** The confirmation only existed in the moment the draft was opened, so sending from Mail after a cold relaunch — or from a laptop — logged nothing and the follow-up never appeared. A red check with no send logged now offers "Already emailed payroll about this?".
+- The Add-a-shift shortcut also fills a *gap* in the pay-period grid instead of silently doing nothing when today sits in a fortnight a schedule scan skipped.
+
 ## 1.3.0 — August 2026
 
 The watchdog follows through — catching a shortfall was never the hard part; chasing it was.

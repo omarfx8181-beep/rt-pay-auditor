@@ -211,6 +211,16 @@ function VerdictBanner({
         <button onClick={onReviewEmail} className="pressable mt-2 block min-h-11 py-1 text-subhead font-medium text-accent">
           Read or edit it first ↓
         </button>
+        {/* The confirmation bar only exists in the moment the draft is
+            opened, and iOS hands off to Mail: send it there, relaunch the
+            app cold, and nothing was ever logged. Sending from a laptop
+            doesn't touch this screen at all. So the clock stays startable
+            after the fact — otherwise the follow-up never appears. */}
+        {sentAt === null && onSendTapped && (
+          <button onClick={onSendTapped} className="pressable mt-1 block min-h-11 py-1 text-footnote text-ink-dim underline">
+            Already emailed payroll about this?
+          </button>
+        )}
         {identityMissing && (
           <p className="text-footnote text-ink-dim">
             Add your name and employee ID below to sign the draft — saved on this device.

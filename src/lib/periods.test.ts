@@ -6,6 +6,7 @@ import {
   addDays,
   correctionTotals,
   periodMoney,
+  gridWindowFor,
   ytdThroughDate,
   buildBackup,
   mergeBackup,
@@ -45,6 +46,16 @@ describe("period dates", () => {
 
   test("nextPeriodRange: the biweekly window right after the last period", () => {
     expect(nextPeriodRange("2026-07-05")).toEqual({ startDate: "2026-07-06", endDate: "2026-07-19" });
+  });
+
+  test("gridWindowFor lands the window holding a date in a HOLE below the newest period", () => {
+    // A schedule scan files only the blocks it saw, so a skipped fortnight
+    // leaves a real gap. Rolling forward can never reach it.
+    expect(gridWindowFor("2026-06-22", "2026-07-10")).toEqual({ startDate: "2026-07-06", endDate: "2026-07-19" });
+    expect(gridWindowFor("2026-06-22", "2026-06-22")).toEqual({ startDate: "2026-06-22", endDate: "2026-07-05" });
+    expect(gridWindowFor("2026-06-22", "2026-07-05")).toEqual({ startDate: "2026-06-22", endDate: "2026-07-05" });
+    expect(gridWindowFor("2026-06-22", "2026-06-10")).toEqual({ startDate: "2026-06-08", endDate: "2026-06-21" });
+    expect(gridWindowFor("2026-06-22", "2029-01-01")).toBeNull(); // a clock years off is a wrong date
   });
 
   test("periodLabel reads like a pay stub header", () => {

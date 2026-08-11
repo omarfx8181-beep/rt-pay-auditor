@@ -61,6 +61,36 @@ test("Add to calendar downloads the period's shifts as an .ics", async ({ page }
   expect(download.suggestedFilename()).toBe("rt-pay-shifts-2026-06-22.ics");
 });
 
+test("the Add-a-shift shortcut keeps the shift when you accept what it filled in", async ({ page }) => {
+  // The shortcut hands over a COMPLETE shift (today, 12 h). Accepting it
+  // and tapping Done used to delete it — already saved, so a real delete,
+  // and the check would then expect 12 hours less than was worked.
+  await gotoApp(page);
+  await page.goto("/?action=add-shift", { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  await expect(page.locator('label:has(span:text-is("Paid hours")) input')).toHaveValue("12");
+
+  await page.getByRole("button", { name: "Done" }).first().click();
+  await page.waitForTimeout(600);
+  await expect(page.getByText("No shifts yet")).toHaveCount(0);
+  await expect(page.locator("text=/12.00 of 80.00 hrs/")).toBeVisible();
+
+  // and it survives the reload, i.e. it really reached storage
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(900);
+  await tabButton(page, "Shifts").click();
+  await expect(page.locator("text=/12.00 of 80.00 hrs/")).toBeVisible();
+});
+
+test("dismissing that same sheet without touching it takes the shift back", async ({ page }) => {
+  await gotoApp(page);
+  await page.goto("/?action=add-shift", { waitUntil: "networkidle" });
+  await page.waitForTimeout(1200);
+  await page.getByRole("button", { name: "Close" }).click(); // ✕ = "didn't mean to"
+  await page.waitForTimeout(600);
+  await expect(page.getByText("No shifts yet")).toBeVisible();
+});
+
 test("the year line lands on Me with the Year card in view", async ({ page }) => {
   await gotoApp(page);
   await page.getByRole("button", { name: /so far · made/ }).click();

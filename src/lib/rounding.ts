@@ -85,6 +85,29 @@ const punchedMinutes = (day: TimecardDay): number | null => {
   return total;
 };
 
+/** A gap this long between segments is someone actually off the clock. */
+const BREAK_GAP_MINUTES = 20;
+
+/**
+ * Was the meal punched out, or auto-deducted? Segment COUNT can't answer
+ * it: Kronos prints a second pair for a cost-center transfer, a float to
+ * another unit, or two shifts in a day, and those segments run back to
+ * back with the meal still auto-deducted. Only a real GAP between
+ * segments means the break was punched. Unreadable punches never get
+ * here — punchedMinutes already dropped the day.
+ */
+const mealWasPunched = (day: TimecardDay): boolean => {
+  const pairs = day.punches ?? [];
+  for (let i = 1; i < pairs.length; i += 1) {
+    const prevOut = clockMinutes(pairs[i - 1]?.out);
+    const nextIn = clockMinutes(pairs[i]?.in);
+    if (prevOut === null || nextIn === null) continue;
+    const gap = nextIn < prevOut ? nextIn + MINUTES_PER_DAY - prevOut : nextIn - prevOut;
+    if (gap >= BREAK_GAP_MINUTES) return true;
+  }
+  return false;
+};
+
 export interface RoundingLoss {
   /** Minutes summed over the short days only — the citable total. */
   minutes: number;
@@ -128,8 +151,10 @@ export function roundingLoss(days: TimecardDay[], cfg: EngineConfig): RoundingLo
     const punched = punchedMinutes(day);
     if (punched === null || !Number.isFinite(day.hours) || day.hours <= 0) continue;
     const pairs = day.punches?.length ?? 0; // punched !== null means at least one
-    // One unbroken pair past the threshold = the meal was auto-deducted, never punched.
-    const worked = pairs === 1 && punched > mealThreshold ? punched - mealMinutes : punched;
+    // No punched-out break on a day past the threshold = payroll deducted
+    // the meal itself. Segments that run back to back (a transfer, a
+    // float) are still one unbroken stretch of work.
+    const worked = punched > mealThreshold && !mealWasPunched(day) ? punched - mealMinutes : punched;
     const delta = Math.round(worked - day.hours * 60);
     if (Math.abs(delta) > roundingCeiling(pairs)) {
       unexplained.push(day.date);
@@ -141,8 +166,13 @@ export function roundingLoss(days: TimecardDay[], cfg: EngineConfig): RoundingLo
       short.push({ date: day.date, minutes: delta });
     }
   }
-  // A period with no legible punches can never accumulate a loss, so it falls out here too.
-  if (minutes < ROUNDING_NOISE_MINUTES) return null;
+  // A period with no legible punches can never accumulate a loss, so it
+  // falls out here too. But days too far off to BE rounding must not fall
+  // out with it: a 16-hour pickup whose whole gap lands in `unexplained`
+  // would otherwise render nothing at all — silence over the exact day
+  // worth questioning. Speak up whenever there is either a citable loss
+  // or an anomaly to point at.
+  if (minutes < ROUNDING_NOISE_MINUTES && unexplained.length === 0) return null;
   return {
     minutes,
     estCents: cents(minutes),
