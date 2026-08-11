@@ -7,6 +7,13 @@
     <meta name="description" content="Know what the check should say before it lands." />
     <link rel="icon" href="/rt-pay-auditor/pwa-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="/rt-pay-auditor/apple-touch-icon.png" />
+    <!-- iOS launch images: it picks one only on an EXACT device-width/height/ratio
+         match, so these must stay in lockstep with TARGETS in scripts/gen-splash.mjs -->
+    <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/rt-pay-auditor/splash/splash-430x932-3x.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/rt-pay-auditor/splash/splash-428x926-3x.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/rt-pay-auditor/splash/splash-393x852-3x.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="/rt-pay-auditor/splash/splash-390x844-3x.png" />
+    <link rel="apple-touch-startup-image" media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="/rt-pay-auditor/splash/splash-820x1180-2x.png" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4efe6" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#171310" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -25,9 +32,9 @@
         if (m === "dark" || m === "light") document.documentElement.dataset.mode = m;
       } catch (e) {}
     </script>
-    <script type="module" crossorigin src="/rt-pay-auditor/assets/index-N9MeTBfZ.js"></script>
+    <script type="module" crossorigin src="/rt-pay-auditor/assets/index-CHAdhYHn.js"></script>
     <link rel="modulepreload" crossorigin href="/rt-pay-auditor/assets/jsx-runtime-D8nDyRPw.js">
-    <link rel="stylesheet" crossorigin href="/rt-pay-auditor/assets/index-DxGPfSiQ.css">
+    <link rel="stylesheet" crossorigin href="/rt-pay-auditor/assets/index-u5sz_v3R.css">
   <link rel="manifest" href="/rt-pay-auditor/manifest.webmanifest"></head>
   <body>
     <div id="root"></div>
