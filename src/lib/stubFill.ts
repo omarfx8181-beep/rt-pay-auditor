@@ -11,6 +11,12 @@ import { callClaude, filesToContentBlocks } from "./scan.ts";
 export interface StubLineItem {
   label: string;
   amount: number;
+  /**
+   * The quantity column printed beside the amount, when the stub shows
+   * one. Only the regular line's is used so far (raiseWatch.ts divides
+   * by it) — absent whenever the stub didn't print it or it wasn't read.
+   */
+  hours?: number;
 }
 
 export interface StubLines {
@@ -32,7 +38,7 @@ export const stubFillInstruction =
   "Extract the CURRENT-period amounts only — never YTD columns. " +
   "Respond with ONLY valid JSON, no markdown, no commentary, exactly this schema: " +
   '{"periodStart":"YYYY-MM-DD or empty string","periodEnd":"YYYY-MM-DD or empty string",' +
-  '"earnings":[{"label":"the exact line name printed on the stub","amount":1234.56}],' +
+  '"earnings":[{"label":"the exact line name printed on the stub","amount":1234.56,"hours":73.5}],' +
   '"taxes":[{"label":"...","amount":123.45}],' +
   '"pretax":[{"label":"...","amount":123.45}],' +
   '"aftertax":[{"label":"...","amount":123.45}],' +
@@ -41,18 +47,30 @@ export const stubFillInstruction =
   "taxes = withholding lines (federal, state, Social Security, Medicare, paid-leave premiums). " +
   "pretax = before-tax deductions (retirement, medical, dental, FSA). aftertax = after-tax deductions. " +
   "Keep every line as its own item with the stub's exact label — do NOT merge or sum lines. " +
+  'On EARNINGS lines only, add "hours": the hours/units quantity printed on that same row, transcribed exactly. ' +
+  "Omit it when the row shows no quantity — never derive hours from the amount, and never fill in one you cannot read. " +
   "ytdGross/ytdNet are the ONLY year-to-date values to read: the YTD column's TOTAL gross and TOTAL net, null if not shown. " +
   "Amounts are plain positive numbers without $ or commas. Use null for gross/net only if truly not shown.";
+
+/** A printed quantity, or nothing — zero and junk are "not read", never 0.00 hours. */
+const asQty = (v: unknown): number | undefined => {
+  const n = typeof v === "number" ? v : Number.parseFloat(String(v ?? "").replace(/[$,]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+};
 
 /** Loose model output → clean line items; junk entries drop out. Shared with the bulk stub scan. */
 export const parseLineItems = (v: unknown): StubLineItem[] =>
   Array.isArray(v)
     ? v
         .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
-        .map((x) => ({
-          label: typeof x.label === "string" ? x.label : "",
-          amount: typeof x.amount === "number" ? x.amount : Number.parseFloat(String(x.amount ?? "").replace(/[$,]/g, "")),
-        }))
+        .map((x) => {
+          const hours = asQty(x.hours);
+          return {
+            label: typeof x.label === "string" ? x.label : "",
+            amount: typeof x.amount === "number" ? x.amount : Number.parseFloat(String(x.amount ?? "").replace(/[$,]/g, "")),
+            ...(hours === undefined ? {} : { hours }),
+          };
+        })
         .filter((x) => x.label !== "" && Number.isFinite(x.amount))
     : [];
 const asItems = parseLineItems;
@@ -138,6 +156,13 @@ export interface StubFillResult {
   /** The stub's YTD totals in cents, when its YTD column was readable. */
   ytdGrossCents: number | null;
   ytdNetCents: number | null;
+  /**
+   * Hours printed on the regular line(s), summed like their dollars —
+   * null when the stub didn't print them. Stored beside the money so
+   * raiseWatch has the stub's OWN divisor; hours, not dollars, so it
+   * stays out of `actual`'s money keys until the panel files it.
+   */
+  regHours: string | null;
 }
 
 const toCents = (amount: number): number => Math.round(amount * 100);
@@ -154,6 +179,7 @@ export function stubLinesToActual(lines: StubLines): StubFillResult {
   const unmatched: StubFillResult["unmatched"] = [];
   const ignored: StubFillResult["ignored"] = [];
   const add = (key: string, amount: number) => cents.set(key, (cents.get(key) ?? 0) + toCents(amount));
+  let regHours: number | null = null;
 
   for (const item of lines.earnings) {
     if (IGNORED_EARNINGS.test(item.label)) {
@@ -163,6 +189,8 @@ export function stubLinesToActual(lines: StubLines): StubFillResult {
     const rule = EARNINGS_RULES.find(([, re]) => re.test(item.label));
     if (rule) {
       add(rule[0], item.amount);
+      // Split regular rows sum their hours exactly as they sum their dollars.
+      if (rule[0] === "reg" && item.hours !== undefined) regHours = (regHours ?? 0) + item.hours;
       matched.push({ key: rule[0], label: item.label, amount: item.amount.toFixed(2) });
     } else {
       unmatched.push({ section: "earnings", label: item.label, amount: item.amount.toFixed(2) });
@@ -208,6 +236,7 @@ export function stubLinesToActual(lines: StubLines): StubFillResult {
     periodEnd: lines.periodEnd,
     ytdGrossCents: lines.ytdGross !== null ? toCents(lines.ytdGross) : null,
     ytdNetCents: lines.ytdNet !== null ? toCents(lines.ytdNet) : null,
+    regHours: regHours === null ? null : (Math.round(regHours * 100) / 100).toFixed(2),
   };
 }
 

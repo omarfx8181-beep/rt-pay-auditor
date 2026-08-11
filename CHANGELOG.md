@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0 — August 2026
+
+The watchdog follows through — catching a shortfall was never the hard part; chasing it was.
+
+- **Dispute follow-up**: opening the HR email asks "did it go to payroll?" — only a confirmed send starts the clock (and "take it back" undoes a mis-tap). The check then carries "Emailed payroll Thu, 7/30 · 12 days ago", and once payroll has had a full cycle (10 days), a **firmer follow-up** draft appears: it cites the first email by date, restates what's still owed after any partial correction, and asks for an off-cycle check by a named date.
+- **Raise watch**: a scanned stub's regular line carries its own hours, so the app divides them out and compares the hourly rate payroll actually used to the one in your settings. A landed raise says so; an old rate still being paid shows what the check is light. It stays silent unless the stub's hours corroborate the app's own — a rate is never inferred from a mismatch.
+- **Kronos rounding watch**: the timecard scan now reads punch in/out times, and the preview totals what rounding shaved — in minutes and dollars. Fairview's unpaid meal is subtracted first (it is a contract term, not a shave), and any day too far off to be rounding is named rather than priced.
+- **Shifts → calendar**: one tap exports the period's shifts as a calendar file; scheduled windows become timed events (nights roll past midnight), everything else lands as an all-day event.
+- **Take me there**: "Me → Backup / Year / your rate" pointers are now taps that scroll to the card and flash it.
+- **Home Screen shortcuts**: long-press the icon for "Scan stub" or "Add a shift", plus real iOS launch screens (no white flash on open).
+
 ## 1.2.0 — July 2026
 
 Faster, smoother, keeping score.

@@ -60,9 +60,13 @@ export default function StubFillPanel({
   const apply = (result: StubFillResult, route: StubRoute) => {
     if (applied.current) return; // a fast double-tap must never create two periods
     applied.current = true;
-    if (route.kind === "current") onFillCurrent(result.actual);
-    else if (route.kind === "existing") onFillExisting(route.period.id, result.actual);
-    else onCreateAndFill(route.startDate, route.endDate, result.actual);
+    // The regular line's own hours ride along with its dollars: the rate
+    // check divides by them, and dividing by the app's shift list instead
+    // turns a missing shift into a raise that never happened.
+    const filled = result.regHours === null ? result.actual : { ...result.actual, regHours: result.regHours };
+    if (route.kind === "current") onFillCurrent(filled);
+    else if (route.kind === "existing") onFillExisting(route.period.id, filled);
+    else onCreateAndFill(route.startDate, route.endDate, filled);
     if (result.ytdGrossCents !== null) {
       // The anchor's as-of date must sit ON the biweekly grid — a
       // one-day misread otherwise makes the year cross-check cry wolf.

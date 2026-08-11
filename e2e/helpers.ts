@@ -1,19 +1,28 @@
 import type { Page } from "@playwright/test";
 
-/** Load the app; clear first-run onboarding and the auto-offered tour. */
+/**
+ * Load the app; clear first-run onboarding and the auto-offered tour.
+ *
+ * The tour arrives a beat AFTER onboarding closes, so asking "is it on
+ * screen yet?" races it: on a slow runner the answer is no, the test
+ * walks on, and the tour's full-screen overlay then swallows the next
+ * click somewhere unrelated. Wait for it, dismiss it, and don't hand
+ * the page back until its dialog is actually gone.
+ */
 export async function gotoApp(page: Page): Promise<void> {
   await page.goto("/", { waitUntil: "networkidle" });
   await page.waitForTimeout(800); // Dexie seed + first render
   const skip = page.locator('button:has-text("Skip for now")').first();
   if (await skip.count()) {
     await skip.click();
-    await page.waitForTimeout(600);
   }
+  const tour = page.locator('[role="dialog"][aria-label^="App tour"]');
+  await tour.waitFor({ state: "visible", timeout: 4000 }).catch(() => {}); // already dismissed on a re-run
   const skipTour = page.locator('button:has-text("Skip tour")').first();
   if (await skipTour.count()) {
     await skipTour.click();
-    await page.waitForTimeout(400);
   }
+  await tour.waitFor({ state: "detached", timeout: 4000 }).catch(() => {});
 }
 
 export const tabButton = (page: Page, label: string) =>

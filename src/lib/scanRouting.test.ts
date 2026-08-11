@@ -110,13 +110,18 @@ describe("ytdThroughDate — the app's own year total through a stub's YTD date"
     expect(lastYear.periodCount).toBe(0);
   });
 
-  test("estimated periods contribute their computed values until a stub lands", () => {
+  test("an empty upcoming period adds nothing to the year yet", () => {
     const withEmptyJuly = ytdThroughDate(PERIODS, "2026-07-19");
     expect(withEmptyJuly.periodCount).toBe(2);
     expect(withEmptyJuly.stubCount).toBe(1);
-    // Shiftless July still carries the $1.81 imputed-life line — an
-    // estimate, exactly what the anchor comparison is meant to expose.
-    expect(withEmptyJuly.grossCents).toBe(886522 + 181);
+    // July is an open window with nothing in it. It used to carry the
+    // engine's $1.81 imputed-life line (and, in netCents, MINUS $403.20
+    // of fixed deductions against no pay) on the theory that an estimate
+    // is what the anchor comparison exists to expose. Backwards: the
+    // anchor exists to catch PAYROLL's errors, so a period the app
+    // invented money for reports a mismatch that isn't real. An empty
+    // window is worth zero until something lands in it.
+    expect(withEmptyJuly.grossCents).toBe(886522);
   });
 });
 

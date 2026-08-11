@@ -7,7 +7,7 @@
  * The old Periods tab (year totals, past stubs, other income, backup,
  * period management) lives here too, under "Your periods & data".
  */
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Archive,
@@ -59,6 +59,35 @@ export interface QuestionAnswer {
 }
 
 export type AppearanceMode = "system" | "light" | "dark";
+
+/**
+ * The cards another screen can send you to ("Backup overdue →", "Update
+ * my rate"). The base rate has its own target: it lives a card ABOVE the
+ * pay rules, so landing on "rules" scrolls it off the top edge and
+ * flashes the ring around nine rates that aren't the one asked for.
+ */
+export type MeSection = "backup" | "year" | "rules" | "rate";
+
+const SECTION_IDS: Record<MeSection, string> = {
+  backup: "me-backup",
+  year: "me-year",
+  rules: "me-rules",
+  rate: "me-rate",
+};
+
+/**
+ * A deep-link target. Landing on a long settings page is disorienting
+ * without a "this one" — so the card it scrolled to wears a terracotta
+ * ring for a beat. A color, not a movement: nothing to hide under
+ * prefers-reduced-motion, and the ring never shifts the layout.
+ */
+function Anchor({ id, flash, children }: { id: string; flash: boolean; children: ReactNode }) {
+  return (
+    <div id={id} className={`scroll-mt-4 rounded-2xl ring-2 ${flash ? "ring-accent" : "ring-transparent"}`}>
+      {children}
+    </div>
+  );
+}
 
 /** One human-readable rule: plain words left, the number right. */
 function RuleRow({
@@ -447,6 +476,8 @@ export default function Me({
   closeEnoughCents,
   scanModel,
   onSaveScanModel,
+  initialSection = null,
+  onSectionConsumed,
 }: {
   cfgDraft: CfgDraft;
   setCfgDraft: (updater: (d: CfgDraft) => CfgDraft) => void;
@@ -501,8 +532,33 @@ export default function Me({
   /** Scan model override; blank = the built-in default. */
   scanModel: string;
   onSaveScanModel: (v: string) => void;
+  /** One-shot "take me there" from another screen — consumed on mount. */
+  initialSection?: MeSection | null;
+  onSectionConsumed?: () => void;
 }) {
   const set = (key: keyof CfgDraft) => (value: string) => setCfgDraft((d) => ({ ...d, [key]: value }));
+
+  // Land on the card that was asked for, then say which one it is.
+  const [flash, setFlash] = useState<MeSection | null>(initialSection);
+  useEffect(() => {
+    if (initialSection === null) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const jump = () =>
+      document
+        .getElementById(SECTION_IDS[initialSection])
+        ?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    jump();
+    // The lazy cards above (How to use, and the panels below it) land a
+    // beat later and push the target off screen — aim once more.
+    const settle = setTimeout(jump, 300);
+    onSectionConsumed?.();
+    const t = setTimeout(() => setFlash(null), 1200);
+    return () => {
+      clearTimeout(settle);
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // The Year card can look at ANY year with data, not just the open
   // period's — same rollup, same anchors, chip-switched below.
   const [yearView, setYearView] = useState(year);
@@ -556,6 +612,7 @@ export default function Me({
       <h1 className="text-large-title tracking-tight">Me</h1>
 
       {/* ---- role & employer (from the preset) + the one number that matters ---- */}
+      <Anchor id="me-rate" flash={flash === "rate"}>
       <Card>
         <div className="text-headline">{FAIRVIEW_RT_PRESET.facility.name}</div>
         <div className="mt-0.5 text-subhead text-ink-dim">{FAIRVIEW_RT_PRESET.role.name} · paid every two weeks</div>
@@ -571,6 +628,7 @@ export default function Me({
         </div>
         <p className="mt-3 text-footnote text-ink-dim">Everything you enter stays on this device.</p>
       </Card>
+      </Anchor>
 
       <Suspense fallback={null}>
         <HowToCard onStartTour={onStartTour} onReplayTour={onReplayTour} />
@@ -580,6 +638,7 @@ export default function Me({
       <div className="pt-3">
         <Eyebrow className="mb-2">Pay rules</Eyebrow>
       </div>
+      <Anchor id="me-rules" flash={flash === "rules"}>
       <Card title="Your pay rules">
         <RuleRow label="Weekend pay" hint="Extra per hour on Saturday and Sunday — applies itself." value={cfgDraft.weekendDiff} onChange={set("weekendDiff")} suffix="$/hr" />
         <RuleRow label="Evening pay" value={cfgDraft.eveningDiff} onChange={set("eveningDiff")} suffix="$/hr" />
@@ -598,6 +657,7 @@ export default function Me({
         <RuleRow label="Preceptor pay" hint="Extra per hour while precepting — confirmed with payroll." value={cfgDraft.preceptorRate} onChange={set("preceptorRate")} suffix="$/hr" />
         <RuleRow label="Critical shift bonus" hint="What one bonus unit is worth." value={cfgDraft.unit548} onChange={set("unit548")} suffix="$/unit" />
       </Card>
+      </Anchor>
 
       <Card title="Bonus tiers — they change week to week">
         <div className="space-y-2">
@@ -842,6 +902,7 @@ export default function Me({
       <div className="pt-3">
         <Eyebrow className="mb-2">Your periods & data</Eyebrow>
         <div className="space-y-3">
+          <Anchor id="me-year" flash={flash === "year"}>
           <div id="tour-year">
           <Card title={`Year total — ${yearView}`}>
             {years.length > 1 && (
@@ -922,6 +983,7 @@ export default function Me({
             </p>
           </Card>
           </div>
+          </Anchor>
 
           <PtoCard periods={periods} pto={pto} onSavePto={onSavePto} baseRateCents={baseRateCents} />
 
@@ -1042,6 +1104,7 @@ export default function Me({
             </button>
           </Disclosure>
 
+          <Anchor id="me-backup" flash={flash === "backup"}>
           <div id="tour-backup">
           <Disclosure
             title="Backup — yours, on your device"
@@ -1084,6 +1147,7 @@ export default function Me({
             </div>
           </Disclosure>
           </div>
+          </Anchor>
 
           <Suspense fallback={null}>
           <ShareRulesPanel

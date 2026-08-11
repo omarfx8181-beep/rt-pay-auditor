@@ -13,7 +13,9 @@ import {
   mergeYtdAnchorSettings,
   overlappingEnds,
   parseBackup,
+  periodCovering,
   periodLabel,
+  periodRangesThrough,
   prevPeriodRange,
   rollupYtd,
   type PayPeriod,
@@ -47,6 +49,44 @@ describe("period dates", () => {
 
   test("periodLabel reads like a pay stub header", () => {
     expect(periodLabel("2026-06-22", "2026-07-05")).toBe("Jun 22 – Jul 5, 2026");
+  });
+});
+
+describe("finding today on the grid — a shift dated today belongs to today's period", () => {
+  const grid = [
+    { startDate: "2026-06-22", endDate: "2026-07-05" },
+    { startDate: "2026-07-06", endDate: "2026-07-19" },
+  ];
+
+  test("periodCovering picks the window the date sits in, ends included", () => {
+    expect(periodCovering(grid, "2026-06-22")).toBe(grid[0]);
+    expect(periodCovering(grid, "2026-07-05")).toBe(grid[0]);
+    expect(periodCovering(grid, "2026-07-06")).toBe(grid[1]);
+    expect(periodCovering(grid, "2026-07-19")).toBe(grid[1]);
+  });
+
+  test("a date off the grid covers nothing — never the nearest period", () => {
+    expect(periodCovering(grid, "2026-06-21")).toBeNull();
+    expect(periodCovering(grid, "2026-08-11")).toBeNull();
+    expect(periodCovering([], "2026-07-06")).toBeNull();
+  });
+
+  test("periodRangesThrough rolls the grid forward to today, and no further", () => {
+    // idle since 7/05, today 8/11: three windows, the last one holding today
+    expect(periodRangesThrough("2026-07-05", "2026-08-11")).toEqual([
+      { startDate: "2026-07-06", endDate: "2026-07-19" },
+      { startDate: "2026-07-20", endDate: "2026-08-02" },
+      { startDate: "2026-08-03", endDate: "2026-08-16" },
+    ]);
+  });
+
+  test("nothing to add when the grid already reaches the date", () => {
+    expect(periodRangesThrough("2026-07-05", "2026-07-05")).toEqual([]);
+    expect(periodRangesThrough("2026-07-05", "2026-06-30")).toEqual([]);
+  });
+
+  test("a date years out is a wrong clock, not a gap — no periods spawn", () => {
+    expect(periodRangesThrough("2026-07-05", "2031-01-01")).toEqual([]);
   });
 });
 
@@ -120,6 +160,41 @@ describe("YTD rollup — stub actuals outrank engine estimates", () => {
     expect(ytd.taxesCents).toBe(0);
   });
 
+  test("a placeholder period is worth zero, not the engine's guess at one", () => {
+    // The grid rolls empty windows forward (Start the next period, the
+    // Home Screen shortcut). The engine still prices one — imputed life
+    // posts per period and the fixed deductions come out against no pay
+    // — so summing it would add $1.81 and subtract $403.20 of take-home
+    // that nobody was paid or docked.
+    const placeholder = demoPeriod({ id: "pe", shifts: [], leave: [], actual: {} });
+    const m = periodMoney(placeholder);
+    expect(m.grossCents).toBe(0);
+    expect(m.netCents).toBe(0);
+    expect(m.stubTrue).toBe(false);
+
+    const ytd = rollupYtd([demoPeriod(), placeholder], "2026");
+    expect(ytd.grossCents).toBe(886522); // unchanged by the empty window
+    expect(ytd.netCents).toBe(rollupYtd([demoPeriod()], "2026").netCents);
+  });
+
+  test("a placeholder stops being one the moment anything is known about it", () => {
+    // One typed stub line, one shift, or a correction check all mean a
+    // real check exists — the engine estimate is wanted again.
+    const oneLine = demoPeriod({ id: "pa", shifts: [], leave: [], actual: { reg: "1,000.00" } });
+    expect(periodMoney(oneLine).grossCents).not.toBe(0);
+
+    const corrected = demoPeriod({
+      id: "pb",
+      shifts: [],
+      leave: [],
+      actual: {},
+      corrections: [{ id: "c1", payDate: "2026-07-10", gross: "250.00", net: "180.50", note: "", updatedAt: 1 }],
+    });
+    const m = periodMoney(corrected);
+    expect(m.grossCents).toBe(25000); // the correction, and nothing invented around it
+    expect(m.netCents).toBe(18050);
+  });
+
   test("other income rolls into the totals; blank net means nothing withheld", () => {
     const ytd = rollupYtd([demoPeriod()], "2026", [
       { id: "o1", date: "2026-03-15", source: "Side gig", gross: "1,200.50", net: "1000", updatedAt: 1 },
@@ -158,6 +233,18 @@ describe("backup merge", () => {
     expect(v1.settings).toEqual({});
     const v2 = parseBackup('{"app":"rt-pay-auditor","version":2,"exportedAt":"x","periods":[],"otherIncome":[]}');
     expect(v2.settings).toEqual({});
+  });
+
+  test("the dispute log rides with its period — a restore knows payroll was already asked", () => {
+    const log = [
+      { at: "2026-07-10", kind: "initial" as const },
+      { at: "2026-07-22", kind: "followup" as const },
+    ];
+    const round = parseBackup(JSON.stringify(buildBackup([demoPeriod({ disputeLog: log })], [], {}, "x")));
+    expect(round.periods[0].disputeLog).toEqual(log);
+    // Periods that never disputed stay clean — the field is optional.
+    const bare = parseBackup(JSON.stringify(buildBackup([demoPeriod()], [], {}, "x")));
+    expect(bare.periods[0].disputeLog).toBeUndefined();
   });
 
   test("the API key and per-device transients NEVER ride in a backup — export or import side", () => {

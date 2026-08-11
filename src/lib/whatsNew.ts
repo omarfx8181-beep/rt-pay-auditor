@@ -14,6 +14,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "1.3.0",
+    date: "August 2026",
+    title: "The watchdog follows through",
+    points: [
+      "Email payroll about a shortfall and the app starts a clock — after 10 quiet days it writes you a firmer follow-up.",
+      "Every scanned stub checks its own hourly rate: a raise that landed shows up, and one that didn't gets flagged.",
+      "Snap the Kronos timecard and see what rounding cost you — in minutes and in dollars.",
+      "Send your shifts to the phone's calendar in one tap.",
+      "Long-press the app icon for Scan stub or Add a shift, and a proper launch screen instead of a white flash.",
+    ],
+  },
+  {
     version: "1.2.0",
     date: "July 2026",
     title: "Faster, smoother, and keeping score",

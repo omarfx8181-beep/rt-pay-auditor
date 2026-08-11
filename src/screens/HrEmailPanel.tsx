@@ -12,6 +12,7 @@ export default function HrEmailPanel({
   unit548Cents,
   initialIdentity,
   onSaveIdentity,
+  onSend,
 }: {
   discrepancies: EmailDiscrepancy[];
   shifts: Shift[];
@@ -20,6 +21,12 @@ export default function HrEmailPanel({
   unit548Cents: Cents;
   initialIdentity: EmailIdentity;
   onSaveIdentity: (identity: EmailIdentity) => void;
+  /**
+   * The draft left for payroll. This panel is where the body gets
+   * edited, so it is the path that actually sends — the dispute clock
+   * has to hear about it here too, copy-and-paste included.
+   */
+  onSend?: () => void;
 }) {
   const [identity, setIdentity] = useState<EmailIdentity>(initialIdentity);
   const [manualBody, setManualBody] = useState<string | null>(null);
@@ -81,11 +88,18 @@ export default function HrEmailPanel({
       <div className="mt-3 flex flex-wrap gap-2">
         <a
           href={`mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(body)}`}
+          onClick={onSend}
           className="btn btn-primary pressable"
         >
           <Mail size={15} /> Open in Mail
         </a>
-        <button onClick={() => void copy("body", body)} className="btn btn-ghost pressable">
+        <button
+          onClick={() => {
+            void copy("body", body);
+            onSend?.();
+          }}
+          className="btn btn-ghost pressable"
+        >
           {copied === "body" ? <Check size={15} /> : <Copy size={15} />}
           {copied === "body" ? "Copied ✓" : "Copy email"}
         </button>

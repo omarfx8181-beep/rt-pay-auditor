@@ -27,6 +27,10 @@ export default defineConfig(({ mode }) => {
           name: "RT Pay",
           short_name: "RT Pay",
           description: "Know what the check should say before it lands.",
+          // the plugin fills start_url/scope from `base`; id has no such
+          // default, and without it the identity is start_url — which would
+          // make a future base change read as a brand new app.
+          id: base,
           display: "standalone",
           theme_color: "#f4efe6",
           background_color: "#f4efe6",
@@ -35,6 +39,22 @@ export default defineConfig(({ mode }) => {
             { src: "pwa-192.png", sizes: "192x192", type: "image/png" },
             { src: "pwa-512.png", sizes: "512x512", type: "image/png" },
             { src: "pwa-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          ],
+          // url takes start_url's absolute-path form: a relative one would
+          // resolve against manifest.webmanifest, not the app root.
+          shortcuts: [
+            {
+              name: "Scan this stub",
+              short_name: "Scan stub",
+              url: `${base}?action=scan-stub`,
+              icons: [{ src: "pwa-192.png", sizes: "192x192", type: "image/png" }],
+            },
+            {
+              name: "Add a shift",
+              short_name: "Add shift",
+              url: `${base}?action=add-shift`,
+              icons: [{ src: "pwa-192.png", sizes: "192x192", type: "image/png" }],
+            },
           ],
         },
         workbox: {

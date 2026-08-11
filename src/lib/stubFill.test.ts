@@ -11,7 +11,7 @@ const REAL_STUB: StubLines = {
   periodStart: "2026-06-22",
   periodEnd: "2026-07-05",
   earnings: [
-    { label: "Regular Straight Time", amount: 4202.4 },
+    { label: "Regular Straight Time", amount: 4202.4, hours: 80 },
     { label: "Overtime", amount: 1354.71 },
     { label: "Double Time", amount: 1744.0 },
     { label: "Adder – Weekend Differential", amount: 61.4 },
@@ -92,6 +92,31 @@ describe("stubLinesToActual — the real stub maps onto every check line", () =>
   test("critical-illness insurance stays after-tax — never mistaken for the 548 bonus", () => {
     expect(r.actual.bonus548).toBe("1200.00"); // not 1205.19
   });
+
+  test("the regular line's OWN hours come across — the rate check divides by them", () => {
+    expect(r.regHours).toBe("80.00");
+    // and never into the money map: 80 dollars of nothing would audit as a line
+    expect(r.actual.regHours).toBeUndefined();
+  });
+
+  test("no quantity printed → no hours invented", () => {
+    const bare = REAL_STUB.earnings.map(({ hours: _hours, ...rest }) => rest);
+    expect(stubLinesToActual({ ...REAL_STUB, earnings: bare }).regHours).toBeNull();
+  });
+
+  test("split regular rows sum their hours exactly as they sum their dollars", () => {
+    const split: StubLines = {
+      ...REAL_STUB,
+      earnings: [
+        ...REAL_STUB.earnings.filter((e) => !/regular/i.test(e.label)),
+        { label: "Regular Straight Time", amount: 2101.2, hours: 40 },
+        { label: "Regular Straight Time", amount: 2101.2, hours: 33.5 },
+      ],
+    };
+    const s = stubLinesToActual(split);
+    expect(s.regHours).toBe("73.50");
+    expect(s.actual.reg).toBe("4202.40");
+  });
 });
 
 describe("stubLinesToActual — the June failure mode and the fallthroughs", () => {
@@ -143,6 +168,17 @@ describe("parseStubLinesResponse", () => {
     expect(lines.earnings[0].amount).toBe(4202.4);
     expect(lines.net).toBe(5781.99);
     expect(lines.gross).toBeNull();
+  });
+
+  test("hours come through as printed; an unreadable or absent one is simply not there", () => {
+    const lines = parseStubLinesResponse(
+      '{"periodStart":"","periodEnd":"","earnings":[{"label":"Regular","amount":3860.96,"hours":"73.5"},' +
+        '{"label":"Overtime","amount":100,"hours":0},{"label":"Double Time","amount":200,"hours":"n/a"},' +
+        '{"label":"Critical Shift Bonus (548)","amount":1200}],' +
+        '"taxes":[],"pretax":[],"aftertax":[],"gross":null,"net":null}',
+    );
+    expect(lines.earnings.map((e) => e.hours)).toEqual([73.5, undefined, undefined, undefined]);
+    expect(stubLinesToActual(lines).regHours).toBe("73.50");
   });
 
   test("garbage in → a human error, not a crash", () => {

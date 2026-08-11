@@ -3,10 +3,10 @@
  * punches replace scheduled hours; the evening-credit total fills the
  * one box that still needed typing. Preview first, always.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ClipboardCheck, Loader2 } from "lucide-react";
 import type { ShiftDraft } from "../lib/draft.ts";
-import { applyTimecard, scanTimecard, timecardCoverage, type TimecardApplyPlan, type TimecardRead } from "../lib/timecard.ts";
+import { applyTimecard, scanTimecard, timecardCoverage, type TimecardApplyPlan, type TimecardDay, type TimecardRead } from "../lib/timecard.ts";
 import { dayLabel, fmtNum } from "../lib/format.ts";
 import { Disclosure } from "../ui/kit.tsx";
 
@@ -22,12 +22,15 @@ export default function TimecardPanel({
   periodStart,
   periodEnd,
   onApply,
+  previewNote,
 }: {
   apiKey: string;
   shifts: ShiftDraft[];
   periodStart: string;
   periodEnd: string;
   onApply: (shifts: ShiftDraft[], eveningHours: number | null) => void;
+  /** The caller's read of the punches, shown with the preview. Days are already period-windowed. */
+  previewNote?: (days: TimecardDay[]) => ReactNode;
 }) {
   const [state, setState] = useState<State>({ status: "idle" });
 
@@ -128,6 +131,7 @@ export default function TimecardPanel({
               </div>
             )}
           </div>
+          {previewNote?.(state.read.days)}
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => {

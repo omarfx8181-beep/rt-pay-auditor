@@ -6,13 +6,16 @@
  * and the weekly tier chips. Scan stays on top; leave keeps one-tap
  * call-ins; the hour tiles read the period at a glance.
  */
-import { useEffect, useMemo, useState } from "react";
-import { HeartPulse, Minus, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarPlus, HeartPulse, Minus, Plus, Trash2 } from "lucide-react";
 import { isWeekend, LEAVE_LABELS, LEAVE_TYPES, type BonusTier, type EngineConfig, type LeaveType, type PeriodResult } from "../lib/engine.ts";
 import { shiftWorths, type ShiftWorth } from "../lib/worth.ts";
 import { blankLeave, blankShift, draftToLeave, draftToShift, num, todayIso, type LeaveDraft, type ShiftDraft } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtRate, fmtUnits } from "../lib/format.ts";
 import { periodLabel } from "../lib/periods.ts";
+import { roundingLoss } from "../lib/rounding.ts";
+import { buildShiftsIcs, shiftsIcsName } from "../lib/shiftsIcs.ts";
+import type { TimecardDay } from "../lib/timecard.ts";
 import type { FutureBatch } from "../lib/scanRouting.ts";
 import { Card, Eyebrow, Sheet, StatTile, UndoToast } from "../ui/kit.tsx";
 import ScanPanel from "./ScanPanel.tsx";
@@ -54,6 +57,36 @@ function OvertimeMeter({ period, cfg }: { period: PeriodResult; cfg: EngineConfi
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Field for field how it was handed over — nothing typed into it yet. */
+const untouched = (s: ShiftDraft, seed: ShiftDraft): boolean =>
+  (Object.keys(seed) as Array<keyof ShiftDraft>).every((k) => s[k] === seed[k]);
+
+/**
+ * Kronos rounds punches to the quarter hour, and the shaved minutes
+ * never reach the stub — no earnings line to audit them against. So
+ * this is a finding against the TIMECARD, shown while the punches are
+ * still on screen: it never enters the verdict or "you're owed", and
+ * nothing is stored. The paid-up days ride in the net so the read stays
+ * honest on a period that came out ahead, and the period's own rules go
+ * in so the unpaid meal is never billed as a shave.
+ */
+function RoundingNote({ days, cfg }: { days: TimecardDay[]; cfg: EngineConfig }) {
+  const loss = roundingLoss(days, cfg);
+  if (loss === null) return null;
+  const odd = loss.unexplained.length;
+  return (
+    <p className="text-footnote tabular-nums text-amber">
+      Kronos rounding: −{loss.minutes} min ≈ −{fmtCents(loss.estCents)} this timecard.
+      {loss.netMinutes <= 0
+        ? " Other days paid it back — the period nets out ahead."
+        : loss.netMinutes < loss.minutes
+          ? ` Net of the days it paid up: −${loss.netMinutes} min.`
+          : ""}
+      {odd > 0 && ` ${odd} day${odd === 1 ? "" : "s"} punched too far off to be rounding — check those punches.`}
+    </p>
+  );
+}
 
 function Tag({ children, tone = "soft" }: { children: React.ReactNode; tone?: "soft" | "pos" | "accent" }) {
   const tones = {
@@ -340,11 +373,27 @@ export default function Shifts({
   onEditConsumed?: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(initialEditId);
+  // A shift the app HANDED over — the what-if's "I'm taking it", the Home
+  // Screen's "Add a shift" — counts in the engine the moment it exists.
+  // Keep the handed-over copy: closing the sheet on one still untouched
+  // drops it again, so a mis-tap never leaves 12 phantom hours in a
+  // period the check then reads as short.
+  const seeded = useRef<ShiftDraft | null>(null);
   useEffect(() => {
-    if (initialEditId !== null) onEditConsumed?.();
+    if (initialEditId === null) return;
+    seeded.current = shifts.find((s) => s.id === initialEditId) ?? null;
+    onEditConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const editing = shifts.find((s) => s.id === editingId) ?? null;
+  const closeSheet = () => {
+    const seed = seeded.current;
+    if (seed !== null && seed.id === editingId) {
+      setShifts((arr) => arr.filter((s) => s.id !== seed.id || !untouched(s, seed)));
+      seeded.current = null;
+    }
+    setEditingId(null);
+  };
 
   // Each shift's real marginal value — the OT it unlocked included.
   const worths = useMemo(
@@ -370,11 +419,32 @@ export default function Shifts({
     setEditingId(fresh.id); // new shift opens in the sheet, ready to fill
   };
 
+  // The period's shifts as a calendar file. Same UID per shift every
+  // time, so re-exporting after an edit updates the event instead of
+  // duplicating it. Revoke late — a synchronous revoke cancels the
+  // download on iOS Safari.
+  const downloadIcs = () => {
+    const ics = buildShiftsIcs(shifts, `RT Pay — ${periodLabel(periodStart, periodEnd)}`);
+    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = shiftsIcsName(periodStart);
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+
   return (
     <div className="space-y-3">
-      <div>
-        <h1 className="text-large-title tracking-tight">Shifts</h1>
-        <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-large-title tracking-tight">Shifts</h1>
+          <p className="mt-1 text-subhead text-ink-dim">Pay period {periodLabel(periodStart, periodEnd)}</p>
+        </div>
+        {shifts.some((s) => s.date !== "") && (
+          <button onClick={downloadIcs} className="btn btn-ghost pressable shrink-0 text-xs">
+            <CalendarPlus size={14} /> Add to calendar
+          </button>
+        )}
       </div>
 
       <div id="tour-scan">
@@ -401,6 +471,7 @@ export default function Shifts({
           setShifts(() => next);
           if (eveningHours !== null) onSetEveningHours(String(Math.round(eveningHours * 100) / 100));
         }}
+        previewNote={(days) => <RoundingNote days={days} cfg={cfg} />}
       />
 
       {replaced && (
@@ -441,7 +512,7 @@ export default function Shifts({
         </>
       )}
 
-      <Sheet open={editing !== null} onClose={() => setEditingId(null)} title={editing?.date ? dayLabel(editing.date) : "New shift"}>
+      <Sheet open={editing !== null} onClose={closeSheet} title={editing?.date ? dayLabel(editing.date) : "New shift"}>
         {editing && (
           <ShiftSheet
             s={editing}
@@ -460,7 +531,7 @@ export default function Shifts({
               setShifts((arr) => arr.filter((x) => x.id !== editing.id));
               setEditingId(null);
             }}
-            onClose={() => setEditingId(null)}
+            onClose={closeSheet}
           />
         )}
       </Sheet>

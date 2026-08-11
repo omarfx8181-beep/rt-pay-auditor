@@ -16,11 +16,13 @@ import { periodLabel, type CorrectionDraft, type PayPeriod, type YtdAnchor, type
 import { daysUntil, paydayFor } from "../lib/payday.ts";
 import { checksWaiting } from "../lib/attention.ts";
 import { caughtSummary, milestones, periodVerdict } from "../lib/caught.ts";
+import { disputeStatus, type DisputeSend } from "../lib/disputes.ts";
 import { checkDiff } from "../lib/checkDiff.ts";
 import { findLiveShift, todayShiftWithoutTimes, type OnNow } from "../lib/shiftClock.ts";
 import { shiftWorths } from "../lib/worth.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure, Eyebrow, Hero } from "../ui/kit.tsx";
+import type { MeSection } from "./Me.tsx";
 import Audit from "./Audit.tsx";
 import { BreakdownCards, WhatIfBody, type WhatIfDraft } from "./Paycheck.tsx";
 
@@ -134,18 +136,24 @@ function TrophyCase({
           </p>
         </>
       )}
-      {s.openCatches.map((c) => (
-        <button
-          key={c.periodId}
-          onClick={() => onOpenPeriodDetails(c.periodId)}
-          className="pressable mt-1.5 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl bg-neg/10 px-3 py-2 text-left"
-        >
-          <span className="text-footnote text-neg">
-            {dayLabel(c.endDate)} · <span className="font-semibold tabular-nums">{fmtCents(c.openCents)}</span> still open
-          </span>
-          <span className="text-neg">→</span>
-        </button>
-      ))}
+      {s.openCatches.map((c) => {
+        // How long payroll has sat on it — the row that taps into the chase.
+        const chased = disputeStatus(periods.find((p) => p.id === c.periodId)?.disputeLog, todayIso());
+        return (
+          <button
+            key={c.periodId}
+            onClick={() => onOpenPeriodDetails(c.periodId)}
+            className="pressable mt-1.5 flex min-h-11 w-full items-center justify-between gap-3 rounded-xl bg-neg/10 px-3 py-2 text-left"
+          >
+            <span className="text-footnote text-neg">
+              {dayLabel(c.endDate)} · <span className="font-semibold tabular-nums">{fmtCents(c.openCents)}</span> still
+              open
+              {chased.sends > 0 && <span className="tabular-nums"> · emailed {chased.daysSinceLast}d ago</span>}
+            </span>
+            <span className="text-neg">→</span>
+          </button>
+        );
+      })}
       {s.cleanStreak >= 2 && (
         <p className={`text-footnote text-pos ${s.caughtCents > 0 ? "mt-1.5" : "mt-1"}`}>
           {s.cleanStreak} clean checks in a row — they know you're watching.
@@ -403,6 +411,9 @@ export default function Home({
   closeEnoughCents,
   corrections,
   setCorrections,
+  disputeLog,
+  onDisputeLog,
+  onDisputeUnlog,
   backupStale,
   installNudge,
   onDismissInstallNudge,
@@ -444,12 +455,18 @@ export default function Home({
   closeEnoughCents: number;
   corrections: CorrectionDraft[];
   setCorrections: (updater: (arr: CorrectionDraft[]) => CorrectionDraft[]) => void;
+  /** Emails already sent about this period's shortfall. */
+  disputeLog: DisputeSend[];
+  onDisputeLog: (send: DisputeSend) => void;
+  /** Undo the most recent logged send — the clock only runs on real emails. */
+  onDisputeUnlog: () => void;
   backupStale: boolean;
   /** Real data in an un-installed iOS Safari tab — worth one warm warning. */
   installNudge: boolean;
   onDismissInstallNudge: () => void;
   onGoToShifts: () => void;
-  onGoToMe: () => void;
+  /** Me, optionally scrolled to one of its cards. */
+  onGoToMe: (section?: MeSection) => void;
   /** Open another period's check screen (the app-level deep link). */
   onOpenPeriodDetails: (id: string) => void;
   /** Stamp this period's first green — the celebration fires once, ever. */
@@ -514,6 +531,7 @@ export default function Home({
             verdict={verdict}
             cfg={cfg}
             shifts={shifts}
+            regHours={period.regHours}
             periodStart={record.startDate}
             periodEnd={record.endDate}
             identity={identity}
@@ -524,6 +542,10 @@ export default function Home({
             onFillExisting={onFillExisting}
             onCreateAndFill={onCreateAndFill}
             onYtdAnchor={onYtdAnchor}
+            disputeLog={disputeLog}
+            onDisputeLog={onDisputeLog}
+            onDisputeUnlog={onDisputeUnlog}
+            onGoToMe={onGoToMe}
           />
         ) : (
           <BreakdownCards period={period} net={net} cfgDraft={cfgDraft} />
@@ -655,7 +677,7 @@ export default function Home({
       />
 
       <button
-        onClick={onGoToMe}
+        onClick={() => onGoToMe("year")}
         className="pressable flex w-full items-baseline justify-between gap-3 rounded-2xl border border-surface-line bg-surface-card px-5 py-4 text-left shadow-card"
       >
         <span className="text-subhead text-ink-dim">
@@ -666,7 +688,10 @@ export default function Home({
       </button>
 
       {backupStale && (
-        <button onClick={onGoToMe} className="pressable block w-full px-2 py-1 text-center text-footnote text-amber">
+        <button
+          onClick={() => onGoToMe("backup")}
+          className="pressable block w-full px-2 py-1 text-center text-footnote text-amber"
+        >
           Backup overdue — Me → Backup.
         </button>
       )}

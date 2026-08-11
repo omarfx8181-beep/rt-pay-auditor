@@ -5,6 +5,9 @@
  */
 import { computeNet, computePeriod, type BonusTier, type Cents } from "./engine.ts";
 import { draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./draft.ts";
+// Type only — disputes.ts imports this module at runtime, so the edge
+// must stay erasable.
+import type { DisputeSend } from "./disputes.ts";
 
 /**
  * An off-cycle correction check — payroll fixing a mistake with a
@@ -34,6 +37,12 @@ export interface PayPeriod {
   leave?: LeaveDraft[];
   /** Off-cycle correction checks for this period; absent on older records. */
   corrections?: CorrectionDraft[];
+  /**
+   * What the stub itself says, by audit-row key, exactly as typed or
+   * scanned. Dollars throughout, bar one quantity: `regHours`, the
+   * regular line's own hours, which corroborate a rate change
+   * (raiseWatch.ts). Absent keys are lines nobody entered.
+   */
   actual: Record<string, string>;
   /**
    * Each period snapshots its own rules: rates and bonus tiers move week
@@ -47,6 +56,11 @@ export interface PayPeriod {
   updatedAt: number;
   /** Stamped the first time this check turns green — the celebration fires once. */
   celebratedAt?: number;
+  /**
+   * Every HR email actually SENT about this period's shortfall, oldest
+   * first. Absent until the first send; disputes.ts sorts defensively.
+   */
+  disputeLog?: DisputeSend[];
 }
 
 export const PERIOD_DAYS = 14;
@@ -77,6 +91,38 @@ export const nextPeriodRange = (latestEndDate: string): { startDate: string; end
 export const prevPeriodRange = (earliestStartDate: string): { startDate: string; endDate: string } => {
   const endDate = addDays(earliestStartDate, -1);
   return { startDate: addDays(endDate, -(PERIOD_DAYS - 1)), endDate };
+};
+
+/**
+ * The period this date falls inside, or null. "Today's period" is not
+ * the open one — the period being audited is normally last month's —
+ * so anything dated today has to look itself up.
+ */
+export const periodCovering = <T extends { startDate: string; endDate: string }>(
+  periods: T[],
+  dateStr: string,
+): T | null => periods.find((p) => p.startDate <= dateStr && dateStr <= p.endDate) ?? null;
+
+/** A year of biweekly windows — past this, the date is wrong, not the grid. */
+const MAX_CATCH_UP_PERIODS = 26;
+
+/**
+ * The windows to add so the grid reaches `dateStr`, oldest first: empty
+ * when it already does, and empty when it can't get there inside
+ * MAX_CATCH_UP_PERIODS (a clock years off must not spawn periods).
+ */
+export const periodRangesThrough = (
+  latestEndDate: string,
+  dateStr: string,
+): Array<{ startDate: string; endDate: string }> => {
+  const ranges: Array<{ startDate: string; endDate: string }> = [];
+  let end = latestEndDate;
+  while (end < dateStr && ranges.length < MAX_CATCH_UP_PERIODS) {
+    const range = nextPeriodRange(end);
+    ranges.push(range);
+    end = range.endDate;
+  }
+  return end >= dateStr ? ranges : [];
 };
 
 /* ---------------- other income (non-Fairview) ---------------- */
@@ -173,6 +219,19 @@ export function periodMoney(p: PayPeriod): PeriodMoney {
   const net = computeNet(period.grossCents, cfg);
   const actualGross = parseDollars(p.actual?.gross);
   const actualNet = parseDollars(p.actual?.net);
+  /**
+   * A period holding NOTHING — no shifts, no leave, not one stub line —
+   * is a placeholder the grid rolled forward, not a paycheck. The engine
+   * still prices one (imputed life posts per period, and the fixed
+   * deductions come out against no pay, so it reads +$1.81 gross and
+   * MINUS $403.20 take-home), and summing that into the year would
+   * invent money nobody was paid or docked. Corrections are real money
+   * and still count, so they ride below.
+   */
+  const placeholder =
+    p.shifts.length === 0 &&
+    (p.leave?.length ?? 0) === 0 &&
+    !Object.values(p.actual ?? {}).some((v) => (v ?? "").trim() !== "");
   const hasLineDetail =
     p.shifts.length > 0 ||
     (p.leave?.length ?? 0) > 0 ||
@@ -196,8 +255,8 @@ export function periodMoney(p: PayPeriod): PeriodMoney {
   }
   const corrections = correctionTotals(p);
   return {
-    grossCents: (actualGross ?? period.grossCents) + corrections.grossCents,
-    netCents: (actualNet ?? net.netCents) + corrections.netCents,
+    grossCents: (actualGross ?? (placeholder ? 0 : period.grossCents)) + corrections.grossCents,
+    netCents: (actualNet ?? (placeholder ? 0 : net.netCents)) + corrections.netCents,
     stubTrue: actualNet !== null,
     buckets,
     correctionGrossCents: corrections.grossCents,

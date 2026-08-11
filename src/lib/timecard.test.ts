@@ -27,6 +27,43 @@ describe("parseTimecardResponse", () => {
   });
 });
 
+const PUNCHED = JSON.stringify({
+  periodStart: "2026-06-22",
+  periodEnd: "2026-07-05",
+  days: [
+    { date: "2026-06-23", hours: 12, punches: [{ in: "6:45", out: "11:30" }, { in: "12:00", out: "19:30" }] }, // meal split, unpadded hour
+    { date: "2026-06-25", hours: 12, punches: [{ in: "18:45", out: "07:00" }] }, // night shift
+    { date: "2026-06-27", hours: 8, punches: [{ in: "07:0", out: "15:00" }] }, // one bad time takes the day's punches
+    { date: "2026-06-29", hours: 8, punches: [] }, // punch columns not legible
+    { date: "2026-07-01", hours: 8, punches: "nope" }, // not even an array
+  ],
+  eveningHours: null,
+});
+
+describe("parseTimecardResponse — punches", () => {
+  test("reads pairs, pads the hour, keeps the day when its punches are junk", () => {
+    const days = parseTimecardResponse(PUNCHED).days;
+    expect(days).toHaveLength(5); // punches never cost a day its hours
+    expect(days[0].punches).toEqual([
+      { in: "06:45", out: "11:30" },
+      { in: "12:00", out: "19:30" },
+    ]);
+    expect(days[1].punches).toEqual([{ in: "18:45", out: "07:00" }]);
+    for (const i of [2, 3, 4]) {
+      expect(days[i].punches).toBeUndefined();
+      expect(days[i].hours).toBe(8);
+    }
+  });
+
+  test("a scan without punches parses exactly as before — no stray key", () => {
+    expect(parseTimecardResponse(RESPONSE).days).toStrictEqual([
+      { date: "2026-06-23", hours: 15.72 },
+      { date: "2026-06-25", hours: 12.2 },
+      { date: "2026-06-27", hours: 8 },
+    ]);
+  });
+});
+
 describe("timecardCoverage", () => {
   test("counts days inside vs outside the open period", () => {
     const read = parseTimecardResponse(RESPONSE);

@@ -8,12 +8,15 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BadgeCheck, CircleAlert, FileDown, Mail, Plus, Trash2 } from "lucide-react";
 import { auditLine, dollarsToCents, type EngineConfig, type Shift } from "../lib/engine.ts";
 import { num, todayIso, uid } from "../lib/draft.ts";
-import { dayLabel, fmtCents, fmtUnits } from "../lib/format.ts";
+import { dayLabel, fmtCents, fmtRate, fmtUnits } from "../lib/format.ts";
 import { CalloutCard, Card, Disclosure } from "../ui/kit.tsx";
 import type { AuditRow } from "../lib/audit.ts";
 import { lineCloseEnough, type LineDelta, type Verdict } from "../lib/verdict.ts";
-import { buildHrEmail, type EmailIdentity } from "../lib/hrEmail.ts";
+import { buildHrEmail, type EmailIdentity, type HrEmail } from "../lib/hrEmail.ts";
+import { buildFollowUpEmail, disputeStatus, nextSendKind, type DisputeSend } from "../lib/disputes.ts";
+import { raiseCheck, type RaiseSignal } from "../lib/raiseWatch.ts";
 import { type CorrectionDraft, type PayPeriod, type YtdAnchor } from "../lib/periods.ts";
+import type { MeSection } from "./Me.tsx";
 import HrEmailPanel from "./HrEmailPanel.tsx";
 import StubFillPanel from "./StubFillPanel.tsx";
 const ProofPacket = lazy(() => import("./ProofPacket.tsx"));
@@ -51,6 +54,10 @@ function CheckDraw() {
   );
 }
 
+/** No recipient — the mail app picks payroll from the user's contacts. */
+const mailtoHref = (e: HrEmail): string =>
+  `mailto:?subject=${encodeURIComponent(e.subject)}&body=${encodeURIComponent(e.body)}`;
+
 /** "Your critical shift bonus was short 5 units ($250.00)." */
 function shortSentence(d: LineDelta): string {
   const label = d.label.charAt(0).toLowerCase() + d.label.slice(1);
@@ -60,6 +67,9 @@ function shortSentence(d: LineDelta): string {
     : `Your ${label} was short ${dollars}.`;
 }
 
+/** "today", "1 day ago", "12 days ago" — the wait, said once. */
+const agoText = (days: number): string => (days === 0 ? "today" : `${days} day${days === 1 ? "" : "s"} ago`);
+
 function VerdictBanner({
   verdict,
   emailHref,
@@ -68,6 +78,11 @@ function VerdictBanner({
   isNewest,
   onCreateNext,
   onReviewEmail,
+  sentAt,
+  followUpHref,
+  onSendTapped,
+  onUnlogSend,
+  raiseAnswered = false,
 }: {
   verdict: Verdict;
   /** mailto: URL with the pre-written draft; null when no shortfall email exists. */
@@ -79,6 +94,16 @@ function VerdictBanner({
   isNewest: boolean;
   onCreateNext: () => void;
   onReviewEmail: () => void;
+  /** The first ask and its age; null until payroll has actually been emailed. */
+  sentAt: { at: string; daysAgo: number } | null;
+  /** The firmer second ask — only once payroll has sat on it a full cycle. */
+  followUpHref: string | null;
+  /** The draft was opened. Only asks — a mailto can't know what Mail did with it. */
+  onSendTapped: () => void;
+  /** Take the last send back off the clock; absent when there's nothing logged. */
+  onUnlogSend?: () => void;
+  /** The raise callout is showing — it states both rates, so the amber's generic advice stands down. */
+  raiseAnswered?: boolean;
 }) {
   if (verdict.kind === "intro") return null;
 
@@ -162,10 +187,27 @@ function VerdictBanner({
           )}
         </p>
         {emailHref ? (
-          <a href={emailHref} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
+          <a href={emailHref} onClick={onSendTapped} className="btn btn-primary pressable mt-3 w-full sm:w-auto">
             <Mail size={16} /> Email HR — draft ready
           </a>
         ) : null}
+        {sentAt && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 text-footnote text-ink-dim">
+            <span>
+              Emailed payroll {dayLabel(sentAt.at)} · {agoText(sentAt.daysAgo)}
+            </span>
+            {onUnlogSend && (
+              <button onClick={onUnlogSend} className="pressable min-h-11 underline">
+                Didn't send it? Take it back
+              </button>
+            )}
+          </div>
+        )}
+        {followUpHref && (
+          <a href={followUpHref} onClick={onSendTapped} className="btn btn-ghost pressable mt-2 w-full sm:w-auto">
+            <Mail size={16} /> Send a firmer follow-up
+          </a>
+        )}
         <button onClick={onReviewEmail} className="pressable mt-2 block min-h-11 py-1 text-subhead font-medium text-accent">
           Read or edit it first ↓
         </button>
@@ -189,7 +231,79 @@ function VerdictBanner({
         <CircleAlert size={22} /> Needs a look
       </div>
       <p className="mt-2 text-body">{verdict.question}</p>
+      {/* The raise callout below answers this with both rates and a button —
+          repeating the generic advice above it just says it twice. */}
+      {verdict.hint !== undefined && !raiseAnswered && <p className="mt-2 text-footnote text-ink-dim">{verdict.hint}</p>}
     </CalloutCard>
+  );
+}
+
+/**
+ * Raise watch. Regular pay ÷ the stub's OWN regular hours IS the base
+ * rate — every differential posts on its own line — so a gap past the
+ * nickel means the configured rate is stale. A rules nudge, never an
+ * earnings shortfall: the money owed is verdict.ts's job and must not
+ * double-count. raiseWatch.ts stays silent unless those hours match the
+ * shift list, so this never fires on a period that's simply half logged.
+ */
+function RaiseCallout({
+  signal,
+  regHours,
+  onGoToMe,
+}: {
+  signal: RaiseSignal;
+  regHours: number;
+  onGoToMe?: (section: MeSection) => void;
+}) {
+  const raise = signal.kind === "raise";
+  return (
+    <CalloutCard tone={raise ? "pos" : "amber"}>
+      <p className="text-subhead font-semibold tabular-nums">
+        Your stub pays ${fmtRate(signal.impliedRateCents)}/hr — settings say ${fmtRate(signal.baseRateCents)}.
+      </p>
+      {raise ? (
+        <>
+          <p className="mt-1 text-footnote text-ink-dim">
+            Raise landed? Update your rate so every check checks against it.
+          </p>
+          {onGoToMe && (
+            <button onClick={() => onGoToMe("rate")} className="btn btn-ghost pressable mt-2.5 text-xs">
+              Update my rate
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="mt-1 text-footnote tabular-nums text-ink-dim">
+          That's {fmtCents(Math.abs(Math.round(signal.deltaCents * regHours)))} light this check if the old rate is
+          right.
+        </p>
+      )}
+    </CalloutCard>
+  );
+}
+
+/**
+ * The one question a mailto can't answer. Opening the mail app is not
+ * sending — the draft gets read and closed all the time — and a clock
+ * started on a tap silences the follow-up for a full cycle while the
+ * screen claims payroll was chased. So the send is confirmed, once,
+ * wherever the tap happened: above the tab bar, like the undo toast,
+ * because the draft the user actually edits sits at the bottom of the
+ * page.
+ */
+function SendConfirm({ onSent, onNotYet }: { onSent: () => void; onNotYet: () => void }) {
+  return (
+    <div className="fixed inset-x-4 bottom-20 z-40 mx-auto max-w-md md:bottom-6">
+      <div className="card flex items-center justify-between gap-3 p-3">
+        <span className="min-w-0 flex-1 text-subhead">Did it go to payroll?</span>
+        <button onClick={onSent} className="btn btn-primary pressable min-h-9 px-3 py-1.5 text-xs">
+          Yes, sent
+        </button>
+        <button onClick={onNotYet} className="pressable px-2 py-1 text-xs text-ink-dim hover:text-ink">
+          Not yet
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -313,6 +427,7 @@ export default function Audit({
   verdict,
   cfg,
   shifts,
+  regHours,
   periodStart,
   periodEnd,
   identity,
@@ -323,6 +438,10 @@ export default function Audit({
   onFillExisting,
   onCreateAndFill,
   onYtdAnchor,
+  disputeLog,
+  onDisputeLog,
+  onDisputeUnlog,
+  onGoToMe,
 }: {
   /**
    * True when this period has no shifts or leave logged — there's
@@ -345,6 +464,12 @@ export default function Audit({
   verdict: Verdict;
   cfg: EngineConfig;
   shifts: Shift[];
+  /**
+   * PeriodResult.regHours — what the SHIFT LIST says was worked at base
+   * rate. The stub's own reg hours (actual.regHours) have to match it
+   * before any rate is implied from them.
+   */
+  regHours: number;
   periodStart: string;
   periodEnd: string;
   identity: EmailIdentity;
@@ -355,6 +480,13 @@ export default function Audit({
   onFillExisting: (periodId: string, actual: Record<string, string>) => void;
   onCreateAndFill: (startDate: string, endDate: string, actual: Record<string, string>) => void;
   onYtdAnchor: (anchor: YtdAnchor) => void;
+  /** Emails already sent about this period; absent until the first one. */
+  disputeLog?: DisputeSend[];
+  onDisputeLog?: (send: DisputeSend) => void;
+  /** Drop the most recent send — a confirmation the user shouldn't have given. */
+  onDisputeUnlog?: () => void;
+  /** Jump to a card in Me — the raise callout's "update my rate". */
+  onGoToMe?: (section: MeSection) => void;
 }) {
   const emailRef = useRef<HTMLDivElement>(null);
   const [proofOpen, setProofOpen] = useState(false);
@@ -392,9 +524,46 @@ export default function Audit({
     discrepancies.length > 0
       ? buildHrEmail({ periodStart, periodEnd, identity, discrepancies, shifts, unit548Cents: cfg.unit548Cents })
       : null;
-  const emailHref = email
-    ? `mailto:?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
-    : null;
+  const emailHref = email === null ? null : mailtoHref(email);
+
+  // The dispute clock. Only a RED check chases: "made whole" has nothing
+  // left to ask for, and the amount asked is what's STILL owed — payroll
+  // already paid back whatever a partial correction covered.
+  const today = todayIso();
+  const status = disputeStatus(disputeLog, today);
+  const firstSentAt = [...(disputeLog ?? [])].map((s) => s.at).sort()[0] ?? null;
+  const stillOwedCents =
+    verdict.kind === "red" ? verdict.owedCents - Math.min(verdict.correctionCents, verdict.owedCents) : 0;
+  // Opening the draft only asks; "Yes, sent" starts the clock.
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const logSend = () => {
+    onDisputeLog?.({ at: today, kind: nextSendKind(disputeLog) });
+    setConfirmingSend(false);
+  };
+  const followUpHref =
+    verdict.kind === "red" && status.stage === "overdue" && firstSentAt !== null
+      ? mailtoHref(
+          buildFollowUpEmail({
+            periodStart,
+            periodEnd,
+            identity,
+            owedCents: stillOwedCents,
+            firstSentAt,
+            todayIso: today,
+          }),
+        )
+      : null;
+
+  // Rate drift off this stub's own regular line — its dollars AND its
+  // hours — against the period's own rules.
+  const raise = recordOnly
+    ? null
+    : raiseCheck({
+        actualReg: actual.reg,
+        stubRegHours: actual.regHours,
+        regHours,
+        baseRateCents: cfg.baseRateCents,
+      });
 
   return (
     <div className="space-y-3">
@@ -413,8 +582,16 @@ export default function Audit({
           isNewest={isNewest && onCreateNext !== undefined}
           onCreateNext={() => onCreateNext?.()}
           onReviewEmail={() => emailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          sentAt={firstSentAt === null ? null : { at: firstSentAt, daysAgo: status.daysSinceFirst }}
+          followUpHref={followUpHref}
+          onSendTapped={() => setConfirmingSend(true)}
+          onUnlogSend={status.sends > 0 ? onDisputeUnlog : undefined}
+          raiseAnswered={raise !== null}
         />
       )}
+      {confirmingSend && <SendConfirm onSent={logSend} onNotYet={() => setConfirmingSend(false)} />}
+
+      {raise && <RaiseCallout signal={raise} regHours={regHours} onGoToMe={onGoToMe} />}
 
       <CorrectionsPanel corrections={corrections} setCorrections={setCorrections} verdict={verdict} />
 
@@ -515,6 +692,7 @@ export default function Audit({
             unit548Cents={cfg.unit548Cents}
             initialIdentity={identity}
             onSaveIdentity={onSaveIdentity}
+            onSend={() => setConfirmingSend(true)}
           />
         </div>
       )}

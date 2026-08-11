@@ -12,6 +12,14 @@ export interface TimecardDay {
   date: string;
   /** Paid/worked hours the timecard shows for that day. */
   hours: number;
+  /**
+   * The day's punch in/out times, 24h "HH:MM", one entry per worked
+   * segment (a meal break splits the day into two). Absent when the
+   * punch columns weren't legible — see asPunches: it's all-or-nothing
+   * per day, so a present list is the day's WHOLE span. rounding.ts
+   * reads these against `hours`.
+   */
+  punches?: { in: string; out: string }[];
 }
 
 export interface TimecardRead {
@@ -25,14 +33,46 @@ export interface TimecardRead {
 export const timecardInstruction =
   "You are reading a Kronos timecard screen for ONE employee and ONE biweekly pay period. " +
   "Extract each WORKED day's date and its total paid/worked hours for that day (combine multiple punches per day). " +
+  "For each of those days ALSO list its punch in/out times exactly as printed in the punch columns, one entry per " +
+  "worked segment — a meal break that splits the day gives two entries — written as 24-hour HH:MM. Transcribe the " +
+  "printed minutes verbatim: never round them, never derive them from the paid total, never fill in one you cannot " +
+  "read. The whole point is the gap between punched and paid, so an invented punch is worse than none. " +
   "Also extract the pay period start and end dates if shown, and the period TOTAL of evening/shift-differential " +
   'credit hours (pay codes like "Shift - Evening" or 301) if a totals section shows one. ' +
   'Respond with ONLY valid JSON, no markdown, no commentary, exactly this schema: {"periodStart":"YYYY-MM-DD or empty string",' +
-  '"periodEnd":"YYYY-MM-DD or empty string","days":[{"date":"YYYY-MM-DD","hours":12.25}],"eveningHours":18.45} ' +
-  'Use "eveningHours":null when no evening/differential total is shown. Hours are plain decimal numbers. ' +
+  '"periodEnd":"YYYY-MM-DD or empty string","days":[{"date":"YYYY-MM-DD","hours":12.25,' +
+  '"punches":[{"in":"06:45","out":"11:30"},{"in":"12:00","out":"19:18"}]}],"eveningHours":18.45} ' +
+  'Use "punches":[] for a day whose in/out times are not legible, and "eveningHours":null when no ' +
+  "evening/differential total is shown. Hours are plain decimal numbers. " +
   "Skip time-off/PTO days — worked days only. Never invent days that are not on the screen.";
 
 const asDate = (v: unknown): string => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+
+/** 24h "HH:MM" → zero-padded; "" for anything else. A misread AM/PM is a 12-hour error, so 12-hour forms drop. */
+const asClock = (v: unknown): string => {
+  const m = typeof v === "string" ? /^\s*(\d{1,2}):(\d{2})\s*$/.exec(v) : null;
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return "";
+  return `${m[1].padStart(2, "0")}:${m[2]}`;
+};
+
+/**
+ * Punch pairs, all-or-nothing per day: one unreadable time and the whole
+ * day's list goes. A partial list understates the punched span, which
+ * reads as rounding paying you UP — a phantom gain that would mask real
+ * losses on other days. Absent/empty/unreadable → undefined, scan carries on.
+ */
+const asPunches = (v: unknown): TimecardDay["punches"] => {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  const pairs: { in: string; out: string }[] = [];
+  for (const raw of v) {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    const start = asClock(p.in);
+    const end = asClock(p.out);
+    if (start === "" || end === "") return undefined;
+    pairs.push({ in: start, out: end });
+  }
+  return pairs;
+};
 
 export function parseTimecardResponse(text: string): TimecardRead {
   const clean = text.replace(/```json|```/g, "").trim();
@@ -46,7 +86,14 @@ export function parseTimecardResponse(text: string): TimecardRead {
   const rawDays = Array.isArray(p.days) ? p.days : [];
   const days = rawDays
     .filter((d): d is Record<string, unknown> => !!d && typeof d === "object")
-    .map((d) => ({ date: asDate(d.date), hours: typeof d.hours === "number" ? d.hours : Number.parseFloat(String(d.hours ?? "")) }))
+    .map((d): TimecardDay => {
+      const punches = asPunches(d.punches);
+      return {
+        date: asDate(d.date),
+        hours: typeof d.hours === "number" ? d.hours : Number.parseFloat(String(d.hours ?? "")),
+        ...(punches ? { punches } : {}),
+      };
+    })
     .filter((d) => d.date !== "" && Number.isFinite(d.hours) && d.hours > 0);
   if (days.length === 0) throw new Error("No worked days found — is that the timecard view?");
   const evening = typeof p.eveningHours === "number" && Number.isFinite(p.eveningHours) && p.eveningHours >= 0 ? p.eveningHours : null;
@@ -104,6 +151,6 @@ export function applyTimecard(shifts: ShiftDraft[], days: TimecardDay[]): Timeca
 export async function scanTimecard(files: File[], apiKey: string): Promise<TimecardRead> {
   const blocks = await filesToContentBlocks(files);
   if (blocks.length === 0) throw new Error("No readable files — snap the Kronos timecard screen.");
-  const text = await callClaude(blocks, timecardInstruction, apiKey, 2000);
+  const text = await callClaude(blocks, timecardInstruction, apiKey, 3000); // punch pairs roughly triple the per-day payload
   return parseTimecardResponse(text);
 }

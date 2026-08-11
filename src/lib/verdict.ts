@@ -72,7 +72,18 @@ export type Verdict =
       correctionCents: Cents;
       shortfalls: LineDelta[];
     }
-  | { kind: "amber"; question: string; focus: LineDelta | null };
+  | {
+      kind: "amber";
+      question: string;
+      /**
+       * What to do about it, kept OUT of `question` so a screen that
+       * already answers concretely (the raise callout names both rates
+       * and carries the button) can drop the generic advice instead of
+       * stating the same thing twice.
+       */
+      hint?: string;
+      focus: LineDelta | null;
+    };
 
 export function computeVerdict(
   rows: AuditRow[],
@@ -137,9 +148,8 @@ export function computeVerdict(
     return {
       kind: "amber",
       focus: f,
-      question:
-        `${f.label} paid more than expected — lucky, or did a rate change? ` +
-        "If the rate changed, update it in Me → Your pay rules so future checks stay exact.",
+      question: `${f.label} paid more than expected — lucky, or did a rate change?`,
+      hint: "If the rate changed, update it in Me → Your pay rules so future checks stay exact.",
     };
   }
   const deductionOff = offs.find((e) => e.kind === "deduction");

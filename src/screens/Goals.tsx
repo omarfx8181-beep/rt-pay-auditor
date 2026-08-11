@@ -15,6 +15,7 @@ import { weeklyHours } from "../lib/workweek.ts";
 import { num, todayIso } from "../lib/draft.ts";
 import { dayLabel, fmtCents, fmtNum, fmtUnits } from "../lib/format.ts";
 import { Card, Eyebrow, Hero, StatTile } from "../ui/kit.tsx";
+import type { MeSection } from "./Me.tsx";
 
 /** The fill meter — accent→pos gradient, milestone dots at 25/50/75. */
 function GoalMeter({ progress, onHero = false }: { progress: number; onHero?: boolean }) {
@@ -47,6 +48,7 @@ export default function Goals({
   goals,
   onSaveGoals,
   onOpenPeriodDetails,
+  onGoToMe,
 }: {
   periods: PayPeriod[];
   otherIncome: OtherIncomeDraft[];
@@ -60,6 +62,8 @@ export default function Goals({
   goals: GoalsSetting;
   onSaveGoals: (next: GoalsSetting) => void;
   onOpenPeriodDetails: (id: string) => void;
+  /** Me, scrolled to one of its cards — the missing-checks nudge lands on the year. */
+  onGoToMe: (section?: MeSection) => void;
 }) {
   const [yearView, setYearView] = useState(year);
   const years = useMemo(
@@ -342,10 +346,16 @@ export default function Goals({
             </>
           )}
           {ytd.periodCount < plan.checksElapsed && (
-            <p className="mt-3 text-footnote text-amber">
-              {plan.checksElapsed - ytd.periodCount} check{plan.checksElapsed - ytd.periodCount === 1 ? "" : "s"} not
-              logged — the plan overshoots. Scan old stubs: Me → Add your year.
-            </p>
+            <button
+              onClick={() => onGoToMe("year")}
+              className="pressable mt-3 flex w-full items-baseline justify-between gap-3 text-left text-footnote text-amber"
+            >
+              <span>
+                {plan.checksElapsed - ytd.periodCount} check{plan.checksElapsed - ytd.periodCount === 1 ? "" : "s"} not
+                logged — the plan overshoots. Scan old stubs: Me → Add your year.
+              </span>
+              <span className="shrink-0">→</span>
+            </button>
           )}
         </Card>
       )}

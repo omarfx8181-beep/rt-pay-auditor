@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarClock, CircleUserRound, House, Target } from "lucide-react";
 import { computeNet, computePeriod, type BonusTier } from "./lib/engine.ts";
-import { blankShift, draftToConfig, draftToLeave, draftToShift, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
+import { blankShift, draftToConfig, draftToLeave, draftToShift, todayIso, type CfgDraft, type LeaveDraft, type ShiftDraft } from "./lib/draft.ts";
 import { buildAuditRows } from "./lib/audit.ts";
 import { computeVerdict } from "./lib/verdict.ts";
 import {
@@ -13,7 +13,9 @@ import {
   nextPeriodRange,
   overlappingEnds,
   parseBackup,
+  periodCovering,
   periodLabel,
+  periodRangesThrough,
   rollupYtd,
   correctionTotals,
   PERIOD_DAYS,
@@ -21,6 +23,7 @@ import {
   type PayPeriod,
   type YtdAnchor,
 } from "./lib/periods.ts";
+import type { DisputeSend } from "./lib/disputes.ts";
 import type { FutureBatch } from "./lib/scanRouting.ts";
 import { buildYearCsv, yearCsvName } from "./lib/csv.ts";
 import { scanRowsToDrafts, setScanModel } from "./lib/scan.ts";
@@ -32,7 +35,7 @@ import Shifts from "./screens/Shifts.tsx";
 import type { WhatIfDraft } from "./screens/Paycheck.tsx";
 import { FAIRVIEW_RT_PRESET, PRESETS } from "./lib/presets.ts";
 import { buildPaydayCalendar, upcomingPaydays } from "./lib/payday.ts";
-import Me, { newOtherIncome, type AppearanceMode, type QuestionAnswer } from "./screens/Me.tsx";
+import Me, { newOtherIncome, type AppearanceMode, type MeSection, type QuestionAnswer } from "./screens/Me.tsx";
 // Rare, heavy screens load on demand — the biweekly hot path stays lean.
 const Onboarding = lazy(() => import("./screens/Onboarding.tsx"));
 const Tour = lazy(() => import("./screens/Tour.tsx"));
@@ -52,6 +55,25 @@ const TABS: Tab[] = [
   { id: "goals", label: "Goals", Icon: Target },
   { id: "me", label: "Me", Icon: CircleUserRound },
 ];
+
+/** What a Home Screen shortcut asked for; anything else is ignored. */
+type BootAction = "scan-stub" | "add-shift" | null;
+
+/**
+ * Manifest shortcuts launch the app at ?action=… — read once at import
+ * and strip it, or every reload of that URL re-fires the shortcut.
+ * Module scope, not a state initializer: StrictMode double-invokes
+ * those in dev, and the second read would see the cleaned URL.
+ */
+const BOOT_ACTION: BootAction = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const action = params.get("action");
+  if (action === null) return null;
+  params.delete("action");
+  const query = params.toString();
+  window.history.replaceState(null, "", window.location.pathname + (query === "" ? "" : `?${query}`) + window.location.hash);
+  return action === "scan-stub" || action === "add-shift" ? action : null;
+})();
 
 export default function App() {
   // Surface a storage failure instead of an eternal splash (private
@@ -137,6 +159,9 @@ export default function App() {
   // check screen. The intent lives up here because opening another
   // period remounts the workspace; Home consumes it once on mount.
   const [homeIntent, setHomeIntent] = useState<{ view: "check" | "breakdown"; periodId: string } | null>(null);
+  // Launched from a Home Screen shortcut — handed to the workspace,
+  // which consumes it on its first mount.
+  const [bootAction, setBootAction] = useState<BootAction>(BOOT_ACTION);
   const openPeriodDetails = (id: string) => {
     // The intent names its period: the workspace may mount once more for
     // the OLD current period before the switch lands, and that interim
@@ -332,6 +357,8 @@ export default function App() {
         onOpenPeriodDetails={openPeriodDetails}
         homeIntent={homeIntent}
         onHomeIntentConsumed={() => setHomeIntent(null)}
+        bootAction={bootAction}
+        onBootActionConsumed={() => setBootAction(null)}
       />
       {deletedPeriod && (
         <UndoToast
@@ -422,6 +449,8 @@ function PeriodWorkspace({
   onOpenPeriodDetails,
   homeIntent,
   onHomeIntentConsumed,
+  bootAction,
+  onBootActionConsumed,
 }: {
   record: PayPeriod;
   periods: PayPeriod[];
@@ -448,12 +477,16 @@ function PeriodWorkspace({
   onOpenPeriodDetails: (id: string) => void;
   homeIntent: { view: "check" | "breakdown"; periodId: string } | null;
   onHomeIntentConsumed: () => void;
+  /** A Home Screen shortcut's ?action=, consumed once on mount. */
+  bootAction: BootAction;
+  onBootActionConsumed: () => void;
 }) {
   const [cfgDraft, setCfgDraft] = useState<CfgDraft>(record.cfgDraft);
   const [tiers, setTiers] = useState<BonusTier[]>(record.tiers);
   const [shiftDrafts, setShiftDrafts] = useState<ShiftDraft[]>(record.shifts);
   const [leaveDrafts, setLeaveDrafts] = useState<LeaveDraft[]>(record.leave ?? []);
   const [corrections, setCorrections] = useState<CorrectionDraft[]>(record.corrections ?? []);
+  const [disputeLog, setDisputeLog] = useState<DisputeSend[]>(record.disputeLog ?? []);
   const [actual, setActual] = useState<Record<string, string>>(record.actual);
   const [whatIf, setWhatIf] = useState<WhatIfDraft>({ hours: "12", units548: "10", weekend: false, charge: "0" });
   const [importStatus, setImportStatus] = useState("");
@@ -461,14 +494,17 @@ function PeriodWorkspace({
   // Shifts sheet ready for its date. Lives here — Shifts remounts per
   // tab switch and consumes it on mount.
   const [shiftsEditIntent, setShiftsEditIntent] = useState<string | null>(null);
+  // Me is a long page — a jump from another screen names the card it
+  // should land on. Me remounts per tab switch and consumes it on mount.
+  const [meIntent, setMeIntent] = useState<MeSection | null>(null);
   const tabIndex = useRef(tab === "shifts" ? 1 : tab === "goals" ? 2 : tab === "me" ? 3 : 0);
 
   // Persist edits: debounced while typing, flushed on unmount/period switch.
   // The mount render is NOT an edit — writing it back would stamp a fresh
   // updatedAt on every period merely viewed, and backup merge trusts
   // updatedAt to mean "this copy really is newer".
-  const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, corrections, actual, cfgDraft, tiers });
-  snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, corrections, actual, cfgDraft, tiers };
+  const snapshot = useRef({ shifts: shiftDrafts, leave: leaveDrafts, corrections, disputeLog, actual, cfgDraft, tiers });
+  snapshot.current = { shifts: shiftDrafts, leave: leaveDrafts, corrections, disputeLog, actual, cfgDraft, tiers };
   const dirty = useRef(false);
   const mounted = useRef(false);
   useEffect(() => {
@@ -482,7 +518,7 @@ function PeriodWorkspace({
       void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
     }, 400);
     return () => clearTimeout(t);
-  }, [shiftDrafts, leaveDrafts, corrections, actual, cfgDraft, tiers, record.id]);
+  }, [shiftDrafts, leaveDrafts, corrections, disputeLog, actual, cfgDraft, tiers, record.id]);
   useEffect(
     () => () => {
       if (dirty.current) void db.periods.update(record.id, { ...snapshot.current, updatedAt: Date.now() });
@@ -539,28 +575,90 @@ function PeriodWorkspace({
     setTab(id);
   };
 
+  const goToMe = (section?: MeSection) => {
+    setMeIntent(section ?? null);
+    selectTab("me", 3);
+  };
+
+  // "Add a shift" from the Home Screen: the same hand-off the what-if
+  // card uses — one shift, dated TODAY, opened in the Shifts sheet.
+  // Both details matter. The open period is normally the FINISHED one
+  // being audited, and an undated 12 h dropped into it reads as a
+  // shortfall payroll never owed, so the shift goes to the period that
+  // CONTAINS today (started if the grid fell behind) — the workspace
+  // remounts there and this runs again, in the right period.
+  const bootShiftAdded = useRef(false); // StrictMode runs mount effects twice; one shift, not two
+  useEffect(() => {
+    if (bootAction !== "add-shift" || bootShiftAdded.current) return;
+    const today = todayIso();
+    if (today < record.startDate || today > record.endDate) {
+      // Nothing consumed: the action carries over to the mount that lands
+      // on the right period. Only a clock before the whole grid gives up.
+      void openPeriodForToday(today).then((moved) => {
+        if (!moved) onBootActionConsumed();
+      });
+      return;
+    }
+    bootShiftAdded.current = true;
+    const fresh = { ...blankShift(), date: today };
+    setShiftDrafts((arr) => [...arr, fresh]);
+    setShiftsEditIntent(fresh.id);
+    selectTab("shifts", 1);
+    onBootActionConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootAction]);
+
   /* ---- period management ---- */
 
-  const createNext = async () => {
-    const latest = periods.reduce((a, b) => (a.endDate > b.endDate ? a : b));
+  /** An empty period on `range`, rules rolled forward from `from`. */
+  const emptyPeriod = (from: PayPeriod, range: { startDate: string; endDate: string }): PayPeriod => {
     const now = Date.now();
-    const fresh: PayPeriod = {
+    return {
       id: crypto.randomUUID(),
-      ...nextPeriodRange(latest.endDate),
+      ...range,
       shifts: [],
       leave: [],
       actual: {},
       // Rules roll forward from the latest period; history keeps its own.
       // eveningHours is period DATA (manual timecard entry, SPEC §6 Q3),
       // not a rule — a fresh period starts at zero.
-      cfgDraft: { ...latest.cfgDraft, eveningHours: "0" },
-      tiers: latest.tiers,
+      cfgDraft: { ...from.cfgDraft, eveningHours: "0" },
+      tiers: from.tiers,
       archived: false,
       createdAt: now,
       updatedAt: now,
     };
+  };
+
+  const latestPeriod = () => periods.reduce((a, b) => (a.endDate > b.endDate ? a : b));
+
+  const createNext = async () => {
+    const latest = latestPeriod();
+    const fresh = emptyPeriod(latest, nextPeriodRange(latest.endDate));
     await db.periods.add(fresh);
     await setCurrentPeriodId(fresh.id);
+  };
+
+  /**
+   * Open the period that CONTAINS today, rolling the biweekly grid
+   * forward if the app sat idle through a payday or two. False when
+   * the grid can't reach today — a clock that far off is a wrong date,
+   * not a gap to fill. The periods this adds are empty, so they count
+   * for nothing: no check waiting, no scoreboard entry, no year totals.
+   */
+  const openPeriodForToday = async (today: string): Promise<boolean> => {
+    const covering = periodCovering(periods, today);
+    if (covering) {
+      await setCurrentPeriodId(covering.id);
+      return true;
+    }
+    const latest = latestPeriod();
+    const ranges = periodRangesThrough(latest.endDate, today);
+    if (ranges.length === 0) return false;
+    const fresh = ranges.map((range) => emptyPeriod(latest, range));
+    await db.periods.bulkAdd(fresh);
+    await setCurrentPeriodId(fresh[fresh.length - 1].id);
+    return true;
   };
 
   // Historical stub: a period with the real gross/net — and, when a scan
@@ -798,11 +896,14 @@ function PeriodWorkspace({
             closeEnoughCents={closeEnoughCents}
             corrections={corrections}
             setCorrections={setCorrections}
+            disputeLog={disputeLog}
+            onDisputeLog={(send) => setDisputeLog((log) => [...log, send])}
+            onDisputeUnlog={() => setDisputeLog((log) => log.slice(0, -1))}
             backupStale={backupStale}
             installNudge={installNudge}
             onDismissInstallNudge={() => void db.settings.put({ key: "installNudge", value: "done" })}
             onGoToShifts={() => selectTab("shifts", 1)}
-            onGoToMe={() => selectTab("me", 3)}
+            onGoToMe={goToMe}
             onOpenPeriodDetails={onOpenPeriodDetails}
             onCelebrated={() => void db.periods.update(record.id, { celebratedAt: Date.now() })}
             onAddShift={(hours, units548, charge) => {
@@ -811,8 +912,13 @@ function PeriodWorkspace({
               setShiftsEditIntent(fresh.id);
               selectTab("shifts", 1);
             }}
-            initialView={homeIntent?.periodId === record.id ? homeIntent.view : null}
-            onViewConsumed={onHomeIntentConsumed}
+            initialView={
+              bootAction === "scan-stub" ? "check" : homeIntent?.periodId === record.id ? homeIntent.view : null
+            }
+            onViewConsumed={() => {
+              onHomeIntentConsumed();
+              if (bootAction === "scan-stub") onBootActionConsumed();
+            }}
           />
         )}
         {tab === "shifts" && (
@@ -845,6 +951,7 @@ function PeriodWorkspace({
             goals={goals}
             onSaveGoals={(next) => void db.settings.put({ key: "goals", value: JSON.stringify(next) })}
             onOpenPeriodDetails={onOpenPeriodDetails}
+            onGoToMe={goToMe}
           />
         )}
         {tab === "me" && (
@@ -904,6 +1011,8 @@ function PeriodWorkspace({
             onSaveW2={(yr, next) => void db.settings.put({ key: "w2", value: JSON.stringify({ ...w2Typed, [yr]: next }) })}
             baseRateCents={cfg.baseRateCents}
             closeEnoughCents={closeEnoughCents}
+            initialSection={meIntent}
+            onSectionConsumed={() => setMeIntent(null)}
           />
         )}
       </main>
