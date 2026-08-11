@@ -11,9 +11,17 @@ import type { Page } from "@playwright/test";
  */
 export async function gotoApp(page: Page): Promise<void> {
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.waitForTimeout(800); // Dexie seed + first render
+  // Wait for the app to RENDER, not for a fixed beat. A cold runner can
+  // still be seeding Dexie at 800 ms, and asking "is the skip button
+  // there?" too early answers no — leaving onboarding up for the rest of
+  // the test, where nothing else can be reached behind it.
   const skip = page.locator('button:has-text("Skip for now")').first();
-  if (await skip.count()) {
+  const tabs = page.locator("nav button").first();
+  await Promise.race([
+    skip.waitFor({ state: "visible", timeout: 20_000 }).catch(() => {}),
+    tabs.waitFor({ state: "visible", timeout: 20_000 }).catch(() => {}),
+  ]);
+  if (await skip.isVisible().catch(() => false)) {
     await skip.click();
   }
   const tour = page.locator('[role="dialog"][aria-label^="App tour"]');
@@ -23,6 +31,7 @@ export async function gotoApp(page: Page): Promise<void> {
     await skipTour.click();
   }
   await tour.waitFor({ state: "detached", timeout: 4000 }).catch(() => {});
+  await tabs.waitFor({ state: "visible", timeout: 20_000 }); // the workspace is up
 }
 
 export const tabButton = (page: Page, label: string) =>
