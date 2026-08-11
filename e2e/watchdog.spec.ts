@@ -67,8 +67,9 @@ test("the Add-a-shift shortcut keeps the shift when you accept what it filled in
   // and the check would then expect 12 hours less than was worked.
   await gotoApp(page);
   await page.goto("/?action=add-shift", { waitUntil: "networkidle" });
-  await page.waitForTimeout(1200);
-  await expect(page.locator('label:has(span:text-is("Paid hours")) input')).toHaveValue("12");
+  // the shortcut writes a period and opens the sheet — wait for the sheet
+  // itself, never a fixed beat (a slow runner loses the race)
+  await expect(page.locator('label:has(span:text-is("Paid hours")) input')).toHaveValue("12", { timeout: 15000 });
 
   await page.getByRole("button", { name: "Done" }).first().click();
   await page.waitForTimeout(600);
@@ -85,7 +86,7 @@ test("the Add-a-shift shortcut keeps the shift when you accept what it filled in
 test("dismissing that same sheet without touching it takes the shift back", async ({ page }) => {
   await gotoApp(page);
   await page.goto("/?action=add-shift", { waitUntil: "networkidle" });
-  await page.waitForTimeout(1200);
+  await expect(page.locator('label:has(span:text-is("Paid hours")) input')).toHaveValue("12", { timeout: 15000 });
   await page.getByRole("button", { name: "Close" }).click(); // ✕ = "didn't mean to"
   await page.waitForTimeout(600);
   await expect(page.getByText("No shifts yet")).toBeVisible();
